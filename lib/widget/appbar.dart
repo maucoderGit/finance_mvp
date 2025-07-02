@@ -12,7 +12,7 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: Padding(
         padding: const EdgeInsets.all(8.0),
         child: CircleAvatar(
-          backgroundColor: AppColors.primaryLight.withOpacity(0.3),
+          backgroundColor: AppColors.primaryLight.withOpacity(0.2),
           child: IconButton(
             icon: const Icon(Icons.search, color: AppColors.primary),
             onPressed: () {},

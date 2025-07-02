@@ -4,6 +4,8 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/widget/appbar.dart';
 import 'package:finance_mvp/widget/info_section_title.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 class HomeScreen extends StatelessWidget {
@@ -27,24 +29,24 @@ class HomeScreen extends StatelessWidget {
               InfoSectionTitle(
                 icon: Icons.arrow_downward_rounded,
                 title: 'Recent withdrawals',
+                index: 0,
                 actionText: 'View all',
                 onTap: () {},
               ),
-              const SizedBox(height: 16),
               InfoSectionTitle(
                 icon: Icons.arrow_upward_rounded,
                 title: 'Upcoming payments',
+                index: 1,
                 actionText: 'Get paid',
                 onTap: () {},
               ),
-              const SizedBox(height: 16),
               InfoSectionTitle(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'My balance',
+                index: 2,
                 actionText: 'Review',
                 onTap: () {},
               ),
-              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -61,7 +63,7 @@ class _UserGreeting extends StatefulWidget {
 }
 
 class _UserGreetingState extends State<_UserGreeting> {
-  // final ImagePicker _picker = ImagePicker();
+  final ImagePicker _picker = ImagePicker();
   String? _imagePath;
 
   @override
@@ -72,20 +74,25 @@ class _UserGreetingState extends State<_UserGreeting> {
 
   /// Loads the saved image path from SharedPreferences.
   Future<void> _loadProfileImage() async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
+      _imagePath = prefs.getString('profileImagePath');
     });
   }
 
   /// Opens the image gallery and saves the selected image path.
   Future<void> _pickImage() async {
-    // final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    // if (image != null) {
-    //   final prefs = await SharedPreferences.getInstance();
-    //   await prefs.setString('profileImagePath', image.path);
-    //   setState(() {
-    //     _imagePath = image.path;
-    //   });
-    // }
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _imagePath = prefs.getString('profileImagePath');
+    });
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      await prefs.setString('profileImagePath', image.path);
+      setState(() {
+        _imagePath = image.path;
+      });
+    }
   }
 
   @override
@@ -145,7 +152,7 @@ class _UserGreetingState extends State<_UserGreeting> {
 // --- widgets/action_buttons.dart ---
 // Row of main action buttons (Add, Withdraw, Transfer).
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({super.key});
+  const _ActionButtons();
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +171,7 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _ActionButton({super.key, required this.icon, required this.label});
+  const _ActionButton({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {

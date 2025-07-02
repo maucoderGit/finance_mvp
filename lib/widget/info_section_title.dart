@@ -6,51 +6,57 @@ class InfoSectionTitle extends StatelessWidget {
   final IconData icon;
   final String title;
   final String actionText;
+  final int index;
   final VoidCallback onTap;
 
   const InfoSectionTitle({
     super.key,
     required this.icon,
     required this.title,
+    required this.index,
     required this.actionText,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: AppColors.primary.withOpacity(0.1),
-            child: Icon(icon, color: AppColors.primary),
-          ),
-          const SizedBox(width: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
+    return Align(
+      heightFactor: 0.9,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 30),
+        decoration: BoxDecoration(
+          color: AppColors.stackCardBackground[index],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.textDark,
+              child: Icon(icon, color: AppColors.background),
             ),
-          ),
-          const Spacer(),
-          Text(
-            actionText,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: AppColors.primary, size: 20),
-        ],
-      ),
+            const Spacer(),
+            Text(
+              actionText,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.primary, size: 20),
+            const SizedBox(width: 50),
+          ],
+        ),
+      )
     );
   }
 }
