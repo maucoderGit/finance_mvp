@@ -28,7 +28,9 @@ class InfoSectionTitle extends StatelessWidget {
           color: AppColors.stackCardBackground[index],
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Row(
           children: [
             CircleAvatar(
               backgroundColor: AppColors.textDark,
@@ -55,7 +57,7 @@ class InfoSectionTitle extends StatelessWidget {
             const Icon(Icons.chevron_right, color: AppColors.primary, size: 20),
             const SizedBox(width: 50),
           ],
-        ),
+        )),
       )
     );
   }

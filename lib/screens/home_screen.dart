@@ -20,18 +20,20 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
+            children: <Widget>[
+              SizedBox(height: MediaQuery.of(context).size.height * 0.10),
               const _UserGreeting(),
-              const SizedBox(height: 30),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.08),
               const _ActionButtons(),
-              const SizedBox(height: 40),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.08),
               InfoSectionTitle(
                 icon: Icons.arrow_downward_rounded,
                 title: 'Recent withdrawals',
                 index: 0,
                 actionText: 'View all',
-                onTap: () {},
+                onTap: () {
+                  Navigator.pushNamed(context, '/v1/transactions');
+                },
               ),
               InfoSectionTitle(
                 icon: Icons.arrow_upward_rounded,
@@ -101,13 +103,19 @@ class _UserGreetingState extends State<_UserGreeting> {
       children: [
         Stack(
           children: [
-            CircleAvatar(
-              radius: 50,
-              backgroundImage: _imagePath != null
-                  ? FileImage(File(_imagePath!))
-                  : const NetworkImage(
-                          'https://placehold.co/100x100/4A6A54/FFFFFF?text=JP')
-                      as ImageProvider,
+            Container(
+                width: 125,
+                height: 125,
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 255, 238, 254), // Placeholder color
+                  shape: BoxShape.rectangle,
+                  borderRadius: BorderRadius.circular(24.0), // Rounded corners
+                  border: Border.all(color: Colors.grey[400]!, width: 0),
+                ),
+                child: _imagePath != null ? ClipRRect(
+                  borderRadius: BorderRadius.circular(24.0),
+                  child: Image.file(File(_imagePath!), fit: BoxFit.cover),
+                ) : const SizedBox()
             ),
             Positioned(
               bottom: 0,
@@ -156,12 +164,18 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _ActionButton(icon: Icons.add, label: 'Add money'),
-        _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw'),
-        _ActionButton(icon: Icons.swap_horiz, label: 'Transfer'),
+        _ActionButton(icon: Icons.add, label: 'Add money', onTap: () {
+          Navigator.pushNamed(context, '/v1/transactions/create');
+        }),
+        _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw', onTap: () {
+          Navigator.pushNamed(context, '/v1/transactions/create');
+        }),
+        _ActionButton(icon: Icons.swap_horiz, label: 'Transfer', onTap: () {
+          Navigator.pushNamed(context, '/v1/transactions/create');
+        }),
       ],
     );
   }
@@ -170,12 +184,15 @@ class _ActionButtons extends StatelessWidget {
 class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final GestureTapCallback onTap;
 
-  const _ActionButton({required this.icon, required this.label});
+  const _ActionButton({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return InkWell(
+      onTap: onTap,
+      child: Column(
       children: [
         CircleAvatar(
           radius: 30,
@@ -191,6 +208,6 @@ class _ActionButton extends StatelessWidget {
           ),
         ),
       ],
-    );
+    ));
   }
 }
