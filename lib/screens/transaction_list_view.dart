@@ -1,56 +1,19 @@
-import 'package:finance_mvp/widget/transaction_card.dart';
+import 'package:finance_mvp/models/transactions.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class TransactionListView extends StatefulWidget {
-  const TransactionListView({super.key});
+  final List<Transaction> transactions;
+  const TransactionListView({super.key, required this.transactions});
 
   @override
   State<TransactionListView> createState() => _TransactionListViewState();
 }
 
 class _TransactionListViewState extends State<TransactionListView> {
-  final List<Map<String, dynamic>> _allTransactions = [
-    {
-      'title': 'Banesco Panama',
-      'display_amount': '+ \$3,907.01 USD',
-      'amount': 3907.01,
-      // 'iconPath': 'assets/revolut_logo.png', // Placeholder for Revolut logo
-      'iconBackgroundColor': Colors.grey[100],
-    },
-    {
-      'title': 'Cash',
-      'display_amount': '+ \$3,402.00 USD',
-      'amount': 3402.00,
-      // 'iconPath': 'assets/behance_logo.png', // Placeholder for Behance logo
-      'iconBackgroundColor': Colors.blue[50],
-    },
-    {
-      'title': 'Binance (USDT)',
-      'display_amount': '+ \$1,337.99 USD',
-      'amount': 1337.99,
-      // 'iconPath': 'assets/okx_logo.png', // Placeholder for OKX logo
-      'iconBackgroundColor': Colors.black87,
-    },
-    {
-      'title': 'Binance (BTC)',
-      'display_amount': '+ \$150.66 USD',
-      'amount': 150.66,
-      // 'iconPath': 'assets/okx_logo.png',
-      // 'defaultIcon': Icons.account_balance,
-      'iconBackgroundColor': Colors.purple[50],
-    },
-    {
-      'title': 'Reserve / Ugly Cash (USD)',
-      'display_amount': '+ \$44.48 USD',
-      'amount': 44.48,
-      // 'iconPath': 'assets/okx_logo.png',
-      'defaultIcon': Icons.work,
-      'iconBackgroundColor': Colors.orange[50],
-    },
-  ];
-
-  List<Map<String, dynamic>> _displayedTransactions = [];
-  int _itemsPerPage = 3; // Number of items to load initially and per "page"
+  final List<Transaction> _displayedTransactions = [];
+  final int _itemsPerPage =
+      8; // Number of items to load initially and per "page"
   bool _isLoading = false;
 
   @override
@@ -66,86 +29,153 @@ class _TransactionListViewState extends State<TransactionListView> {
       _isLoading = true;
     });
 
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
-
     int startIndex = _displayedTransactions.length;
     int endIndex = startIndex + _itemsPerPage;
-    if (endIndex > _allTransactions.length) {
-      endIndex = _allTransactions.length;
+    if (endIndex > widget.transactions.length) {
+      endIndex = widget.transactions.length;
     }
 
     setState(() {
-      _displayedTransactions.addAll(_allTransactions.sublist(startIndex, endIndex));
+      _displayedTransactions
+          .addAll(widget.transactions.sublist(startIndex, endIndex));
       _isLoading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Add the "Total" card if there are transactions
-    List<Widget> cards = <Widget>[];
-    if (_allTransactions.isNotEmpty) {
-      double totalAmount = _allTransactions.map((data) => data["amount"]).reduce((x, y) => x + y);
-      cards.add(
-        TransactionCard(
-          title: 'Total',
-          amount: totalAmount,
-          displayAmount: '+ \$$totalAmount USD', // This should be calculated dynamically in a real app
-          isTotalCard: true,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title (h2)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 16.0),
+          child: Text(
+            'Recent Transactions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              // Note: For full dark/light theme support, you'd use Theme.of(context).textTheme...
+            ),
+          ),
         ),
-      );
-    }
+        // The list of transactions (space-y-3)
+        SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.45,
+            child: ListView.separated(
+            shrinkWrap: true,
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: widget.transactions.length,
+            itemBuilder: (context, index) {
+              return TransactionItem(transaction: widget.transactions[index]);
+            },
+            separatorBuilder: (context, index) =>
+                const SizedBox(height: 12), // Mimics space-y-3
+          )),
+        )
+      ],
+    );
+  }
+}
 
-    // Add the "Total" card at the end
-    cards = _displayedTransactions.map((data) {
-      return TransactionCard(
-        title: data['title'],
-        amount: data["amount"],
-        displayAmount: data['display_amount'],
-        iconPath: data['iconPath'],
-        defaultIcon: data['defaultIcon'],
-        iconBackgroundColor: data['iconBackgroundColor'],
-      );
-    }).toList();
+class TransactionItem extends StatelessWidget {
+  final Transaction transaction;
 
-    return ListView.builder(
-      itemCount: cards.length + (_isLoading || _displayedTransactions.length < _allTransactions.length ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index < cards.length) {
-          return cards[index];
-        } else {
-          // This is the loading indicator or a "Load More" button
-          if (_displayedTransactions.length < _allTransactions.length) {
-            // Only show load more if there are more items to load
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(
-                child: _isLoading
-                    ? const CircularProgressIndicator(
-                        color: Color(0xFF4CAF50),
-                      )
-                    : ElevatedButton(
-                        onPressed: _loadMoreItems,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                        ),
-                        child: const Text(
-                          'Load More',
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                      ),
+  const TransactionItem({super.key, required this.transaction});
+
+  @override
+  Widget build(BuildContext context) {
+    // Determine text color based on amount sign
+    bool isExpense = transaction.amount < 0;
+    String amountText = isExpense
+        ? '-\$${(-transaction.amount).toStringAsFixed(2)}'
+        : '+\$${transaction.amount.toStringAsFixed(2)}';
+
+    Color amountColor = isExpense ? Colors.red.shade600 : Colors.green.shade600;
+
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .cardColor, // A good substitute for surface-light/dark
+        borderRadius: BorderRadius.circular(8.0),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.grey,
+            spreadRadius: 0.01,
+            blurRadius: 0.3,
+            offset: Offset(0, 0.01), // subtle shadow
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Left side: Icon, Title, and Category
+          Row(
+            children: [
+              // Icon Container (w-10 h-10 rounded-full)
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: transaction.iconBackgroundColor,
+                ),
+                child: Icon(
+                  transaction.icon,
+                  color: transaction.iconColor,
+                  size: 20,
+                ),
               ),
-            );
-          } else {
-            return const SizedBox.shrink(); // No more items to load
-          }
-        }
-      },
+              const SizedBox(width: 12), // mr-3 equivalent
+              // Title and Category Text
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    transaction.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      // text-text-light dark:text-text-dark
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    transaction.category,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey, // text-sm text-text-secondary...
+                    ),
+                  ),
+                  Text(
+                    transaction.date != null
+                        ? DateFormat('MMM dd, yyyy').format(transaction.date!)
+                        : '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color, // text-sm text-text-secondary...
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // Right side: Amount
+          Text(
+            amountText,
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: amountColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

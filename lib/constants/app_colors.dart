@@ -7,6 +7,7 @@ class AppColors {
   static const Color textDark = Color(0xFF333333);
   static const Color textLight = Color(0xFF666666);
   static const Color cardBackground = Color(0xFFFFFFFF);
+  static const Color fieldsBackground = Color.fromARGB(255, 254, 255, 252);
 
   static const List<Color> stackCardBackground = [
     Color(0xFFF7FAF5),

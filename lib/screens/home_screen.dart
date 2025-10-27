@@ -21,9 +21,9 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              SizedBox(height: MediaQuery.of(context).size.height * 0.10),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.05),
               const _UserGreeting(),
-              SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               const _ActionButtons(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.08),
               InfoSectionTitle(
@@ -167,15 +167,15 @@ class _ActionButtons extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _ActionButton(icon: Icons.add, label: 'Add money', onTap: () {
+        _ActionButton(icon: Icons.add, label: 'Register Transaction', onTap: () {
           Navigator.pushNamed(context, '/v1/transactions/create');
         }),
-        _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw', onTap: () {
-          Navigator.pushNamed(context, '/v1/transactions/create');
-        }),
-        _ActionButton(icon: Icons.swap_horiz, label: 'Transfer', onTap: () {
-          Navigator.pushNamed(context, '/v1/transactions/create');
-        }),
+        // _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw', onTap: () {
+        //   Navigator.pushNamed(context, '/v1/transactions/create');
+        // }),
+        // _ActionButton(icon: Icons.swap_horiz, label: 'Transfer', onTap: () {
+        //   Navigator.pushNamed(context, '/v1/transactions/create');
+        // }),
       ],
     );
   }

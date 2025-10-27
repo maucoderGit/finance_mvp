@@ -86,18 +86,34 @@ class _SearchScreenState extends State<SearchScreen> {
         // Remove the default back button if it appears
         automaticallyImplyLeading: true,
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2, // 2 items per row
-          crossAxisSpacing: 12, // Horizontal space between cards
-          mainAxisSpacing: 12, // Vertical space between cards
-          childAspectRatio:
-          4, // Adjust to change the card's height-to-width ratio
-        ),
+      body: ListView.builder(
         itemCount: _filteredItems.length,
+        
         itemBuilder: (context, index) {
-          return SearchElementCard(product: _filteredItems[index]);
+          // return SearchElementCard(product: _filteredItems[index]);
+          final item = _filteredItems[index];
+
+          return ListTile(
+            // leading: Icon(item['icon'], color: item['color']),
+            title: Text(item.name),
+            onTap: () {
+              Navigator.pop(context, item);
+            },
+            trailing: item.tag != null ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                item.tag!,
+                style: const TextStyle(
+                  color: Color(0xFF4CAF50),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ) : const SizedBox(),
+          );
         },
       ),
     );

@@ -1,6 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/screens/home_screen.dart';
-import 'package:finance_mvp/screens/invoice_screen.dart';
+import 'package:finance_mvp/screens/transaction_screen.dart';
 import 'package:finance_mvp/screens/transactions_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -19,6 +19,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         scaffoldBackgroundColor: AppColors.background,
         primaryColor: AppColors.primary,
+        cardColor: AppColors.cardBackground,
+        secondaryHeaderColor: AppColors.background,
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.primary,
+          secondary: AppColors.cardBackground,
+          surface: AppColors.background,
+        ),
         fontFamily: 'Inter', // A modern font, add it to your pubspec.yaml
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
@@ -26,7 +33,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/v1/home': (context) => const HomeScreen(),
         '/v1/transactions': (context) => const TransactionPage(),
-        '/v1/transactions/create': (context) => const transactionscreen(),
+        '/v1/transactions/create': (context) => const TransactionScreen(),
       },
     );
   }
