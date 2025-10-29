@@ -1,4 +1,5 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/screens/currency_screen.dart';
 import 'package:finance_mvp/screens/category_screen.dart';
 import 'package:finance_mvp/widget/numpad.dart';
 import 'package:finance_mvp/widget/search_screen/search_screen.dart';
@@ -229,7 +230,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           const SizedBox(height: 10),
                           GestureDetector(
                             onTap: () {
-                              showModalBottomSheet(context: context, builder: (context) => SearchScreen());
+                              showModalBottomSheet(context: context, builder: (context) => const SearchScreen());
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -275,17 +276,25 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     ),
                                   ),
                                   const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE8F5E9),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: const Text(
-                                      'USD',
-                                      style: TextStyle(
-                                        color: Color(0xFF4CAF50),
-                                        fontWeight: FontWeight.w500,
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (context) => const CurrencyScreen()),
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8F5E9),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Text(
+                                        'USD',
+                                        style: TextStyle(
+                                          color: Color(0xFF4CAF50),
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ),
