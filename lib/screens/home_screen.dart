@@ -47,7 +47,9 @@ class HomeScreen extends StatelessWidget {
                 title: 'My balance',
                 index: 2,
                 actionText: 'Review',
-                onTap: () {},
+                onTap: () {
+                  Navigator.pushNamed(context, '/v1/dashboard');
+                },
               ),
             ],
           ),
@@ -169,6 +171,9 @@ class _ActionButtons extends StatelessWidget {
       children: [
         _ActionButton(icon: Icons.add, label: 'Register Transaction', onTap: () {
           Navigator.pushNamed(context, '/v1/transactions/create');
+        }),
+        _ActionButton(icon: Icons.pie_chart, label: 'Budget', onTap: () {
+          Navigator.pushNamed(context, '/v1/budget');
         }),
         // _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw', onTap: () {
         //   Navigator.pushNamed(context, '/v1/transactions/create');
