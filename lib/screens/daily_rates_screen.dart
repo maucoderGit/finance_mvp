@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' as drift;
-import 'package:finance_mvp/screens/database.dart';
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/providers/currency_provider.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,7 @@ class DailyRatesScreen extends StatefulWidget {
 class _DailyRatesScreenState extends State<DailyRatesScreen> {
   late Future<List<ExchangeRate>> _ratesFuture;
   int _currentIndex = 0;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -28,6 +30,39 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
     setState(() {
       _ratesFuture = repo.getRatesForCurrency(widget.currency.code);
     });
+  }
+
+  Future<void> _syncFromApi() async {
+    final provider = context.read<CurrencyProvider>();
+    setState(() => _syncing = true);
+
+    try {
+      final count = await provider.syncHistoricalRates(
+        widget.currency.code,
+        daysBack: 90,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count > 0
+                ? 'Synced $count rate(s) from the API.'
+                : 'No rates available from the API. Add them manually.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _syncing = false);
+        _loadRates();
+      }
+    }
   }
 
   Future<void> _addRate() async {
@@ -82,7 +117,7 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
           date: drift.Value(selectedDate!),
         );
         await repo.addExchangeRate(newRate);
-        _loadRates(); // Refresh the list
+        _loadRates();
       }
     }
   }
@@ -93,6 +128,19 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
       appBar: AppBar(
         title: Text('Rates for ${widget.currency.code}'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: _syncing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            tooltip: 'Sync from API',
+            onPressed: _syncing ? null : _syncFromApi,
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addRate,
@@ -105,7 +153,34 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No rates found for this currency.'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.trending_down, size: 48, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No rates found for this currency.',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Use the sync button to fetch from the API, or add rates manually.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _syncing ? null : _syncFromApi,
+                      icon: const Icon(Icons.cloud_download),
+                      label: const Text('Fetch from API'),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
           final rates = snapshot.data!;
@@ -160,10 +235,14 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                   itemCount: rates.length,
                   itemBuilder: (context, index) {
                     final rate = rates[index];
+                    final isLatest = index == 0;
                     return ListTile(
                       title: Text(DateFormat('MMMM dd, yyyy').format(rate.date)),
+                      subtitle: isLatest
+                          ? const Text('Latest', style: TextStyle(color: Colors.green))
+                          : null,
                       trailing: Text(
-                        rate.rate.toString(),
+                        rate.rate.toStringAsFixed(4),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     );

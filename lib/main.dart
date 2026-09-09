@@ -1,11 +1,15 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/providers/currency_provider.dart';
+import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/screens/accounts_screen.dart';
-import 'package:finance_mvp/screens/database.dart';
 import 'package:finance_mvp/screens/config_screen.dart';
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/home_screen.dart';
+import 'package:finance_mvp/screens/revaluation_screen.dart';
 import 'package:finance_mvp/screens/transaction_screen.dart';
 import 'package:finance_mvp/screens/transactions_screen.dart';
+import 'package:finance_mvp/services/revaluation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,6 +26,16 @@ void main() {
         ),
         ProxyProvider<AppDatabase, FinanceRepository>(
           update: (_, db, __) => FinanceRepository(db),
+        ),
+        ProxyProvider<FinanceRepository, RevaluationService>(
+          update: (_, repo, __) => RevaluationService(repo),
+        ),
+        ProxyProvider<FinanceRepository, CurrencyProvider>(
+          update: (_, repo, __) => CurrencyProvider(repo),
+          dispose: (_, provider) => provider.dispose(),
+        ),
+        ProxyProvider<RevaluationService, RevaluationProvider>(
+          update: (_, service, __) => RevaluationProvider(service),
         ),
       ],
       child: const MyApp(),
@@ -57,6 +71,7 @@ class MyApp extends StatelessWidget {
         '/v1/transactions/create': (context) => const TransactionScreen(),
         '/v1/accounts': (context) => const AccountsScreen(),
         '/v1/config': (context) => const ConfigScreen(),
+        '/v1/revaluation': (context) => const RevaluationScreen(),
       },
     );
   }

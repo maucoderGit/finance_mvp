@@ -1,11 +1,10 @@
 import 'package:drift/drift.dart' hide Column;
 import 'package:finance_mvp/constants/app_colors.dart';
-import 'package:finance_mvp/screens/database.dart' as db;
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/currency_screen.dart';
 import 'package:finance_mvp/screens/category_screen.dart';
 import 'package:finance_mvp/widget/numpad.dart';
-import 'package:finance_mvp/widget/search_screen/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -82,7 +81,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   Future<void> _saveTransaction() async {
     final repo = context.read<FinanceRepository>();
-    
+
     // If no account selected, pick the first one for the MVP flow
     if (_selectedAccount == null) {
       final accounts = await repo.db.select(repo.db.accounts).get();
@@ -96,6 +95,32 @@ class _TransactionScreenState extends State<TransactionScreen> {
       amountValue = -amountValue;
     }
 
+    // Auto-capture the exchange rate at the transaction date (manual rate
+    // overrides are not yet implemented in the form UI, so we use the
+    // closest stored rate or the API-latest rate).
+    double? rateAtCreation;
+    final baseCode = await repo.getBaseCurrencyCode();
+    if (_selectedAccount!.currencyCode != baseCode) {
+      final stored = await repo.getRateAtDate(
+          _selectedAccount!.currencyCode, DateTime.now());
+      if (stored != null) {
+        rateAtCreation = stored.rate;
+      }
+      if (rateAtCreation == null) {
+        // Fall back to the latest stored rate if none exists for today.
+        final latest = await repo.getLatestRate(_selectedAccount!.currencyCode);
+        rateAtCreation = latest?.rate;
+      }
+    }
+
+    // Compute the transaction value in the base currency at creation time.
+    double? baseAmount;
+    if (rateAtCreation != null && rateAtCreation != 0) {
+      baseAmount = amountValue / rateAtCreation;
+    } else if (_selectedAccount!.currencyCode == baseCode) {
+      baseAmount = amountValue;
+    }
+
     await repo.createTransaction(db.TransactionsCompanion(
       amount: Value(amountValue),
       accountId: Value(_selectedAccount!.id),
@@ -104,9 +129,82 @@ class _TransactionScreenState extends State<TransactionScreen> {
       reference: Value(_referenceController.text),
       isRecurrenceEnabled: Value(_isRecurrenceEnabled),
       date: Value(DateTime.now()),
+      exchangeRateAtCreation: Value(rateAtCreation),
+      baseCurrencyAmount: Value(baseAmount),
     ));
 
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _pickAccountFromDatabase() async {
+    final repo = context.read<FinanceRepository>();
+    final accounts = await repo.watchAccounts().first;
+
+    if (accounts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Create an account first in "Register Accounts".')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<db.Account>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.85,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (context, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Account',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: controller,
+                  itemCount: accounts.length,
+                  itemBuilder: (context, index) {
+                    final account = accounts[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Color(account.iconColor),
+                        child: Icon(
+                          _iconDataFrom(account.icon),
+                          color: Colors.white,
+                        ),
+                      ),
+                      title: Text(account.name),
+                      subtitle: Text(account.currencyCode),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.pop(context, account),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected != null && mounted) {
+      setState(() => _selectedAccount = selected);
+    }
   }
 
   @override
@@ -265,7 +363,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           const SizedBox(height: 10),
                           GestureDetector(
                             onTap: () {
-                              showModalBottomSheet(context: context, builder: (context) => const SearchScreen());
+                              _pickAccountFromDatabase();
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -311,28 +409,28 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     ),
                                   ),
                                   const Spacer(),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (context) => const CurrencyScreen()),
-                                      );
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE8F5E9),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Text(
-                                        'USD',
-                                        style: TextStyle(
-                                          color: Color(0xFF4CAF50),
-                                          fontWeight: FontWeight.w500,
+GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => const CurrencyScreen()),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE8F5E9),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          _selectedAccount?.currencyCode ?? 'USD',
+                                          style: const TextStyle(
+                                            color: Color(0xFF4CAF50),
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -352,11 +450,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     color: Colors.black,
                                   ),
                                 ),
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 12.0, left: 4.0),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12.0, left: 4.0),
                                   child: Text(
-                                    'USD',
-                                    style: TextStyle(
+                                    _selectedAccount?.currencyCode ?? 'USD',
+                                    style: const TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.black54,
@@ -398,9 +496,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                       color: Colors.black,
                                     ),
                                   ),
-                                  const TextSpan(
-                                    text: ' USD',
-                                    style: TextStyle(
+                                  TextSpan(
+                                    text: ' ${_selectedAccount?.currencyCode ?? 'USD'}',
+                                    style: const TextStyle(
                                       fontSize: 24,
                                       fontWeight: FontWeight.normal,
                                       color: Colors.grey,
@@ -726,4 +824,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
       ),
     );
   }
+}
+
+IconData _iconDataFrom(String codePoint) {
+  final parsed = int.tryParse(codePoint);
+  if (parsed == null) return Icons.account_balance;
+  // ignore: non_const_argument_for_const_parameter
+  return IconData(parsed);
 }
