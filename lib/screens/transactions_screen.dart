@@ -1,5 +1,5 @@
-import 'package:finance_mvp/screens/database.dart' as db;
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transaction_list_view.dart';
 import 'package:finance_mvp/widget/transaction_card.dart';
 import 'package:flutter/material.dart';

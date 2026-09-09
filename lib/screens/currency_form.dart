@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart' as drift;
-import 'package:finance_mvp/screens/database.dart';
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

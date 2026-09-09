@@ -2,22 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
-import 'package:finance_mvp/screens/database.dart' as db;
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/add_account_sheet.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
-
-  IconData _getIconData(String iconName) {
-    // Assuming iconName is the codePoint stored as a string
-    final codePoint = int.tryParse(iconName);
-    if (codePoint == null) return Icons.help_outline;
-
-    switch (iconName) {
-      default: return Icons.help_outline;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +166,7 @@ class AccountsScreen extends StatelessWidget {
                             currencyCode: account.currencyCode,
                             convertedAmount: converted,
                             baseCurrencyCode: baseCode,
+                            // ignore: non_const_argument_for_const_parameter
                             icon: IconData(int.parse(account.icon), fontFamily: 'MaterialIcons'),
                             iconBgColor: Color(account.iconColor),
                           );

@@ -1,4 +1,4 @@
-import 'package:finance_mvp/screens/database.dart' as db;
+import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
