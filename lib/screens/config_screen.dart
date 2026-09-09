@@ -1,6 +1,8 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/screens/currency_screen.dart';
+import 'package:finance_mvp/screens/dashboard_screen.dart';
+import 'package:finance_mvp/screens/revaluation_screen.dart';
 
 class ConfigScreen extends StatelessWidget {
   const ConfigScreen({super.key});
@@ -39,6 +41,28 @@ class ConfigScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const CurrencyScreen()),
+              );
+            },
+          ),
+          _SettingTile(
+            icon: Icons.pie_chart_outline,
+            title: 'Dashboard',
+            subtitle: 'Overview charts and analytics',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              );
+            },
+          ),
+          _SettingTile(
+            icon: Icons.trending_up,
+            title: 'Revaluation',
+            subtitle: 'FX gains/losses and purchasing power',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const RevaluationScreen()),
               );
             },
           ),

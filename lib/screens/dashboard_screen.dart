@@ -1,7 +1,10 @@
 
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/widget/forecast/goal_projection_card.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -40,13 +43,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                '\$10,450.75',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: FutureBuilder<String>(
+                future: _loadTotalBalance(),
+                builder: (context, snapshot) {
+                  return Text(
+                    snapshot.data ?? '\$0.00',
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
               ),
             ),
             Expanded(
@@ -69,6 +77,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  Future<String> _loadTotalBalance() async {
+    final repo = context.read<FinanceRepository>();
+    final baseCode = await repo.getBaseCurrencyCode();
+    final total = await repo.calculateTotalBalance(baseCode);
+    return NumberFormat.currency(locale: 'en_US', symbol: '\$').format(total);
+  }
+
+  Future<double> _loadMonthNet() async {
+    final repo = context.read<FinanceRepository>();
+    final summary = await repo.watchMonthlySummary(DateTime.now()).first;
+    return summary.income - summary.expenses;
   }
 
   Widget _buildTopAppBar(Color textColor) {
@@ -140,13 +161,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                '\$1,230.50',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+              FutureBuilder<double>(
+                future: _loadMonthNet(),
+                builder: (context, snapshot) {
+                  final value = snapshot.data ?? 0.0;
+                  return Text(
+                    NumberFormat.currency(
+                      locale: 'en_US',
+                      symbol: '\$',
+                    ).format(value),
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
               ),
               const SizedBox(width: 8),
               const Text(

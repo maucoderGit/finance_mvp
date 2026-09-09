@@ -1,13 +1,13 @@
-import 'dart:io';
-
 import 'package:finance_mvp/constants/app_colors.dart';
-import 'package:finance_mvp/screens/database.dart' as db;
-import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/providers/currency_provider.dart';
+import 'package:finance_mvp/providers/revaluation_provider.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/net_worth_tracker.dart';
+import 'package:finance_mvp/services/revaluation_service.dart';
 import 'package:finance_mvp/widget/month_filter_widget.dart';
 import 'package:finance_mvp/widget/appbar.dart';
 import 'package:finance_mvp/widget/info_section_title.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -21,11 +21,45 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
+  bool _autoSyncTriggered = false;
 
   void _onDateChanged(DateTime newDate) {
     setState(() {
       _selectedDate = newDate;
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runStartupTasks();
+    });
+  }
+
+  /// Trigger background tasks on first launch: auto-fetch rates (if enabled)
+  /// and ensure today's net worth snapshot exists.
+  Future<void> _runStartupTasks() async {
+    if (_autoSyncTriggered || !mounted) return;
+    _autoSyncTriggered = true;
+
+    final currencyProvider = context.read<CurrencyProvider>();
+    final revaluationService = context.read<RevaluationService>();
+    final revaluationProvider = context.read<RevaluationProvider>();
+    final tracker = NetWorthTracker(context.read<FinanceRepository>(), revaluationService);
+
+    // Auto-sync rates when settings allow it.
+    final settings = await currencyProvider.watchUserSettings().first;
+    if (settings?.currencySelectionMode == 'auto') {
+      await currencyProvider.syncRates();
+    }
+
+    // Ensure a net worth snapshot exists for today.
+    await tracker.ensureTodaySnapshot();
+    tracker.cancel();
+
+    // Refresh revaluation analytics.
+    await revaluationProvider.refresh();
   }
 
   @override
@@ -44,6 +78,8 @@ class _HomeScreenState extends State<HomeScreen> {
             children: <Widget>[
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               const _UserGreeting(),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
+              const _RevaluationSummaryStrip(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               StreamBuilder<MonthlySummary>(
                 stream: repo.watchMonthlySummary(_selectedDate),
@@ -263,6 +299,117 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(amount, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: amountColor)),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact, tappable strip showing total unrealized FX gain/loss.
+class _RevaluationSummaryStrip extends StatelessWidget {
+  const _RevaluationSummaryStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    final revaluationProvider = context.watch<RevaluationProvider>();
+    final summary = revaluationProvider.summary;
+
+    if (summary == null) {
+      return InkWell(
+        onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, Color(0xFF1E6B34)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.trending_up, color: Colors.white),
+              SizedBox(width: 12),
+              Text(
+                'Revaluation analytics',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              Spacer(),
+              Icon(Icons.chevron_right, color: Colors.white70),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final isGain = summary.totalUnrealizedGainLoss >= 0;
+    final color = isGain ? const Color(0xFFB9F6CA) : const Color(0xFFFFCDD2);
+    final icon = isGain ? Icons.trending_up : Icons.trending_down;
+    final formatted = NumberFormat.currency(
+      locale: 'en_US',
+      symbol: '',
+      decimalDigits: 2,
+    ).format(summary.totalUnrealizedGainLoss);
+
+    return InkWell(
+      onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, Color(0xFF1E6B34)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(width: 8),
+                const Text(
+                  'UNREALIZED FX',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  'Details',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const Icon(Icons.chevron_right,
+                    color: Colors.white70, size: 16),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${isGain ? '+' : ''}$formatted USD',
+              style: TextStyle(
+                color: color,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
+            ),
+            if (summary.purchasingPowerChangePercent != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${summary.nationalCurrencyCode} devalued '
+                '${summary.purchasingPowerChangePercent!.toStringAsFixed(1)}% in 12 months',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,26 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+const Map<String, IconData> _categoryIcons = {
+  'home_repair_service': Icons.build,
+  'restaurant': Icons.restaurant,
+  'directions_car': Icons.directions_car,
+  'shopping_bag': Icons.shopping_bag,
+  'bolt': Icons.bolt,
+  'movie': Icons.movie,
+  'local_hospital': Icons.local_hospital,
+  'school': Icons.school,
+  'payments': Icons.payments,
+  'trending_up': Icons.trending_up,
+  'bookmark': Icons.bookmark,
+  'fastfood': Icons.fastfood,
+  'lightbulb': Icons.lightbulb,
+  'health_and_safety': Icons.health_and_safety,
+  'attach_money': Icons.attach_money,
+};
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -9,18 +30,13 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  final List<Map<String, dynamic>> _categories = [
-    {'id': 1, 'name': 'Services', 'icon': Icons.bookmark, 'color': Colors.blue},
-    {'id': 2, 'name': 'Food', 'icon': Icons.fastfood, 'color': Colors.orange},
-    {'id': 3, 'name': 'Transport', 'icon': Icons.directions_car, 'color': Colors.red},
-    {'id': 4, 'name': 'Shopping', 'icon': Icons.shopping_bag, 'color': Colors.purple},
-    {'id': 5, 'name': 'Utilities', 'icon': Icons.lightbulb, 'color': Colors.green},
-    {'id': 6, 'name': 'Entertainment', 'icon': Icons.movie, 'color': Colors.teal},
-    {'id': 7, 'name': 'Health', 'icon': Icons.health_and_safety, 'color': Colors.pink},
-    {'id': 8, 'name': 'Education', 'icon': Icons.school, 'color': Colors.indigo},
-    {'id': 9, 'name': 'Salary', 'icon': Icons.attach_money, 'color': Colors.greenAccent},
-    {'id': 10, 'name': 'Investments', 'icon': Icons.trending_up, 'color': Colors.lightBlue},
-  ];
+  late Future<List<db.Category>> _categoriesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesFuture = context.read<FinanceRepository>().getAllCategories();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,17 +58,36 @@ class _CategoryScreenState extends State<CategoryScreen> {
           },
         ),
       ),
-      body: ListView.builder(
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final category = _categories[index];
+      body: FutureBuilder<List<db.Category>>(
+        future: _categoriesFuture,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final categories = snapshot.data!;
+          if (categories.isEmpty) {
+            return const Center(child: Text('No categories found.'));
+          }
+          return ListView.builder(
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final category = categories[index];
+              final icon = _categoryIcons[category.icon] ?? Icons.bookmark;
+              final color = Color(category.color);
 
-          return ListTile(
-            leading: Icon(category['icon'], color: category['color']),
-            title: Text(category["name"]),
-            onTap: () {
-              Navigator.pop(context, category);
-            }
+              return ListTile(
+                leading: Icon(icon, color: color),
+                title: Text(category.name),
+                onTap: () {
+                  Navigator.pop(context, {
+                    'id': category.id,
+                    'name': category.name,
+                    'icon': icon,
+                    'color': color,
+                  });
+                },
+              );
+            },
           );
         },
       ),
