@@ -1,5 +1,8 @@
+import 'package:drift/drift.dart' as drift;
+import 'package:finance_mvp/screens/database.dart';
+import 'package:finance_mvp/screens/finance_repository.dart';
 import 'package:flutter/material.dart';
-import '../models/currency.dart';
+import 'package:provider/provider.dart';
 
 class CurrencyForm extends StatefulWidget {
   const CurrencyForm({super.key});
@@ -26,16 +29,24 @@ class _CurrencyFormState extends State<CurrencyForm> {
     super.dispose();
   }
 
-  void _saveForm() {
+  Future<void> _saveForm() async {
     if (_formKey.currentState!.validate()) {
-      final currency = Currency(
-        name: _nameController.text,
-        code: _codeController.text,
-        symbol: _symbolController.text,
-        separator: _separatorController.text,
-        decimalDigits: int.parse(_decimalDigitsController.text),
+      final repo = context.read<FinanceRepository>();
+      final newCurrencyCompanion = CurrenciesCompanion(
+        name: drift.Value(_nameController.text),
+        code: drift.Value(_codeController.text.toUpperCase()),
+        symbol: drift.Value(_symbolController.text),
+        separator: drift.Value(_separatorController.text),
+        decimalDigits: drift.Value(int.parse(_decimalDigitsController.text)),
       );
-      Navigator.of(context).pop(currency);
+
+      // Insert and get the created object
+      await repo.db.into(repo.db.currencies).insert(newCurrencyCompanion);
+      final newCurrency = await (repo.db.select(repo.db.currencies)
+            ..where((tbl) => tbl.code.equals(_codeController.text.toUpperCase())))
+          .getSingle();
+
+      if (mounted) Navigator.of(context).pop(newCurrency);
     }
   }
 

@@ -157,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 24),
           // Placeholder for the chart
-          Container(
+          SizedBox(
             height: 150,
             width: double.infinity,
             // Replace with actual chart widget

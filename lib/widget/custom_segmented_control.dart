@@ -5,10 +5,10 @@ class CustomSegmentedControl extends StatefulWidget {
   final ValueChanged<int> onSegmentChosen;
 
   const CustomSegmentedControl({
-    Key? key,
+    super.key,
     required this.segments,
     required this.onSegmentChosen,
-  }) : super(key: key);
+  });
 
   @override
   _CustomSegmentedControlState createState() => _CustomSegmentedControlState();

@@ -1,10 +1,14 @@
+import 'package:drift/drift.dart' hide Column;
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/screens/database.dart' as db;
+import 'package:finance_mvp/screens/finance_repository.dart';
 import 'package:finance_mvp/screens/currency_screen.dart';
 import 'package:finance_mvp/screens/category_screen.dart';
 import 'package:finance_mvp/widget/numpad.dart';
 import 'package:finance_mvp/widget/search_screen/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 enum TransactionType {
   income,
@@ -27,6 +31,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
   TransactionType _transactionType = TransactionType.income;
   
   bool _isRecurrenceEnabled = true;
+  final TextEditingController _referenceController = TextEditingController();
+  db.Account? _selectedAccount;
   Map? category;
 
   void _onNumberTap(String number) {
@@ -72,6 +78,35 @@ class _TransactionScreenState extends State<TransactionScreen> {
       decimalDigits: 2,
     );
     return formatter.format(number).replaceAll('.', ',');
+  }
+
+  Future<void> _saveTransaction() async {
+    final repo = context.read<FinanceRepository>();
+    
+    // If no account selected, pick the first one for the MVP flow
+    if (_selectedAccount == null) {
+      final accounts = await repo.db.select(repo.db.accounts).get();
+      if (accounts.isNotEmpty) _selectedAccount = accounts.first;
+    }
+
+    if (_selectedAccount == null) return;
+
+    var amountValue = double.tryParse(_amount) ?? 0.0;
+    if (_transactionType == TransactionType.expense) {
+      amountValue = -amountValue;
+    }
+
+    await repo.createTransaction(db.TransactionsCompanion(
+      amount: Value(amountValue),
+      accountId: Value(_selectedAccount!.id),
+      categoryId: Value(category?['id']),
+      currencyCode: Value(_selectedAccount!.currencyCode),
+      reference: Value(_referenceController.text),
+      isRecurrenceEnabled: Value(_isRecurrenceEnabled),
+      date: Value(DateTime.now()),
+    ));
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
@@ -149,7 +184,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       if (_currentStep < 1) {
                         _currentStep += 1;
                       } else {
-                        // Last step, do something
+                        _saveTransaction();
                       }
                     });
                   },
@@ -267,9 +302,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  const Text(
-                                    'Banco mercantil Panama',
-                                    style: TextStyle(
+                                  Text(
+                                    _selectedAccount?.name ?? 'Select Account',
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.black,
@@ -391,7 +426,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           const SizedBox(height: 16),
 
                           // Add Reference Field
-                          _buildReferenceField(),
+                          _buildReferenceField(_referenceController),
 
                           const SizedBox(height: 20),
                           
@@ -531,24 +566,25 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
 
-  Widget _buildReferenceField() {
+  Widget _buildReferenceField(TextEditingController controller) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.fieldsBackground,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.description_outlined, color: Colors.black54),
-          SizedBox(width: 8),
+          const Icon(Icons.description_outlined, color: Colors.black54),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
-              decoration: InputDecoration(
+              controller: controller,
+              decoration: const InputDecoration(
                 hintText: 'Enter reference',
                 border: InputBorder.none,
               ),
-              style: TextStyle(fontSize: 16, color: Colors.black),
+              style: const TextStyle(fontSize: 16, color: Colors.black),
             ),
           ),
         ],

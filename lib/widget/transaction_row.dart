@@ -4,7 +4,7 @@ import 'package:finance_mvp/models/budget.dart';
 class TransactionRow extends StatelessWidget {
   final Transaction transaction;
 
-  const TransactionRow({Key? key, required this.transaction}) : super(key: key);
+  const TransactionRow({super.key, required this.transaction});
 
   @override
   Widget build(BuildContext context) {

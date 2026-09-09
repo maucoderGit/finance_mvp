@@ -1,16 +1,32 @@
 import 'package:finance_mvp/constants/app_colors.dart';
-import 'package:finance_mvp/screens/budget_screen.dart';
-import 'package:finance_mvp/screens/config.dart';
-import 'package:finance_mvp/screens/currency_screen.dart';
-import 'package:finance_mvp/screens/forecast_screen.dart';
+import 'package:finance_mvp/screens/accounts_screen.dart';
+import 'package:finance_mvp/screens/database.dart';
+import 'package:finance_mvp/screens/config_screen.dart';
+import 'package:finance_mvp/screens/finance_repository.dart';
 import 'package:finance_mvp/screens/home_screen.dart';
 import 'package:finance_mvp/screens/transaction_screen.dart';
 import 'package:finance_mvp/screens/transactions_screen.dart';
-import 'package:finance_mvp/screens/dashboard_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  final database = AppDatabase();
+
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider<AppDatabase>(
+          create: (_) => database,
+          dispose: (_, db) => db.close(),
+        ),
+        ProxyProvider<AppDatabase, FinanceRepository>(
+          update: (_, db, __) => FinanceRepository(db),
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -37,14 +53,10 @@ class MyApp extends StatelessWidget {
       initialRoute: '/v1/home',
       routes: {
         '/v1/home': (context) => const HomeScreen(),
-        '/v1/dashboard': (context) => const DashboardScreen(),
-        // '/v1/balance': (context) => const MinimalistBalanceScreen(),
-        '/v1/config': (context) => const ConfigScreen(),
-        '/v1/config/currency': (context) => const CurrencyScreen(),
         '/v1/transactions': (context) => const TransactionPage(),
         '/v1/transactions/create': (context) => const TransactionScreen(),
-        '/v1/budget': (context) => const BudgetScreen(),
-        '/v1/forecast': (context) => const ForecastScreen(),
+        '/v1/accounts': (context) => const AccountsScreen(),
+        '/v1/config': (context) => const ConfigScreen(),
       },
     );
   }

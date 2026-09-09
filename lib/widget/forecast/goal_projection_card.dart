@@ -10,14 +10,14 @@ class GoalProjectionCard extends StatelessWidget {
   final IconData icon;
 
   const GoalProjectionCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.projectedDate,
     required this.currentAmount,
     required this.totalAmount,
     required this.progress,
     required this.icon,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

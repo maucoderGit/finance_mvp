@@ -12,7 +12,7 @@ class AppColors {
   static const Color fieldsBackground = Color.fromARGB(255, 254, 255, 252);
   static const Color segmentedControlBackground = Color(0xFFE0E0E0);
   static const Color segmentedControlActive = Color(0xFFFFFFFF);
-
+  static const Color cardBorder = Color.fromARGB(255, 156, 156, 156);
 
   static const List<Color> stackCardBackground = [
     Color(0xFFF7FAF5),

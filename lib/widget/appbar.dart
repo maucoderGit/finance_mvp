@@ -2,11 +2,14 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const HomeAppBar({super.key});
+  final Widget? title;
+  const HomeAppBar({super.key, this.title});
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      title: title,
+      centerTitle: true,
       backgroundColor: AppColors.background,
       elevation: 0,
       leading: Padding(

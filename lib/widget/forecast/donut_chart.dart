@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class DonutChartCard extends StatelessWidget {
-  const DonutChartCard({Key? key}) : super(key: key);
+  const DonutChartCard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +116,7 @@ class ChartLegend extends StatelessWidget {
   final Color color;
   final String text;
 
-  const ChartLegend({Key? key, required this.color, required this.text})
-      : super(key: key);
+  const ChartLegend({super.key, required this.color, required this.text});
 
   @override
   Widget build(BuildContext context) {

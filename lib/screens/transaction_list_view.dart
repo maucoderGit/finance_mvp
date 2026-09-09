@@ -1,9 +1,9 @@
-import 'package:finance_mvp/models/transactions.dart';
+import 'package:finance_mvp/screens/database.dart' as db;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class TransactionListView extends StatefulWidget {
-  final List<Transaction> transactions;
+  final List<db.Transaction> transactions;
   const TransactionListView({super.key, required this.transactions});
 
   @override
@@ -11,39 +11,12 @@ class TransactionListView extends StatefulWidget {
 }
 
 class _TransactionListViewState extends State<TransactionListView> {
-  final List<Transaction> _displayedTransactions = [];
-  final int _itemsPerPage =
-      8; // Number of items to load initially and per "page"
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMoreItems(); // Load initial items
-  }
-
-  Future<void> _loadMoreItems() async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    int startIndex = _displayedTransactions.length;
-    int endIndex = startIndex + _itemsPerPage;
-    if (endIndex > widget.transactions.length) {
-      endIndex = widget.transactions.length;
-    }
-
-    setState(() {
-      _displayedTransactions
-          .addAll(widget.transactions.sublist(startIndex, endIndex));
-      _isLoading = false;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (widget.transactions.isEmpty) {
+      return const Center(child: Text('No transactions yet', style: TextStyle(color: Colors.grey)));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -81,19 +54,18 @@ class _TransactionListViewState extends State<TransactionListView> {
 }
 
 class TransactionItem extends StatelessWidget {
-  final Transaction transaction;
+  final db.Transaction transaction;
 
   const TransactionItem({super.key, required this.transaction});
 
   @override
   Widget build(BuildContext context) {
-    // Determine text color based on amount sign
     bool isExpense = transaction.amount < 0;
     String amountText = isExpense
         ? '-\$${(-transaction.amount).toStringAsFixed(2)}'
         : '+\$${transaction.amount.toStringAsFixed(2)}';
 
-    Color amountColor = isExpense ? Colors.red.shade600 : Colors.green.shade600;
+    Color amountColor = isExpense ? Colors.red.shade600 : const Color(0xFF0B2013);
 
     return Container(
       padding: const EdgeInsets.all(12.0),
@@ -122,11 +94,11 @@ class TransactionItem extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: transaction.iconBackgroundColor,
+                  color: Colors.grey[200],
                 ),
-                child: Icon(
-                  transaction.icon,
-                  color: transaction.iconColor,
+                child: const Icon(
+                  Icons.receipt_long,
+                  color: Colors.black,
                   size: 20,
                 ),
               ),
@@ -136,30 +108,19 @@ class TransactionItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    transaction.title,
+                    transaction.reference ?? 'Transaction',
                     style: const TextStyle(
                       fontWeight: FontWeight.w500,
-                      // text-text-light dark:text-text-dark
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    transaction.category,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey, // text-sm text-text-secondary...
                     ),
                   ),
                   Text(
-                    transaction.date != null
-                        ? DateFormat('MMM dd, yyyy').format(transaction.date!)
-                        : '',
+                    DateFormat('MMM dd, yyyy').format(transaction.date),
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context)
                           .textTheme
                           .bodySmall
-                          ?.color, // text-sm text-text-secondary...
+                          ?.color,
                     ),
                   ),
                 ],

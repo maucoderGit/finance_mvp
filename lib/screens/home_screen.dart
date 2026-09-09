@@ -1,34 +1,70 @@
 import 'dart:io';
 
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/screens/database.dart' as db;
+import 'package:finance_mvp/screens/finance_repository.dart';
+import 'package:finance_mvp/widget/month_filter_widget.dart';
 import 'package:finance_mvp/widget/appbar.dart';
 import 'package:finance_mvp/widget/info_section_title.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  DateTime _selectedDate = DateTime.now();
+
+  void _onDateChanged(DateTime newDate) {
+    setState(() {
+      _selectedDate = newDate;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final repo = context.read<FinanceRepository>();
+
     return Scaffold(
-      appBar: const HomeAppBar(),
+      appBar: HomeAppBar(
+        title: MonthFilterWidget(onDateSelected: _onDateChanged),
+      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               const _UserGreeting(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
+              StreamBuilder<MonthlySummary>(
+                stream: repo.watchMonthlySummary(_selectedDate),
+                builder: (context, snapshot) {
+                  final summary = snapshot.data;
+                  final income = summary?.income ?? 0.0;
+                  final expenses = summary?.expenses ?? 0.0;
+
+                  final currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
+
+                  return _MonthlySummary(
+                    income: '+${currencyFormat.format(income)}',
+                    expenses: '-${currencyFormat.format(expenses)}',
+                  );
+                }
+              ),
               const _ActionButtons(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.08),
               InfoSectionTitle(
-                icon: Icons.arrow_downward_rounded,
-                title: 'Recent withdrawals',
+                icon: Icons.receipt_long_outlined,
+                title: 'Moves',
                 index: 0,
                 actionText: 'View all',
                 onTap: () {
@@ -36,20 +72,18 @@ class HomeScreen extends StatelessWidget {
                 },
               ),
               InfoSectionTitle(
-                icon: Icons.arrow_upward_rounded,
-                title: 'Upcoming payments',
-                index: 1,
-                actionText: 'Get paid',
-                onTap: () {},
-              ),
-              InfoSectionTitle(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'My balance',
-                index: 2,
+                index: 1,
                 actionText: 'Review',
-                onTap: () {
-                  Navigator.pushNamed(context, '/v1/dashboard');
-                },
+                onTap: () => Navigator.pushNamed(context, '/v1/accounts'),
+              ),
+              InfoSectionTitle(
+                icon: Icons.add_card_outlined,
+                title: 'Register Accounts',
+                index: 2,
+                actionText: 'Add',
+                onTap: () => Navigator.pushNamed(context, '/v1/accounts'),
               ),
             ],
           ),
@@ -67,38 +101,6 @@ class _UserGreeting extends StatefulWidget {
 }
 
 class _UserGreetingState extends State<_UserGreeting> {
-  final ImagePicker _picker = ImagePicker();
-  String? _imagePath;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfileImage();
-  }
-
-  /// Loads the saved image path from SharedPreferences.
-  Future<void> _loadProfileImage() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _imagePath = prefs.getString('profileImagePath');
-    });
-  }
-
-  /// Opens the image gallery and saves the selected image path.
-  Future<void> _pickImage() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _imagePath = prefs.getString('profileImagePath');
-    });
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      await prefs.setString('profileImagePath', image.path);
-      setState(() {
-        _imagePath = image.path;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -114,16 +116,15 @@ class _UserGreetingState extends State<_UserGreeting> {
                   borderRadius: BorderRadius.circular(24.0), // Rounded corners
                   border: Border.all(color: Colors.grey[400]!, width: 0),
                 ),
-                child: _imagePath != null ? ClipRRect(
-                  borderRadius: BorderRadius.circular(24.0),
-                  child: Image.file(File(_imagePath!), fit: BoxFit.cover),
-                ) : const SizedBox()
-            ),
+                child: const SizedBox()),
             Positioned(
               bottom: 0,
               right: 0,
               child: GestureDetector(
-                onTap: _pickImage,
+                onTap: () {
+                  // TODO: Implement _pickImage
+                  // _pickImage,
+                },
                 child: const CircleAvatar(
                   radius: 18,
                   backgroundColor: AppColors.primary,
@@ -146,9 +147,9 @@ class _UserGreetingState extends State<_UserGreeting> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Maucoder',
-          style: TextStyle(
+        Text(
+          'Maucoder', // TODO: Replace with user name from DB
+          style: const TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
             color: AppColors.textDark,
@@ -172,15 +173,6 @@ class _ActionButtons extends StatelessWidget {
         _ActionButton(icon: Icons.add, label: 'Register Transaction', onTap: () {
           Navigator.pushNamed(context, '/v1/transactions/create');
         }),
-        _ActionButton(icon: Icons.pie_chart, label: 'Budget', onTap: () {
-          Navigator.pushNamed(context, '/v1/budget');
-        }),
-        // _ActionButton(icon: Icons.arrow_downward, label: 'Withdraw', onTap: () {
-        //   Navigator.pushNamed(context, '/v1/transactions/create');
-        // }),
-        // _ActionButton(icon: Icons.swap_horiz, label: 'Transfer', onTap: () {
-        //   Navigator.pushNamed(context, '/v1/transactions/create');
-        // }),
       ],
     );
   }
@@ -214,5 +206,64 @@ class _ActionButton extends StatelessWidget {
         ),
       ],
     ));
+  }
+}
+
+class _MonthlySummary extends StatelessWidget {
+  final String income;
+  final String expenses;
+  const _MonthlySummary({required this.income, required this.expenses});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryCard(
+              label: 'Income',
+              amount: income,
+              amountColor: const Color(0xFF0B2013),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: _SummaryCard(
+              label: 'Expenses',
+              amount: expenses,
+              amountColor: AppColors.textDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String label;
+  final String amount;
+  final Color amountColor;
+
+  const _SummaryCard({required this.label, required this.amount, required this.amountColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F4EF), // surface-container-low
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC3C8C1)), // outline-variant
+      ),
+      child: Column(
+        children: [
+          Text(label.toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text(amount, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: amountColor)),
+        ],
+      ),
+    );
   }
 }

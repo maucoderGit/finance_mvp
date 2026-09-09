@@ -6,11 +6,11 @@ class StatCard extends StatelessWidget {
   final String percentage;
 
   const StatCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.value,
     required this.percentage,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

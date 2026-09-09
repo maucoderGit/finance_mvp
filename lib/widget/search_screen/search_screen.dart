@@ -1,4 +1,3 @@
-import 'package:finance_mvp/widget/search_screen/search_element_card.dart';
 import 'package:flutter/material.dart';
 import 'search_element.dart';
 

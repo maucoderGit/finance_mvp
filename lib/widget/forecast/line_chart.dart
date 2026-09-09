@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class LineChartCard extends StatelessWidget {
-  const LineChartCard({Key? key}) : super(key: key);
+  const LineChartCard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +83,7 @@ class LineChartCard extends StatelessWidget {
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: Colors.red.withOpacity(0.3),
+                      color: Colors.red.withValues(alpha: 0.3),
                     ),
                   ),
                 ],

@@ -1,9 +1,11 @@
 
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/screens/database.dart' as db;
 import 'package:finance_mvp/screens/currency_form.dart';
+import 'package:finance_mvp/screens/finance_repository.dart';
 import 'package:flutter/material.dart';
-import '../models/currency.dart';
 import 'daily_rates_screen.dart';
+import 'package:provider/provider.dart';
 
 class CurrencyScreen extends StatefulWidget {
   const CurrencyScreen({super.key});
@@ -14,40 +16,38 @@ class CurrencyScreen extends StatefulWidget {
 
 class _CurrencyScreenState extends State<CurrencyScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<Currency> _currencies = [];
-  List<Currency> _filteredCurrencies = [];
-  Currency? _selectedCurrency;
+  late Future<List<db.Currency>> _currenciesFuture;
+  late Future<String> _baseCurrencyCodeFuture;
+  List<db.Currency> _filteredCurrencies = [];
 
   @override
   void initState() {
     super.initState();
-    _currencies = [
-      Currency(name: 'United States Dollar', code: 'USD', symbol: '\$', separator: ',', decimalDigits: 2),
-      Currency(name: 'Euro', code: 'EUR', symbol: '€', separator: '.', decimalDigits: 2),
-      Currency(name: 'British Pound', code: 'GBP', symbol: '£', separator: ',', decimalDigits: 2),
-      Currency(name: 'Japanese Yen', code: 'JPY', symbol: '¥', separator: ',', decimalDigits: 0),
-      Currency(name: 'Australian Dollar', code: 'AUD', symbol: '\$', separator: ',', decimalDigits: 2),
-      Currency(name: 'Canadian Dollar', code: 'CAD', symbol: '\$', separator: ',', decimalDigits: 2),
-      Currency(name: 'Swiss Franc', code: 'CHF', symbol: 'CHF', separator: '\'', decimalDigits: 2),
-    ];
-    _filteredCurrencies = _currencies;
-    _selectedCurrency = _currencies.first;
+    _loadCurrencies();
     _searchController.addListener(_filterCurrencies);
   }
 
+  void _loadCurrencies() {
+    final repo = context.read<FinanceRepository>();
+    _currenciesFuture = repo.db.select(repo.db.currencies).get();
+    _baseCurrencyCodeFuture = repo.getBaseCurrencyCode();
+  }
+
   void _filterCurrencies() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredCurrencies = _currencies.where((currency) {
-        return currency.name.toLowerCase().contains(query) || currency.code.toLowerCase().contains(query);
-      }).toList();
-    });
+    // This will be handled within the FutureBuilder now
+    setState(() {});
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _setBaseCurrency(String code) async {
+    final repo = context.read<FinanceRepository>();
+    await repo.setBaseCurrency(code);
+    _loadCurrencies(); // Reload to reflect changes
   }
 
   @override
@@ -63,18 +63,17 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
         actions: [
           CircleAvatar(
             backgroundColor: AppColors.primary,
-            child: IconButton(icon: const Icon(Icons.add, color: AppColors.background), onPressed: () async {
-              final newCurrency = await showModalBottomSheet<Currency>(
+            child: IconButton(icon: const Icon(Icons.add, color: AppColors.background), onPressed: () {
+              showModalBottomSheet<db.Currency>(
                 context: context,
                 isScrollControlled: true,
                 builder: (context) => const CurrencyForm(),
-              );
-              if (newCurrency != null) {
+              ).then((newCurrency) {
+                if (newCurrency != null) {
                 setState(() {
-                  _currencies.add(newCurrency);
-                  _filterCurrencies();
+                    _loadCurrencies();
                 });
-              }
+              }});
             },
           ))
         ],
@@ -95,32 +94,40 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _filteredCurrencies.length,
-              itemBuilder: (context, index) {
-                final currency = _filteredCurrencies[index];
-                final isSelected = currency.code == _selectedCurrency?.code;
-                return _CurrencyListItem(
-                  currency: currency,
-                  isSelected: isSelected,
-                  onTap: () {
-                    setState(() {
-                      _selectedCurrency = currency;
-                    });
-                  },
-                  onLongPress: () {
-                    showModalBottomSheet(context: context, builder: (context) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(16),
-                            topRight: Radius.circular(16),
-                          ),
-                        ),
-                        child: const DailyRatesScreen(),
-                      );
-                    });
+            child: FutureBuilder(
+              future: Future.wait([_currenciesFuture, _baseCurrencyCodeFuture]),
+              builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting || !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                final allCurrencies = snapshot.data![0] as List<db.Currency>;
+                final baseCurrencyCode = snapshot.data![1] as String;
+
+                if (allCurrencies.isEmpty) {
+                  return const Center(child: Text('No currencies found.'));
+                }
+
+                final query = _searchController.text.toLowerCase();
+                _filteredCurrencies = allCurrencies.where((currency) {
+                  return currency.name.toLowerCase().contains(query) || currency.code.toLowerCase().contains(query);
+                }).toList();
+
+                return ListView.builder(
+                  itemCount: _filteredCurrencies.length,
+                  itemBuilder: (context, index) {
+                    final currency = _filteredCurrencies[index];
+                    final isBase = currency.code == baseCurrencyCode;
+                    return _CurrencyListItem(
+                      currency: currency,
+                      isBase: isBase,
+                      onTap: () {
+                        _setBaseCurrency(currency.code);
+                      },
+                      onViewRates: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => DailyRatesScreen(currency: currency)));
+                      },
+                    );
                   },
                 );
               },
@@ -135,24 +142,23 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
 class _CurrencyListItem extends StatelessWidget {
   const _CurrencyListItem({
     required this.currency,
-    required this.isSelected,
+    required this.isBase,
     required this.onTap,
-    required this.onLongPress,
+    required this.onViewRates,
   });
 
-  final Currency currency;
-  final bool isSelected;
+  final db.Currency currency;
+  final bool isBase;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback onViewRates;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      onLongPress: onLongPress,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        decoration: isSelected
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        decoration: isBase
             ? BoxDecoration(
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                 border: Border(left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 4)),
@@ -183,10 +189,16 @@ class _CurrencyListItem extends StatelessWidget {
                 ],
               ),
             ),
-            if (isSelected)
+            if (isBase)
               Icon(
                 Icons.check_circle,
                 color: Theme.of(context).colorScheme.primary,
+              ),
+            if (!isBase)
+              IconButton(
+                icon: const Icon(Icons.timeline),
+                onPressed: onViewRates,
+                tooltip: 'View historical rates',
               ),
           ],
         ),
