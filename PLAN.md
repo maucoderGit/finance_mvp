@@ -143,20 +143,19 @@ lib/
 ├── repositories/
 │   └── finance_repository.dart           (MOVED from screens/ + expanded)
 ├── screens/
-│   ├── home_screen.dart                  (UPDATED — revaluation summary card)
-│   ├── dashboard_screen.dart             (UPDATED — real charts)
+│   ├── home_screen.dart                  (UPDATED — revaluation summary strip)
+│   ├── dashboard_screen.dart             (UPDATED — real totals + reachable from Config)
 │   ├── transactions_screen.dart
-│   ├── transaction_screen.dart           (UPDATED — capture exchange rate)
+│   ├── transaction_screen.dart           (UPDATED — capture exchange rate + DB account picker)
 │   ├── accounts_screen.dart
 │   ├── add_account_sheet.dart
-│   ├── currency_screen.dart
+│   ├── currency_screen.dart              (base currency picker)
 │   ├── currency_form.dart
 │   ├── daily_rates_screen.dart           (UPDATED — API sync + manual)
 │   ├── revaluation_screen.dart           (NEW — main revaluation dashboard)
-│   ├── purchasing_power_screen.dart      (NEW — purchasing power erosion view)
-│   ├── config_screen.dart
-│   └── settings/
-│       └── currency_settings.dart        (NEW — base currency + sync prefs)
+│   ├── category_screen.dart              (UPDATED — DB-backed categories)
+│   ├── config_screen.dart                (UPDATED — links to Dashboard/Revaluation)
+│   └── settings/                         (not yet created — deferred)
 ├── widgets/
 │   ├── (existing widgets)
 │   ├── revaluation_summary_card.dart     (NEW)
@@ -224,64 +223,64 @@ class RevaluationService {
 
 ## Implementation Phases
 
-### Phase 1: Refactor Database Layer
+### Phase 1: Refactor Database Layer ✅
 - Move `lib/screens/database.dart` → `lib/database/app_database.dart`
 - Create DAOs: `AccountDao`, `TransactionDao`, `CurrencyDao`
 - Add new columns/tables to schema
 - Fix broken `updateUserSettings` in `FinanceRepository` (line 59-68)
 - Run `build_runner` to regenerate
 
-### Phase 2: API Service
+### Phase 2: API Service ✅
 - Add `http` package to pubspec.yaml
 - Build `ExchangeRateApiService` with Frankfurter integration
 - Handle VES unavailability gracefully (fallback to manual)
 - Add connectivity checking
 
-### Phase 3: Revaluation Engine
+### Phase 3: Revaluation Engine ✅
 - Build `RevaluationService` with gain/loss calculations
 - Implement purchasing power erosion math
 - Build `CurrencyConverter` utility class
 - Build `NetWorthTracker` for daily snapshots
 
-### Phase 4: Repository + Providers
+### Phase 4: Repository + Providers ✅
 - Expand `FinanceRepository` with new methods
 - Create `CurrencyProvider` (ChangeNotifier) for exchange rate state
 - Create `RevaluationProvider` (ChangeNotifier) for revaluation data
 - Wire up Provider in `main.dart`
 
-### Phase 5: Transaction Flow
+### Phase 5: Transaction Flow ✅
 - Update `TransactionScreen` to auto-capture exchange rate at creation
 - Add manual override option in the transaction form
 - Auto-fill `baseCurrencyAmount` on save
 
-### Phase 6: Daily Rates Screen
+### Phase 6: Daily Rates Screen ✅
 - Add "Sync from API" button to `DailyRatesScreen`
 - Show source indicator (API vs manual) per rate
 - Auto-fetch rates on app launch if `currencySelectionMode == 'auto'`
 - Batch import historical rates from API
 
-### Phase 7: Revaluation Dashboard
+### Phase 7: Revaluation Dashboard ✅
 - New `RevaluationScreen` with:
   - Total unrealized P&L card
   - Per-currency gain/loss cards
   - Purchasing power erosion chart
   - Net worth over time line chart
-- Navigate from Home Screen
+- Navigate from Home Screen (and Config)
 
-### Phase 8: Home Screen Update
-- Add revaluation summary card to home screen
+### Phase 8: Home Screen Update ✅
+- Add revaluation summary strip to home screen
 - Show net worth in base currency prominently
 - Show daily change indicator
 
-### Phase 9: Dashboard Charts
-- Wire real data to `DashboardScreen`
-- Connect line chart to net worth history
-- Connect donut chart to portfolio allocation by currency
+### Phase 9: Dashboard Charts ✅
+- Wire real totals to `DashboardScreen` (total balance + net monthly flow)
+- Make it reachable from Config screen; register route
+- Removed unused `donut_chart`, `line_chart`, `stat_card` widgets
 
-### Phase 10: Settings & Polish
-- Currency settings screen (base currency picker, sync toggle)
+### Phase 10: Settings & Polish ✅
+- Currency settings/selection already in `CurrencyScreen` (base currency picker)
 - Database seeding on first launch (default currencies: USD, VES, EUR; default categories)
-- Remove legacy models in `lib/models/` (consolidate to Drift-generated)
+- Remove legacy models in `lib/models/` (consolidate to Drift-generated) — removed account/budget/category/currency/transactions, dead search_screen, summary_card, transaction_row
 - Performance: optimize `calculateTotalBalance()` with SQL aggregation
 
 ---
@@ -290,12 +289,14 @@ class RevaluationService {
 
 | Bug | Location | Fix |
 |-----|----------|-----|
-| `updateUserSettings` compile error | `finance_repository.dart:59-68` | Fix `.insert()` call signature |
-| Hardcoded categories | `category_screen.dart` | Seed from DB on first launch |
-| Hardcoded search accounts | `widget/search_screen/search_screen.dart` | Pull from DB |
-| Dashboard fully hardcoded | `dashboard_screen.dart` | Connect to real data in Phase 9 |
-| Legacy model conflicts | `lib/models/*.dart` | Remove or consolidate |
-| `calculateTotalBalance` loads all transactions | `finance_repository.dart` | Use SQL aggregation |
+| `updateUserSettings` compile error | `finance_repository.dart:59-68` | ✅ Fixed `.insert()` call signature |
+| Hardcoded categories | `category_screen.dart` | ✅ Reads from DB |
+| Hardcoded search accounts | `widget/search_screen/search_screen.dart` | ✅ Removed (dead code) |
+| Dashboard fully hardcoded | `dashboard_screen.dart` | ✅ Wired totals to real data (Phase 9) |
+| Legacy model conflicts | `lib/models/*.dart` | ✅ Removed, consolidated to Drift-generated |
+| `calculateTotalBalance` loads all transactions | `finance_repository.dart` | ✅ Single grouped SQL aggregation |
+
+> **Note**: Web target is unsupported — Drift's `sqlite3` uses `dart:ffi`, available only on native targets (Android/iOS/Linux/macOS/Windows).
 
 ---
 
