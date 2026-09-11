@@ -7,6 +7,7 @@ import 'package:finance_mvp/screens/config_screen.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/home_screen.dart';
 import 'package:finance_mvp/screens/revaluation_screen.dart';
+import 'package:finance_mvp/screens/root_screen.dart';
 import 'package:finance_mvp/screens/transaction_screen.dart';
 import 'package:finance_mvp/screens/transactions_screen.dart';
 import 'package:finance_mvp/services/revaluation_service.dart';
@@ -30,12 +31,13 @@ void main() {
         ProxyProvider<FinanceRepository, RevaluationService>(
           update: (_, repo, __) => RevaluationService(repo),
         ),
-        ProxyProvider<FinanceRepository, CurrencyProvider>(
-          update: (_, repo, __) => CurrencyProvider(repo),
-          dispose: (_, provider) => provider.dispose(),
+        ChangeNotifierProvider<CurrencyProvider>(
+          create: (context) =>
+              CurrencyProvider(context.read<FinanceRepository>()),
         ),
-        ProxyProvider<RevaluationService, RevaluationProvider>(
-          update: (_, service, __) => RevaluationProvider(service),
+        ChangeNotifierProvider<RevaluationProvider>(
+          create: (context) =>
+              RevaluationProvider(context.read<RevaluationService>()),
         ),
       ],
       child: const MyApp(),
@@ -64,8 +66,9 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Inter', // A modern font, add it to your pubspec.yaml
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      initialRoute: '/v1/home',
+      initialRoute: '/v1/boot',
       routes: {
+        '/v1/boot': (context) => const RootScreen(),
         '/v1/home': (context) => const HomeScreen(),
         '/v1/transactions': (context) => const TransactionPage(),
         '/v1/transactions/create': (context) => const TransactionScreen(),

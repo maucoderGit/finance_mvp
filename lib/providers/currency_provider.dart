@@ -21,6 +21,49 @@ class CurrencyProvider extends ChangeNotifier {
   String? get syncError => _syncError;
   DateTime? get lastSyncDate => _lastSyncDate;
 
+  /// Ensure a [code]/[name]/[symbol] currency exists in the database.
+  /// No-op if it already exists.
+  Future<void> ensureCurrency({
+    required String code,
+    required String name,
+    required String symbol,
+  }) async {
+    final existing = await _repository.getCurrency(code);
+    if (existing != null) return;
+    await _repository.addCurrency(CurrenciesCompanion.insert(
+      code: code,
+      name: name,
+      symbol: symbol,
+    ));
+  }
+
+  /// Complete the onboarding wizard: persist user profile, base/national
+  /// currency and rate sync mode, then mark the flow as finished.
+  Future<void> completeOnboarding({
+    required String username,
+    required String baseCode,
+    required String baseName,
+    required String baseSymbol,
+    required String nationalCode,
+    required String nationalName,
+    required String nationalSymbol,
+    required String syncMode,
+  }) async {
+    await ensureCurrency(
+        code: baseCode, name: baseName, symbol: baseSymbol);
+    await ensureCurrency(
+        code: nationalCode, name: nationalName, symbol: nationalSymbol);
+
+    await _repository.updateUserSettings(UserSettingsCompanion(
+      username: Value(username),
+      baseCurrencyCode: Value(baseCode),
+      nationalCurrencyCode: Value(nationalCode),
+      currencySelectionMode: Value(syncMode),
+      hasCompletedOnboarding: const Value(true),
+    ));
+    notifyListeners();
+  }
+
   /// Sync today's rates for all non-base currencies via the API.
   /// Falls back gracefully when a currency is unsupported (e.g. VES).
   /// Returns how many currencies were updated.
@@ -138,6 +181,12 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   Future<String> getBaseCurrencyCode() => _repository.getBaseCurrencyCode();
+
+  Future<String> getNationalCurrencyCode() =>
+      _repository.getNationalCurrencyCode();
+
+  Future<bool> hasCompletedOnboarding() =>
+      _repository.getHasCompletedOnboarding();
 
   Stream<UserSetting?> watchUserSettings() => _repository.watchUserSettings();
 

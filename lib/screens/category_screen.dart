@@ -4,7 +4,7 @@ import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-const Map<String, IconData> _categoryIcons = {
+const Map<String, IconData> categoryIcons = {
   'home_repair_service': Icons.build,
   'restaurant': Icons.restaurant,
   'directions_car': Icons.directions_car,
@@ -72,7 +72,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             itemCount: categories.length,
             itemBuilder: (context, index) {
               final category = categories[index];
-              final icon = _categoryIcons[category.icon] ?? Icons.bookmark;
+              final icon = categoryIcons[category.icon] ?? Icons.bookmark;
               final color = Color(category.color);
 
               return ListTile(

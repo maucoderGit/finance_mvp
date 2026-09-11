@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' as drift;
+import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
@@ -20,14 +21,6 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
   String _selectedAccountType = 'Bank';
   String? _selectedCurrencyCode;
   bool _includeInTotal = true;
-
-  final Map<String, IconData> _accountTypeIcons = {
-    'Cash': Icons.wallet,
-    'Bank': Icons.account_balance,
-    'Savings': Icons.savings,
-    'Investment': Icons.show_chart,
-    'Credit Card': Icons.credit_card,
-  };
 
   @override
   void dispose() {
@@ -57,7 +50,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
       name: drift.Value(name),
       subtitle: drift.Value(_selectedAccountType),
       currencyCode: drift.Value(_selectedCurrencyCode!),
-      icon: drift.Value(_accountTypeIcons[_selectedAccountType]!.codePoint.toString()),
+      icon: drift.Value(accountIconSlug(_selectedAccountType)),
       iconColor: drift.Value(AppColors.primary.value), // Example color
     );
 
@@ -124,7 +117,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                     child: DropdownButtonFormField<String>(
                       value: _selectedAccountType,
                       decoration: const InputDecoration(labelText: 'Type'),
-                      items: _accountTypeIcons.keys.map((String value) {
+                      items: accountTypeLabels.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(value),
@@ -220,13 +213,5 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
         ),
       ),
     );
-  }
-}
-
-extension IconDataExtension on IconData {
-  String get name {
-    // This is a simple implementation. A real app might need a more robust way
-    // to map icon data back to a name if needed, but for saving, codePoint is enough.
-    return toString();
   }
 }

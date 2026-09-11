@@ -116,7 +116,8 @@ class RevaluationService {
   Future<RevaluationSummary> getRevaluationSummary(
       {String? nationalCurrencyCode}) async {
     final baseCode = await _repository.getBaseCurrencyCode();
-    final nationalCode = nationalCurrencyCode ?? 'VES';
+    final nationalCode =
+        nationalCurrencyCode ?? await _repository.getNationalCurrencyCode();
 
     final byAccount = await getUnrealizedGainLossByAccount();
 
@@ -184,7 +185,8 @@ class RevaluationService {
   /// Record a daily net worth snapshot in base and national currency.
   Future<void> recordDailyNetWorth({String? nationalCurrencyCode}) async {
     final baseCode = await _repository.getBaseCurrencyCode();
-    final nationalCode = nationalCurrencyCode ?? 'VES';
+    final nationalCode =
+        nationalCurrencyCode ?? await _repository.getNationalCurrencyCode();
 
     final totalInBase = await _repository.calculateTotalBalance(baseCode);
     final totalInNational =

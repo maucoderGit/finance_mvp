@@ -2,6 +2,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/screens/currency_screen.dart';
 import 'package:finance_mvp/screens/dashboard_screen.dart';
+import 'package:finance_mvp/screens/profile_screen.dart';
 import 'package:finance_mvp/screens/revaluation_screen.dart';
 
 class ConfigScreen extends StatelessWidget {
@@ -30,7 +31,10 @@ class ConfigScreen extends StatelessWidget {
             title: 'Profile',
             subtitle: 'Manage your user profile',
             onTap: () {
-              // TODO: Navigate to Profile Screen
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
             },
           ),
           _SettingTile(

@@ -1589,6 +1589,12 @@ class $TransactionsTable extends Transactions
   late final GeneratedColumn<String> contact = GeneratedColumn<String>(
       'contact', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _imagePathMeta =
+      const VerificationMeta('imagePath');
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+      'image_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _isRecurrenceEnabledMeta =
       const VerificationMeta('isRecurrenceEnabled');
   @override
@@ -1645,6 +1651,7 @@ class $TransactionsTable extends Transactions
         currencyCode,
         reference,
         contact,
+        imagePath,
         isRecurrenceEnabled,
         recurrenceType,
         recurrenceEnds,
@@ -1699,6 +1706,10 @@ class $TransactionsTable extends Transactions
     if (data.containsKey('contact')) {
       context.handle(_contactMeta,
           contact.isAcceptableOrUnknown(data['contact']!, _contactMeta));
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(_imagePathMeta,
+          imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta));
     }
     if (data.containsKey('is_recurrence_enabled')) {
       context.handle(
@@ -1763,6 +1774,8 @@ class $TransactionsTable extends Transactions
           .read(DriftSqlType.string, data['${effectivePrefix}reference']),
       contact: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}contact']),
+      imagePath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}image_path']),
       isRecurrenceEnabled: attachedDatabase.typeMapping.read(
           DriftSqlType.bool, data['${effectivePrefix}is_recurrence_enabled'])!,
       recurrenceType: attachedDatabase.typeMapping
@@ -1795,6 +1808,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String currencyCode;
   final String? reference;
   final String? contact;
+  final String? imagePath;
   final bool isRecurrenceEnabled;
   final String? recurrenceType;
   final String? recurrenceEnds;
@@ -1810,6 +1824,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       required this.currencyCode,
       this.reference,
       this.contact,
+      this.imagePath,
       required this.isRecurrenceEnabled,
       this.recurrenceType,
       this.recurrenceEnds,
@@ -1832,6 +1847,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || contact != null) {
       map['contact'] = Variable<String>(contact);
+    }
+    if (!nullToAbsent || imagePath != null) {
+      map['image_path'] = Variable<String>(imagePath);
     }
     map['is_recurrence_enabled'] = Variable<bool>(isRecurrenceEnabled);
     if (!nullToAbsent || recurrenceType != null) {
@@ -1867,6 +1885,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       contact: contact == null && nullToAbsent
           ? const Value.absent()
           : Value(contact),
+      imagePath: imagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imagePath),
       isRecurrenceEnabled: Value(isRecurrenceEnabled),
       recurrenceType: recurrenceType == null && nullToAbsent
           ? const Value.absent()
@@ -1896,6 +1917,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       currencyCode: serializer.fromJson<String>(json['currencyCode']),
       reference: serializer.fromJson<String?>(json['reference']),
       contact: serializer.fromJson<String?>(json['contact']),
+      imagePath: serializer.fromJson<String?>(json['imagePath']),
       isRecurrenceEnabled:
           serializer.fromJson<bool>(json['isRecurrenceEnabled']),
       recurrenceType: serializer.fromJson<String?>(json['recurrenceType']),
@@ -1919,6 +1941,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'currencyCode': serializer.toJson<String>(currencyCode),
       'reference': serializer.toJson<String?>(reference),
       'contact': serializer.toJson<String?>(contact),
+      'imagePath': serializer.toJson<String?>(imagePath),
       'isRecurrenceEnabled': serializer.toJson<bool>(isRecurrenceEnabled),
       'recurrenceType': serializer.toJson<String?>(recurrenceType),
       'recurrenceEnds': serializer.toJson<String?>(recurrenceEnds),
@@ -1938,6 +1961,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           String? currencyCode,
           Value<String?> reference = const Value.absent(),
           Value<String?> contact = const Value.absent(),
+          Value<String?> imagePath = const Value.absent(),
           bool? isRecurrenceEnabled,
           Value<String?> recurrenceType = const Value.absent(),
           Value<String?> recurrenceEnds = const Value.absent(),
@@ -1953,6 +1977,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         currencyCode: currencyCode ?? this.currencyCode,
         reference: reference.present ? reference.value : this.reference,
         contact: contact.present ? contact.value : this.contact,
+        imagePath: imagePath.present ? imagePath.value : this.imagePath,
         isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
         recurrenceType:
             recurrenceType.present ? recurrenceType.value : this.recurrenceType,
@@ -1979,6 +2004,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.currencyCode,
       reference: data.reference.present ? data.reference.value : this.reference,
       contact: data.contact.present ? data.contact.value : this.contact,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       isRecurrenceEnabled: data.isRecurrenceEnabled.present
           ? data.isRecurrenceEnabled.value
           : this.isRecurrenceEnabled,
@@ -2009,6 +2035,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('currencyCode: $currencyCode, ')
           ..write('reference: $reference, ')
           ..write('contact: $contact, ')
+          ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
           ..write('recurrenceEnds: $recurrenceEnds, ')
@@ -2029,6 +2056,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       currencyCode,
       reference,
       contact,
+      imagePath,
       isRecurrenceEnabled,
       recurrenceType,
       recurrenceEnds,
@@ -2047,6 +2075,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.currencyCode == this.currencyCode &&
           other.reference == this.reference &&
           other.contact == this.contact &&
+          other.imagePath == this.imagePath &&
           other.isRecurrenceEnabled == this.isRecurrenceEnabled &&
           other.recurrenceType == this.recurrenceType &&
           other.recurrenceEnds == this.recurrenceEnds &&
@@ -2064,6 +2093,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> currencyCode;
   final Value<String?> reference;
   final Value<String?> contact;
+  final Value<String?> imagePath;
   final Value<bool> isRecurrenceEnabled;
   final Value<String?> recurrenceType;
   final Value<String?> recurrenceEnds;
@@ -2079,6 +2109,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.currencyCode = const Value.absent(),
     this.reference = const Value.absent(),
     this.contact = const Value.absent(),
+    this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
     this.recurrenceEnds = const Value.absent(),
@@ -2095,6 +2126,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     required String currencyCode,
     this.reference = const Value.absent(),
     this.contact = const Value.absent(),
+    this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
     this.recurrenceEnds = const Value.absent(),
@@ -2114,6 +2146,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? currencyCode,
     Expression<String>? reference,
     Expression<String>? contact,
+    Expression<String>? imagePath,
     Expression<bool>? isRecurrenceEnabled,
     Expression<String>? recurrenceType,
     Expression<String>? recurrenceEnds,
@@ -2130,6 +2163,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (currencyCode != null) 'currency_code': currencyCode,
       if (reference != null) 'reference': reference,
       if (contact != null) 'contact': contact,
+      if (imagePath != null) 'image_path': imagePath,
       if (isRecurrenceEnabled != null)
         'is_recurrence_enabled': isRecurrenceEnabled,
       if (recurrenceType != null) 'recurrence_type': recurrenceType,
@@ -2151,6 +2185,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<String>? currencyCode,
       Value<String?>? reference,
       Value<String?>? contact,
+      Value<String?>? imagePath,
       Value<bool>? isRecurrenceEnabled,
       Value<String?>? recurrenceType,
       Value<String?>? recurrenceEnds,
@@ -2166,6 +2201,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       currencyCode: currencyCode ?? this.currencyCode,
       reference: reference ?? this.reference,
       contact: contact ?? this.contact,
+      imagePath: imagePath ?? this.imagePath,
       isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       recurrenceEnds: recurrenceEnds ?? this.recurrenceEnds,
@@ -2200,6 +2236,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (contact.present) {
       map['contact'] = Variable<String>(contact.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
     }
     if (isRecurrenceEnabled.present) {
       map['is_recurrence_enabled'] = Variable<bool>(isRecurrenceEnabled.value);
@@ -2236,6 +2275,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('currencyCode: $currencyCode, ')
           ..write('reference: $reference, ')
           ..write('contact: $contact, ')
+          ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
           ..write('recurrenceEnds: $recurrenceEnds, ')
@@ -2284,6 +2324,15 @@ class $UserSettingsTable extends UserSettings
   late final GeneratedColumn<String> profilePicturePath =
       GeneratedColumn<String>('profile_picture_path', aliasedName, true,
           type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _nationalCurrencyCodeMeta =
+      const VerificationMeta('nationalCurrencyCode');
+  @override
+  late final GeneratedColumn<String> nationalCurrencyCode = GeneratedColumn<
+          String>('national_currency_code', aliasedName, true,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES currencies (code)'));
   static const VerificationMeta _currencySelectionModeMeta =
       const VerificationMeta('currencySelectionMode');
   @override
@@ -2298,14 +2347,26 @@ class $UserSettingsTable extends UserSettings
   late final GeneratedColumn<DateTime> lastAutoFetchDate =
       GeneratedColumn<DateTime>('last_auto_fetch_date', aliasedName, true,
           type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _hasCompletedOnboardingMeta =
+      const VerificationMeta('hasCompletedOnboarding');
+  @override
+  late final GeneratedColumn<bool> hasCompletedOnboarding =
+      GeneratedColumn<bool>('has_completed_onboarding', aliasedName, false,
+          type: DriftSqlType.bool,
+          requiredDuringInsert: false,
+          defaultConstraints: GeneratedColumn.constraintIsAlways(
+              'CHECK ("has_completed_onboarding" IN (0, 1))'),
+          defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
         baseCurrencyCode,
         username,
         profilePicturePath,
+        nationalCurrencyCode,
         currencySelectionMode,
-        lastAutoFetchDate
+        lastAutoFetchDate,
+        hasCompletedOnboarding
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2338,6 +2399,12 @@ class $UserSettingsTable extends UserSettings
           profilePicturePath.isAcceptableOrUnknown(
               data['profile_picture_path']!, _profilePicturePathMeta));
     }
+    if (data.containsKey('national_currency_code')) {
+      context.handle(
+          _nationalCurrencyCodeMeta,
+          nationalCurrencyCode.isAcceptableOrUnknown(
+              data['national_currency_code']!, _nationalCurrencyCodeMeta));
+    }
     if (data.containsKey('currency_selection_mode')) {
       context.handle(
           _currencySelectionModeMeta,
@@ -2349,6 +2416,12 @@ class $UserSettingsTable extends UserSettings
           _lastAutoFetchDateMeta,
           lastAutoFetchDate.isAcceptableOrUnknown(
               data['last_auto_fetch_date']!, _lastAutoFetchDateMeta));
+    }
+    if (data.containsKey('has_completed_onboarding')) {
+      context.handle(
+          _hasCompletedOnboardingMeta,
+          hasCompletedOnboarding.isAcceptableOrUnknown(
+              data['has_completed_onboarding']!, _hasCompletedOnboardingMeta));
     }
     return context;
   }
@@ -2367,12 +2440,18 @@ class $UserSettingsTable extends UserSettings
           .read(DriftSqlType.string, data['${effectivePrefix}username'])!,
       profilePicturePath: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}profile_picture_path']),
+      nationalCurrencyCode: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}national_currency_code']),
       currencySelectionMode: attachedDatabase.typeMapping.read(
           DriftSqlType.string,
           data['${effectivePrefix}currency_selection_mode'])!,
       lastAutoFetchDate: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
           data['${effectivePrefix}last_auto_fetch_date']),
+      hasCompletedOnboarding: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool,
+          data['${effectivePrefix}has_completed_onboarding'])!,
     );
   }
 
@@ -2387,15 +2466,19 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
   final String baseCurrencyCode;
   final String username;
   final String? profilePicturePath;
+  final String? nationalCurrencyCode;
   final String currencySelectionMode;
   final DateTime? lastAutoFetchDate;
+  final bool hasCompletedOnboarding;
   const UserSetting(
       {required this.id,
       required this.baseCurrencyCode,
       required this.username,
       this.profilePicturePath,
+      this.nationalCurrencyCode,
       required this.currencySelectionMode,
-      this.lastAutoFetchDate});
+      this.lastAutoFetchDate,
+      required this.hasCompletedOnboarding});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -2405,10 +2488,14 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
     if (!nullToAbsent || profilePicturePath != null) {
       map['profile_picture_path'] = Variable<String>(profilePicturePath);
     }
+    if (!nullToAbsent || nationalCurrencyCode != null) {
+      map['national_currency_code'] = Variable<String>(nationalCurrencyCode);
+    }
     map['currency_selection_mode'] = Variable<String>(currencySelectionMode);
     if (!nullToAbsent || lastAutoFetchDate != null) {
       map['last_auto_fetch_date'] = Variable<DateTime>(lastAutoFetchDate);
     }
+    map['has_completed_onboarding'] = Variable<bool>(hasCompletedOnboarding);
     return map;
   }
 
@@ -2420,10 +2507,14 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       profilePicturePath: profilePicturePath == null && nullToAbsent
           ? const Value.absent()
           : Value(profilePicturePath),
+      nationalCurrencyCode: nationalCurrencyCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nationalCurrencyCode),
       currencySelectionMode: Value(currencySelectionMode),
       lastAutoFetchDate: lastAutoFetchDate == null && nullToAbsent
           ? const Value.absent()
           : Value(lastAutoFetchDate),
+      hasCompletedOnboarding: Value(hasCompletedOnboarding),
     );
   }
 
@@ -2436,10 +2527,14 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       username: serializer.fromJson<String>(json['username']),
       profilePicturePath:
           serializer.fromJson<String?>(json['profilePicturePath']),
+      nationalCurrencyCode:
+          serializer.fromJson<String?>(json['nationalCurrencyCode']),
       currencySelectionMode:
           serializer.fromJson<String>(json['currencySelectionMode']),
       lastAutoFetchDate:
           serializer.fromJson<DateTime?>(json['lastAutoFetchDate']),
+      hasCompletedOnboarding:
+          serializer.fromJson<bool>(json['hasCompletedOnboarding']),
     );
   }
   @override
@@ -2450,8 +2545,10 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       'baseCurrencyCode': serializer.toJson<String>(baseCurrencyCode),
       'username': serializer.toJson<String>(username),
       'profilePicturePath': serializer.toJson<String?>(profilePicturePath),
+      'nationalCurrencyCode': serializer.toJson<String?>(nationalCurrencyCode),
       'currencySelectionMode': serializer.toJson<String>(currencySelectionMode),
       'lastAutoFetchDate': serializer.toJson<DateTime?>(lastAutoFetchDate),
+      'hasCompletedOnboarding': serializer.toJson<bool>(hasCompletedOnboarding),
     };
   }
 
@@ -2460,8 +2557,10 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           String? baseCurrencyCode,
           String? username,
           Value<String?> profilePicturePath = const Value.absent(),
+          Value<String?> nationalCurrencyCode = const Value.absent(),
           String? currencySelectionMode,
-          Value<DateTime?> lastAutoFetchDate = const Value.absent()}) =>
+          Value<DateTime?> lastAutoFetchDate = const Value.absent(),
+          bool? hasCompletedOnboarding}) =>
       UserSetting(
         id: id ?? this.id,
         baseCurrencyCode: baseCurrencyCode ?? this.baseCurrencyCode,
@@ -2469,11 +2568,16 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
         profilePicturePath: profilePicturePath.present
             ? profilePicturePath.value
             : this.profilePicturePath,
+        nationalCurrencyCode: nationalCurrencyCode.present
+            ? nationalCurrencyCode.value
+            : this.nationalCurrencyCode,
         currencySelectionMode:
             currencySelectionMode ?? this.currencySelectionMode,
         lastAutoFetchDate: lastAutoFetchDate.present
             ? lastAutoFetchDate.value
             : this.lastAutoFetchDate,
+        hasCompletedOnboarding:
+            hasCompletedOnboarding ?? this.hasCompletedOnboarding,
       );
   UserSetting copyWithCompanion(UserSettingsCompanion data) {
     return UserSetting(
@@ -2485,12 +2589,18 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       profilePicturePath: data.profilePicturePath.present
           ? data.profilePicturePath.value
           : this.profilePicturePath,
+      nationalCurrencyCode: data.nationalCurrencyCode.present
+          ? data.nationalCurrencyCode.value
+          : this.nationalCurrencyCode,
       currencySelectionMode: data.currencySelectionMode.present
           ? data.currencySelectionMode.value
           : this.currencySelectionMode,
       lastAutoFetchDate: data.lastAutoFetchDate.present
           ? data.lastAutoFetchDate.value
           : this.lastAutoFetchDate,
+      hasCompletedOnboarding: data.hasCompletedOnboarding.present
+          ? data.hasCompletedOnboarding.value
+          : this.hasCompletedOnboarding,
     );
   }
 
@@ -2501,15 +2611,24 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           ..write('baseCurrencyCode: $baseCurrencyCode, ')
           ..write('username: $username, ')
           ..write('profilePicturePath: $profilePicturePath, ')
+          ..write('nationalCurrencyCode: $nationalCurrencyCode, ')
           ..write('currencySelectionMode: $currencySelectionMode, ')
-          ..write('lastAutoFetchDate: $lastAutoFetchDate')
+          ..write('lastAutoFetchDate: $lastAutoFetchDate, ')
+          ..write('hasCompletedOnboarding: $hasCompletedOnboarding')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, baseCurrencyCode, username,
-      profilePicturePath, currencySelectionMode, lastAutoFetchDate);
+  int get hashCode => Object.hash(
+      id,
+      baseCurrencyCode,
+      username,
+      profilePicturePath,
+      nationalCurrencyCode,
+      currencySelectionMode,
+      lastAutoFetchDate,
+      hasCompletedOnboarding);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2518,8 +2637,10 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           other.baseCurrencyCode == this.baseCurrencyCode &&
           other.username == this.username &&
           other.profilePicturePath == this.profilePicturePath &&
+          other.nationalCurrencyCode == this.nationalCurrencyCode &&
           other.currencySelectionMode == this.currencySelectionMode &&
-          other.lastAutoFetchDate == this.lastAutoFetchDate);
+          other.lastAutoFetchDate == this.lastAutoFetchDate &&
+          other.hasCompletedOnboarding == this.hasCompletedOnboarding);
 }
 
 class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
@@ -2527,31 +2648,39 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
   final Value<String> baseCurrencyCode;
   final Value<String> username;
   final Value<String?> profilePicturePath;
+  final Value<String?> nationalCurrencyCode;
   final Value<String> currencySelectionMode;
   final Value<DateTime?> lastAutoFetchDate;
+  final Value<bool> hasCompletedOnboarding;
   const UserSettingsCompanion({
     this.id = const Value.absent(),
     this.baseCurrencyCode = const Value.absent(),
     this.username = const Value.absent(),
     this.profilePicturePath = const Value.absent(),
+    this.nationalCurrencyCode = const Value.absent(),
     this.currencySelectionMode = const Value.absent(),
     this.lastAutoFetchDate = const Value.absent(),
+    this.hasCompletedOnboarding = const Value.absent(),
   });
   UserSettingsCompanion.insert({
     this.id = const Value.absent(),
     required String baseCurrencyCode,
     this.username = const Value.absent(),
     this.profilePicturePath = const Value.absent(),
+    this.nationalCurrencyCode = const Value.absent(),
     this.currencySelectionMode = const Value.absent(),
     this.lastAutoFetchDate = const Value.absent(),
+    this.hasCompletedOnboarding = const Value.absent(),
   }) : baseCurrencyCode = Value(baseCurrencyCode);
   static Insertable<UserSetting> custom({
     Expression<int>? id,
     Expression<String>? baseCurrencyCode,
     Expression<String>? username,
     Expression<String>? profilePicturePath,
+    Expression<String>? nationalCurrencyCode,
     Expression<String>? currencySelectionMode,
     Expression<DateTime>? lastAutoFetchDate,
+    Expression<bool>? hasCompletedOnboarding,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2559,9 +2688,13 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       if (username != null) 'username': username,
       if (profilePicturePath != null)
         'profile_picture_path': profilePicturePath,
+      if (nationalCurrencyCode != null)
+        'national_currency_code': nationalCurrencyCode,
       if (currencySelectionMode != null)
         'currency_selection_mode': currencySelectionMode,
       if (lastAutoFetchDate != null) 'last_auto_fetch_date': lastAutoFetchDate,
+      if (hasCompletedOnboarding != null)
+        'has_completed_onboarding': hasCompletedOnboarding,
     });
   }
 
@@ -2570,16 +2703,21 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       Value<String>? baseCurrencyCode,
       Value<String>? username,
       Value<String?>? profilePicturePath,
+      Value<String?>? nationalCurrencyCode,
       Value<String>? currencySelectionMode,
-      Value<DateTime?>? lastAutoFetchDate}) {
+      Value<DateTime?>? lastAutoFetchDate,
+      Value<bool>? hasCompletedOnboarding}) {
     return UserSettingsCompanion(
       id: id ?? this.id,
       baseCurrencyCode: baseCurrencyCode ?? this.baseCurrencyCode,
       username: username ?? this.username,
       profilePicturePath: profilePicturePath ?? this.profilePicturePath,
+      nationalCurrencyCode: nationalCurrencyCode ?? this.nationalCurrencyCode,
       currencySelectionMode:
           currencySelectionMode ?? this.currencySelectionMode,
       lastAutoFetchDate: lastAutoFetchDate ?? this.lastAutoFetchDate,
+      hasCompletedOnboarding:
+          hasCompletedOnboarding ?? this.hasCompletedOnboarding,
     );
   }
 
@@ -2598,12 +2736,20 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
     if (profilePicturePath.present) {
       map['profile_picture_path'] = Variable<String>(profilePicturePath.value);
     }
+    if (nationalCurrencyCode.present) {
+      map['national_currency_code'] =
+          Variable<String>(nationalCurrencyCode.value);
+    }
     if (currencySelectionMode.present) {
       map['currency_selection_mode'] =
           Variable<String>(currencySelectionMode.value);
     }
     if (lastAutoFetchDate.present) {
       map['last_auto_fetch_date'] = Variable<DateTime>(lastAutoFetchDate.value);
+    }
+    if (hasCompletedOnboarding.present) {
+      map['has_completed_onboarding'] =
+          Variable<bool>(hasCompletedOnboarding.value);
     }
     return map;
   }
@@ -2615,8 +2761,10 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
           ..write('baseCurrencyCode: $baseCurrencyCode, ')
           ..write('username: $username, ')
           ..write('profilePicturePath: $profilePicturePath, ')
+          ..write('nationalCurrencyCode: $nationalCurrencyCode, ')
           ..write('currencySelectionMode: $currencySelectionMode, ')
-          ..write('lastAutoFetchDate: $lastAutoFetchDate')
+          ..write('lastAutoFetchDate: $lastAutoFetchDate, ')
+          ..write('hasCompletedOnboarding: $hasCompletedOnboarding')
           ..write(')'))
         .toString();
   }
@@ -3348,22 +3496,6 @@ final class $$CurrenciesTableReferences
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
-
-  static MultiTypedResultKey<$UserSettingsTable, List<UserSetting>>
-      _userSettingsRefsTable(_$AppDatabase db) =>
-          MultiTypedResultKey.fromTable(db.userSettings,
-              aliasName: $_aliasNameGenerator(
-                  db.currencies.code, db.userSettings.baseCurrencyCode));
-
-  $$UserSettingsTableProcessedTableManager get userSettingsRefs {
-    final manager = $$UserSettingsTableTableManager($_db, $_db.userSettings)
-        .filter((f) =>
-            f.baseCurrencyCode.code.sqlEquals($_itemColumn<String>('code')!));
-
-    final cache = $_typedResult.readTableOrNull(_userSettingsRefsTable($_db));
-    return ProcessedTableManager(
-        manager.$state.copyWith(prefetchedData: cache));
-  }
 }
 
 class $$CurrenciesTableFilterComposer
@@ -3451,27 +3583,6 @@ class $$CurrenciesTableFilterComposer
             $$TransactionsTableFilterComposer(
               $db: $db,
               $table: $db.transactions,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return f(composer);
-  }
-
-  Expression<bool> userSettingsRefs(
-      Expression<bool> Function($$UserSettingsTableFilterComposer f) f) {
-    final $$UserSettingsTableFilterComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.code,
-        referencedTable: $db.userSettings,
-        getReferencedColumn: (t) => t.baseCurrencyCode,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$UserSettingsTableFilterComposer(
-              $db: $db,
-              $table: $db.userSettings,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -3605,27 +3716,6 @@ class $$CurrenciesTableAnnotationComposer
             ));
     return f(composer);
   }
-
-  Expression<T> userSettingsRefs<T extends Object>(
-      Expression<T> Function($$UserSettingsTableAnnotationComposer a) f) {
-    final $$UserSettingsTableAnnotationComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.code,
-        referencedTable: $db.userSettings,
-        getReferencedColumn: (t) => t.baseCurrencyCode,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$UserSettingsTableAnnotationComposer(
-              $db: $db,
-              $table: $db.userSettings,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return f(composer);
-  }
 }
 
 class $$CurrenciesTableTableManager extends RootTableManager<
@@ -3640,10 +3730,7 @@ class $$CurrenciesTableTableManager extends RootTableManager<
     (Currency, $$CurrenciesTableReferences),
     Currency,
     PrefetchHooks Function(
-        {bool currencyRatesRefs,
-        bool accountsRefs,
-        bool transactionsRefs,
-        bool userSettingsRefs})> {
+        {bool currencyRatesRefs, bool accountsRefs, bool transactionsRefs})> {
   $$CurrenciesTableTableManager(_$AppDatabase db, $CurrenciesTable table)
       : super(TableManagerState(
           db: db,
@@ -3703,15 +3790,13 @@ class $$CurrenciesTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {currencyRatesRefs = false,
               accountsRefs = false,
-              transactionsRefs = false,
-              userSettingsRefs = false}) {
+              transactionsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (currencyRatesRefs) db.currencyRates,
                 if (accountsRefs) db.accounts,
-                if (transactionsRefs) db.transactions,
-                if (userSettingsRefs) db.userSettings
+                if (transactionsRefs) db.transactions
               ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
@@ -3754,19 +3839,6 @@ class $$CurrenciesTableTableManager extends RootTableManager<
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.currencyCode == item.code),
-                        typedResults: items),
-                  if (userSettingsRefs)
-                    await $_getPrefetchedData<Currency, $CurrenciesTable,
-                            UserSetting>(
-                        currentTable: table,
-                        referencedTable: $$CurrenciesTableReferences
-                            ._userSettingsRefsTable(db),
-                        managerFromTypedResult: (p0) =>
-                            $$CurrenciesTableReferences(db, table, p0)
-                                .userSettingsRefs,
-                        referencedItemsForCurrentItem:
-                            (item, referencedItems) => referencedItems
-                                .where((e) => e.baseCurrencyCode == item.code),
                         typedResults: items)
                 ];
               },
@@ -3787,10 +3859,7 @@ typedef $$CurrenciesTableProcessedTableManager = ProcessedTableManager<
     (Currency, $$CurrenciesTableReferences),
     Currency,
     PrefetchHooks Function(
-        {bool currencyRatesRefs,
-        bool accountsRefs,
-        bool transactionsRefs,
-        bool userSettingsRefs})>;
+        {bool currencyRatesRefs, bool accountsRefs, bool transactionsRefs})>;
 typedef $$CurrencyRatesTableCreateCompanionBuilder = CurrencyRatesCompanion
     Function({
   Value<int> id,
@@ -4747,6 +4816,7 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   required String currencyCode,
   Value<String?> reference,
   Value<String?> contact,
+  Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
   Value<String?> recurrenceEnds,
@@ -4764,6 +4834,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<String> currencyCode,
   Value<String?> reference,
   Value<String?> contact,
+  Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
   Value<String?> recurrenceEnds,
@@ -4843,6 +4914,9 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get contact => $composableBuilder(
       column: $table.contact, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+      column: $table.imagePath, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get isRecurrenceEnabled => $composableBuilder(
       column: $table.isRecurrenceEnabled,
@@ -4952,6 +5026,9 @@ class $$TransactionsTableOrderingComposer
   ColumnOrderings<String> get contact => $composableBuilder(
       column: $table.contact, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+      column: $table.imagePath, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get isRecurrenceEnabled => $composableBuilder(
       column: $table.isRecurrenceEnabled,
       builder: (column) => ColumnOrderings(column));
@@ -5059,6 +5136,9 @@ class $$TransactionsTableAnnotationComposer
 
   GeneratedColumn<String> get contact =>
       $composableBuilder(column: $table.contact, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
 
   GeneratedColumn<bool> get isRecurrenceEnabled => $composableBuilder(
       column: $table.isRecurrenceEnabled, builder: (column) => column);
@@ -5173,6 +5253,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String> currencyCode = const Value.absent(),
             Value<String?> reference = const Value.absent(),
             Value<String?> contact = const Value.absent(),
+            Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
             Value<String?> recurrenceEnds = const Value.absent(),
@@ -5189,6 +5270,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             currencyCode: currencyCode,
             reference: reference,
             contact: contact,
+            imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
             recurrenceEnds: recurrenceEnds,
@@ -5205,6 +5287,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             required String currencyCode,
             Value<String?> reference = const Value.absent(),
             Value<String?> contact = const Value.absent(),
+            Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
             Value<String?> recurrenceEnds = const Value.absent(),
@@ -5221,6 +5304,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             currencyCode: currencyCode,
             reference: reference,
             contact: contact,
+            imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
             recurrenceEnds: recurrenceEnds,
@@ -5314,8 +5398,10 @@ typedef $$UserSettingsTableCreateCompanionBuilder = UserSettingsCompanion
   required String baseCurrencyCode,
   Value<String> username,
   Value<String?> profilePicturePath,
+  Value<String?> nationalCurrencyCode,
   Value<String> currencySelectionMode,
   Value<DateTime?> lastAutoFetchDate,
+  Value<bool> hasCompletedOnboarding,
 });
 typedef $$UserSettingsTableUpdateCompanionBuilder = UserSettingsCompanion
     Function({
@@ -5323,8 +5409,10 @@ typedef $$UserSettingsTableUpdateCompanionBuilder = UserSettingsCompanion
   Value<String> baseCurrencyCode,
   Value<String> username,
   Value<String?> profilePicturePath,
+  Value<String?> nationalCurrencyCode,
   Value<String> currencySelectionMode,
   Value<DateTime?> lastAutoFetchDate,
+  Value<bool> hasCompletedOnboarding,
 });
 
 final class $$UserSettingsTableReferences
@@ -5341,6 +5429,22 @@ final class $$UserSettingsTableReferences
     final manager = $$CurrenciesTableTableManager($_db, $_db.currencies)
         .filter((f) => f.code.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_baseCurrencyCodeTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $CurrenciesTable _nationalCurrencyCodeTable(_$AppDatabase db) =>
+      db.currencies.createAlias($_aliasNameGenerator(
+          db.userSettings.nationalCurrencyCode, db.currencies.code));
+
+  $$CurrenciesTableProcessedTableManager? get nationalCurrencyCode {
+    final $_column = $_itemColumn<String>('national_currency_code');
+    if ($_column == null) return null;
+    final manager = $$CurrenciesTableTableManager($_db, $_db.currencies)
+        .filter((f) => f.code.sqlEquals($_column));
+    final item =
+        $_typedResult.readTableOrNull(_nationalCurrencyCodeTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: [item]));
@@ -5374,10 +5478,34 @@ class $$UserSettingsTableFilterComposer
       column: $table.lastAutoFetchDate,
       builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<bool> get hasCompletedOnboarding => $composableBuilder(
+      column: $table.hasCompletedOnboarding,
+      builder: (column) => ColumnFilters(column));
+
   $$CurrenciesTableFilterComposer get baseCurrencyCode {
     final $$CurrenciesTableFilterComposer composer = $composerBuilder(
         composer: this,
         getCurrentColumn: (t) => t.baseCurrencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableFilterComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableFilterComposer get nationalCurrencyCode {
+    final $$CurrenciesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.nationalCurrencyCode,
         referencedTable: $db.currencies,
         getReferencedColumn: (t) => t.code,
         builder: (joinBuilder,
@@ -5422,10 +5550,34 @@ class $$UserSettingsTableOrderingComposer
       column: $table.lastAutoFetchDate,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get hasCompletedOnboarding => $composableBuilder(
+      column: $table.hasCompletedOnboarding,
+      builder: (column) => ColumnOrderings(column));
+
   $$CurrenciesTableOrderingComposer get baseCurrencyCode {
     final $$CurrenciesTableOrderingComposer composer = $composerBuilder(
         composer: this,
         getCurrentColumn: (t) => t.baseCurrencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableOrderingComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableOrderingComposer get nationalCurrencyCode {
+    final $$CurrenciesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.nationalCurrencyCode,
         referencedTable: $db.currencies,
         getReferencedColumn: (t) => t.code,
         builder: (joinBuilder,
@@ -5467,10 +5619,33 @@ class $$UserSettingsTableAnnotationComposer
   GeneratedColumn<DateTime> get lastAutoFetchDate => $composableBuilder(
       column: $table.lastAutoFetchDate, builder: (column) => column);
 
+  GeneratedColumn<bool> get hasCompletedOnboarding => $composableBuilder(
+      column: $table.hasCompletedOnboarding, builder: (column) => column);
+
   $$CurrenciesTableAnnotationComposer get baseCurrencyCode {
     final $$CurrenciesTableAnnotationComposer composer = $composerBuilder(
         composer: this,
         getCurrentColumn: (t) => t.baseCurrencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableAnnotationComposer get nationalCurrencyCode {
+    final $$CurrenciesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.nationalCurrencyCode,
         referencedTable: $db.currencies,
         getReferencedColumn: (t) => t.code,
         builder: (joinBuilder,
@@ -5499,7 +5674,8 @@ class $$UserSettingsTableTableManager extends RootTableManager<
     $$UserSettingsTableUpdateCompanionBuilder,
     (UserSetting, $$UserSettingsTableReferences),
     UserSetting,
-    PrefetchHooks Function({bool baseCurrencyCode})> {
+    PrefetchHooks Function(
+        {bool baseCurrencyCode, bool nationalCurrencyCode})> {
   $$UserSettingsTableTableManager(_$AppDatabase db, $UserSettingsTable table)
       : super(TableManagerState(
           db: db,
@@ -5515,32 +5691,40 @@ class $$UserSettingsTableTableManager extends RootTableManager<
             Value<String> baseCurrencyCode = const Value.absent(),
             Value<String> username = const Value.absent(),
             Value<String?> profilePicturePath = const Value.absent(),
+            Value<String?> nationalCurrencyCode = const Value.absent(),
             Value<String> currencySelectionMode = const Value.absent(),
             Value<DateTime?> lastAutoFetchDate = const Value.absent(),
+            Value<bool> hasCompletedOnboarding = const Value.absent(),
           }) =>
               UserSettingsCompanion(
             id: id,
             baseCurrencyCode: baseCurrencyCode,
             username: username,
             profilePicturePath: profilePicturePath,
+            nationalCurrencyCode: nationalCurrencyCode,
             currencySelectionMode: currencySelectionMode,
             lastAutoFetchDate: lastAutoFetchDate,
+            hasCompletedOnboarding: hasCompletedOnboarding,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required String baseCurrencyCode,
             Value<String> username = const Value.absent(),
             Value<String?> profilePicturePath = const Value.absent(),
+            Value<String?> nationalCurrencyCode = const Value.absent(),
             Value<String> currencySelectionMode = const Value.absent(),
             Value<DateTime?> lastAutoFetchDate = const Value.absent(),
+            Value<bool> hasCompletedOnboarding = const Value.absent(),
           }) =>
               UserSettingsCompanion.insert(
             id: id,
             baseCurrencyCode: baseCurrencyCode,
             username: username,
             profilePicturePath: profilePicturePath,
+            nationalCurrencyCode: nationalCurrencyCode,
             currencySelectionMode: currencySelectionMode,
             lastAutoFetchDate: lastAutoFetchDate,
+            hasCompletedOnboarding: hasCompletedOnboarding,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (
@@ -5548,7 +5732,8 @@ class $$UserSettingsTableTableManager extends RootTableManager<
                     $$UserSettingsTableReferences(db, table, e)
                   ))
               .toList(),
-          prefetchHooksCallback: ({baseCurrencyCode = false}) {
+          prefetchHooksCallback: (
+              {baseCurrencyCode = false, nationalCurrencyCode = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -5576,6 +5761,17 @@ class $$UserSettingsTableTableManager extends RootTableManager<
                         .code,
                   ) as T;
                 }
+                if (nationalCurrencyCode) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.nationalCurrencyCode,
+                    referencedTable: $$UserSettingsTableReferences
+                        ._nationalCurrencyCodeTable(db),
+                    referencedColumn: $$UserSettingsTableReferences
+                        ._nationalCurrencyCodeTable(db)
+                        .code,
+                  ) as T;
+                }
 
                 return state;
               },
@@ -5598,7 +5794,7 @@ typedef $$UserSettingsTableProcessedTableManager = ProcessedTableManager<
     $$UserSettingsTableUpdateCompanionBuilder,
     (UserSetting, $$UserSettingsTableReferences),
     UserSetting,
-    PrefetchHooks Function({bool baseCurrencyCode})>;
+    PrefetchHooks Function({bool baseCurrencyCode, bool nationalCurrencyCode})>;
 typedef $$ExchangeRateSnapshotsTableCreateCompanionBuilder
     = ExchangeRateSnapshotsCompanion Function({
   Value<int> id,

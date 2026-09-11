@@ -1,30 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:finance_mvp/main.dart';
+import 'package:finance_mvp/screens/onboarding/onboarding_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Onboarding wizard walks through all steps', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Step 0: welcome.
+    expect(find.text('Welcome to\nAtelier Finance'), findsOneWidget);
+    await tester.tap(find.text('Get started'));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Step 1: name.
+    expect(find.text('How should we call you?'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Step 2: reference currency (USD preselected).
+    expect(find.text('Reference currency'), findsOneWidget);
+    expect(find.text('USD'), findsWidgets);
+    expect(find.text('Primary reference for net worth'),
+        findsNothing); // ensure subtitle is the right one
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    // Step 3: local currency.
+    expect(find.text('Local currency'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    // Step 4: sync mode (Automatic preselected).
+    expect(find.text('Exchange rates'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    // Step 5: summary.
+    expect(find.text("You're all set!"), findsOneWidget);
+    expect(find.text('USD'), findsOneWidget);
+    expect(find.text('VES'), findsOneWidget);
+    expect(find.text('Automatic sync'), findsOneWidget);
   });
 }

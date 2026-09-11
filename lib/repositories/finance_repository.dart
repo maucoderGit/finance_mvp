@@ -147,6 +147,20 @@ class FinanceRepository {
     return setting?.baseCurrencyCode ?? 'USD';
   }
 
+  Future<String> getNationalCurrencyCode() async {
+    final setting = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+    return setting?.nationalCurrencyCode ?? 'VES';
+  }
+
+  Future<bool> getHasCompletedOnboarding() async {
+    final setting = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+    return setting?.hasCompletedOnboarding ?? false;
+  }
+
   Stream<UserSetting?> watchUserSettings() {
     return (db.select(db.userSettings)
           ..where((tbl) => tbl.id.equals(0)))
@@ -166,6 +180,37 @@ class FinanceRepository {
   Future<void> updateUserSettings(UserSettingsCompanion settings) {
     final companion = settings.copyWith(id: const drift.Value(0));
     return db.into(db.userSettings).insert(
+          companion,
+          mode: drift.InsertMode.insertOrReplace,
+        );
+  }
+
+  Future<String?> getProfilePicturePath() async {
+    final setting = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+    return setting?.profilePicturePath;
+  }
+
+  Future<void> saveProfilePicturePath(String path) async {
+    final existing = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+
+    // Preserve every other setting: insert-or-replace fills untouched columns
+    // with defaults, which would wipe username/national currency/onboarding.
+    final companion = existing != null
+        ? existing.toCompanion(false).copyWith(
+            id: const drift.Value(0),
+            profilePicturePath: drift.Value(path),
+          )
+        : UserSettingsCompanion.insert(baseCurrencyCode: 'USD').copyWith(
+            id: const drift.Value(0),
+            profilePicturePath: drift.Value(path),
+            hasCompletedOnboarding: const drift.Value(true),
+          );
+
+    await db.into(db.userSettings).insert(
           companion,
           mode: drift.InsertMode.insertOrReplace,
         );
@@ -243,7 +288,7 @@ class FinanceRepository {
 
     final totalByAccount = <int, double>{
       for (final row in rows)
-        row.read<int>('accountId'): row.read<num>('total').toDouble(),
+        row.read<int>('accountId'): (row.data['total'] as num).toDouble(),
     };
 
     double total = 0;
@@ -292,6 +337,20 @@ class FinanceRepository {
 
   // ── Monthly Summary ──
 
+  /// Convert a transaction to the base currency, preferring the rate captured
+  /// at creation time (falls back to the latest stored rate).
+  Future<double> toBaseAmount(Transaction transaction) async {
+    final baseCode = await getBaseCurrencyCode();
+    if (transaction.currencyCode == baseCode) return transaction.amount;
+    final stored = transaction.baseCurrencyAmount;
+    if (stored != null) return stored;
+    return convertAmount(
+      amount: transaction.amount,
+      fromCode: transaction.currencyCode,
+      toCode: baseCode,
+    );
+  }
+
   Stream<MonthlySummary> watchMonthlySummary(DateTime date) {
     final startOfMonth = DateTime(date.year, date.month, 1);
     final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
@@ -305,11 +364,12 @@ class FinanceRepository {
       double totalIncome = 0;
       double totalExpenses = 0;
 
-      for (var t in transactionsInMonth) {
-        if (t.amount > 0) {
-          totalIncome += t.amount;
+      for (final t in transactionsInMonth) {
+        final baseAmount = await toBaseAmount(t);
+        if (baseAmount > 0) {
+          totalIncome += baseAmount;
         } else {
-          totalExpenses += t.amount.abs();
+          totalExpenses += baseAmount.abs();
         }
       }
       return MonthlySummary(income: totalIncome, expenses: totalExpenses);

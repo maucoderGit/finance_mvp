@@ -31,12 +31,11 @@ class Numpad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          // Last row with 0 and backspace
+          // Last row with decimal, 0 and backspace
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Empty space to align 0 to the center
-              const Expanded(child: SizedBox()),
+              Expanded(child: _buildNumberButton('.')),
               Expanded(child: _buildNumberButton('0')),
               Expanded(child: _buildBackspaceButton()),
             ],

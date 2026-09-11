@@ -1,12 +1,15 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/net_worth_tracker.dart';
+import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/services/revaluation_service.dart';
 import 'package:finance_mvp/widget/month_filter_widget.dart';
 import 'package:finance_mvp/widget/appbar.dart';
 import 'package:finance_mvp/widget/info_section_title.dart';
+import 'package:finance_mvp/widget/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -54,8 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
       await currencyProvider.syncRates();
     }
 
-    // Ensure a net worth snapshot exists for today.
-    await tracker.ensureTodaySnapshot();
+    // Ensure a net worth snapshot exists for today (in both currencies).
+    final nationalCode = await currencyProvider.getNationalCurrencyCode();
+    await tracker.ensureTodaySnapshot(nationalCurrencyCode: nationalCode);
     tracker.cancel();
 
     // Refresh revaluation analytics.
@@ -137,61 +141,47 @@ class _UserGreeting extends StatefulWidget {
 }
 
 class _UserGreetingState extends State<_UserGreeting> {
+Future<void> _pickProfilePicture() async {
+    final path = await pickImageFromGallery();
+    if (path == null || !mounted) return;
+    await context.read<FinanceRepository>().saveProfilePicturePath(path);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Stack(
+    final repo = context.read<FinanceRepository>();
+    return StreamBuilder<UserSetting?>(
+      stream: repo.watchUserSettings(),
+      builder: (context, snapshot) {
+        final username = snapshot.data?.username;
+        return Column(
           children: [
-            Container(
-                width: 125,
-                height: 125,
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 255, 238, 254), // Placeholder color
-                  shape: BoxShape.rectangle,
-                  borderRadius: BorderRadius.circular(24.0), // Rounded corners
-                  border: Border.all(color: Colors.grey[400]!, width: 0),
-                ),
-                child: const SizedBox()),
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: GestureDetector(
-                onTap: () {
-                  // TODO: Implement _pickImage
-                  // _pickImage,
-                },
-                child: const CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.primary,
-                  child: Icon(
-                    Icons.edit,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
+            ProfileAvatar(
+              size: 125,
+              shape: ProfileAvatarShape.roundedRect,
+              showEditBadge: true,
+              onEdit: _pickProfilePicture,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Hi,',
+              style: TextStyle(
+                fontSize: 18,
+                color: AppColors.textLight,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              username?.trim().isNotEmpty == true ? username! : 'Maucoder',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Hi,',
-          style: TextStyle(
-            fontSize: 18,
-            color: AppColors.textLight,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Maucoder', // TODO: Replace with user name from DB
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

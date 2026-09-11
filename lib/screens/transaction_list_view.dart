@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/screens/transaction_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -67,75 +70,96 @@ class TransactionItem extends StatelessWidget {
 
     Color amountColor = isExpense ? Colors.red.shade600 : const Color(0xFF0B2013);
 
-    return Container(
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .cardColor, // A good substitute for surface-light/dark
-        borderRadius: BorderRadius.circular(8.0),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.grey,
-            spreadRadius: 0.01,
-            blurRadius: 0.3,
-            offset: Offset(0, 0.01), // subtle shadow
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                TransactionScreen(existingTransaction: transaction),
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left side: Icon, Title, and Category
-          Row(
-            children: [
-              // Icon Container (w-10 h-10 rounded-full)
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.grey[200],
-                ),
-                child: const Icon(
-                  Icons.receipt_long,
-                  color: Colors.black,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12), // mr-3 equivalent
-              // Title and Category Text
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    transaction.reference ?? 'Transaction',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(transaction.date),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.color,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          // Right side: Amount
-          Text(
-            amountText,
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: amountColor,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .cardColor, // A good substitute for surface-light/dark
+          borderRadius: BorderRadius.circular(8.0),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.grey,
+              spreadRadius: 0.01,
+              blurRadius: 0.3,
+              offset: Offset(0, 0.01), // subtle shadow
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Left side: Icon, Title, and Category
+            Row(
+              children: [
+                // Icon Container (w-10 h-10 rounded-full)
+                ClipOval(
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey[200],
+                    ),
+                    child: transaction.imagePath != null &&
+                            File(transaction.imagePath!).existsSync()
+                        ? Image.file(
+                            File(transaction.imagePath!),
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          )
+                        : const Icon(
+                            Icons.receipt_long,
+                            color: Colors.black,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12), // mr-3 equivalent
+                // Title and Category Text
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      transaction.reference ?? 'Transaction',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(transaction.date),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // Right side: Amount
+            Text(
+              amountText,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: amountColor,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transaction_list_view.dart';
 import 'package:finance_mvp/widget/transaction_card.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class TransactionPage extends StatefulWidget {
@@ -14,6 +15,17 @@ class TransactionPage extends StatefulWidget {
 
 class _TransactionPageState extends State<TransactionPage> {
   String _selectedToggle = 'All'; // State variable for selected toggle
+
+  /// Net total of all transactions converted to the base currency.
+  Future<({double total, String baseCode})> _netTotalInBase(
+      FinanceRepository repo, List<db.Transaction> transactions) async {
+    final baseCode = await repo.getBaseCurrencyCode();
+    double sum = 0;
+    for (final t in transactions) {
+      sum += await repo.toBaseAmount(t);
+    }
+    return (total: sum, baseCode: baseCode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +42,8 @@ class _TransactionPageState extends State<TransactionPage> {
             return true;
           }).toList();
 
-          final total = allTransactions.fold(0.0, (sum, t) => sum + t.amount);
+          final formatter = NumberFormat.currency(
+              locale: 'en_US', symbol: '\$', decimalDigits: 2);
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -40,11 +53,19 @@ class _TransactionPageState extends State<TransactionPage> {
                 SizedBox(height: MediaQuery.of(context).size.height * 0.05),
                 _buildHeader(context),
                 const SizedBox(height: 20),
-                TransactionCard(
-                  title: 'Summary',
-                  amount: total,
-                  displayAmount: '\$${total.toStringAsFixed(2)}',
-                  isTotalCard: true,
+                FutureBuilder<({double total, String baseCode})>(
+                  future: _netTotalInBase(repo, allTransactions),
+                  builder: (context, snapshot) {
+                    final total = snapshot.data?.total ?? 0.0;
+                    final baseCode = snapshot.data?.baseCode ?? 'USD';
+                    return TransactionCard(
+                      title: 'Summary',
+                      amount: total,
+                      displayAmount:
+                          '${formatter.format(total)} $baseCode',
+                      isTotalCard: true,
+                    );
+                  },
                 ),
                 const SizedBox(height: 40),
                 _buildMonthSelector(),

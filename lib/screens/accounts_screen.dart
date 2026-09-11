@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
@@ -166,8 +167,7 @@ class AccountsScreen extends StatelessWidget {
                             currencyCode: account.currencyCode,
                             convertedAmount: converted,
                             baseCurrencyCode: baseCode,
-                            // ignore: non_const_argument_for_const_parameter
-                            icon: IconData(int.parse(account.icon), fontFamily: 'MaterialIcons'),
+                            icon: accountIconFor(account.icon),
                             iconBgColor: Color(account.iconColor),
                           );
                         },

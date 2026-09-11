@@ -68,6 +68,7 @@ class Transactions extends Table {
   TextColumn get currencyCode => text().references(Currencies, #code)();
   TextColumn get reference => text().nullable()();
   TextColumn get contact => text().nullable()();
+  TextColumn get imagePath => text().nullable()();
   BoolColumn get isRecurrenceEnabled =>
       boolean().withDefault(const Constant(false))();
   TextColumn get recurrenceType => text().nullable()();
@@ -83,9 +84,13 @@ class UserSettings extends Table {
   TextColumn get baseCurrencyCode => text().references(Currencies, #code)();
   TextColumn get username => text().withDefault(const Constant('User'))();
   TextColumn get profilePicturePath => text().nullable()();
+  TextColumn get nationalCurrencyCode =>
+      text().nullable().references(Currencies, #code)();
   TextColumn get currencySelectionMode =>
       text().withDefault(const Constant('auto'))();
   DateTimeColumn get lastAutoFetchDate => dateTime().nullable()();
+  BoolColumn get hasCompletedOnboarding =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -124,10 +129,10 @@ class NetWorthHistory extends Table {
   daos: [AccountDao, TransactionDao, CurrencyDao],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -146,6 +151,15 @@ class AppDatabase extends _$AppDatabase {
                 userSettings, userSettings.lastAutoFetchDate);
             await m.createTable(exchangeRateSnapshots);
             await m.createTable(netWorthHistory);
+          }
+          if (from < 3) {
+            await m.addColumn(
+                userSettings, userSettings.nationalCurrencyCode);
+            await m.addColumn(
+                userSettings, userSettings.hasCompletedOnboarding);
+          }
+          if (from < 4) {
+            await m.addColumn(transactions, transactions.imagePath);
           }
         },
       );
@@ -251,7 +265,12 @@ class AppDatabase extends _$AppDatabase {
         ),
       ]);
 
-      batch.insert(userSettings, const UserSettingsCompanion());
+      batch.insert(userSettings, const UserSettingsCompanion(
+          id: Value(0),
+          baseCurrencyCode: Value('USD'),
+          nationalCurrencyCode: Value('VES'),
+          hasCompletedOnboarding: Value(false),
+        ));
     });
   }
 }

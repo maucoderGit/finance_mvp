@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide Column;
+import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/currency_screen.dart';
 import 'package:finance_mvp/screens/category_screen.dart';
+import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widget/numpad.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -17,7 +21,10 @@ enum TransactionType {
 
 
 class TransactionScreen extends StatefulWidget {
-  const TransactionScreen({super.key});
+  const TransactionScreen({super.key, this.existingTransaction});
+
+  /// When set, the screen edits this transaction instead of creating a new one.
+  final db.Transaction? existingTransaction;
 
   @override
   State<TransactionScreen> createState() => _TransactionScreenState();
@@ -25,7 +32,7 @@ class TransactionScreen extends StatefulWidget {
 
 class _TransactionScreenState extends State<TransactionScreen> {
 
-  String _amount = '0.00';
+  String _amount = '0';
   int _currentStep = 0;
   TransactionType _transactionType = TransactionType.income;
   
@@ -33,13 +40,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
   final TextEditingController _referenceController = TextEditingController();
   db.Account? _selectedAccount;
   Map? category;
+  String? _imagePath;
 
-  void _onNumberTap(String number) {
+  void _onNumberTap(String value) {
     setState(() {
-      if (_amount == '0.00' && number != '.') {
-        _amount = number == '0' ? '0.00' : number;
+      if (value == '.') {
+        if (!_amount.contains('.')) _amount = '$_amount.';
+        return;
+      }
+      if (_amount == '0') {
+        _amount = value;
       } else {
-        _amount = (_amount + number);
+        _amount = '$_amount$value';
       }
     });
   }
@@ -47,36 +59,72 @@ class _TransactionScreenState extends State<TransactionScreen> {
   void _onBackspaceTap() {
     setState(() {
       if (_amount.length > 1) {
-        if (_amount.length == 2 && _amount.contains('.')) {
-          _amount = '0.00';
-        } else if (_amount.length == 4 && _amount.contains('.')) {
-          _amount = '${_amount.substring(0, _amount.length - 1)}0';
-        } else {
-          _amount = _amount.substring(0, _amount.length - 1);
-        }
+        _amount = _amount.substring(0, _amount.length - 1);
       } else {
-        _amount = '0.00';
-        // If the amount is '0.00' and backspace is pressed, keep it '0.00'
-        if (_amount == '0.00') _amount = '0.00';
+        _amount = '0';
       }
     });
   }
 
   String _formatCurrency(String amountStr) {
-    if (amountStr.isEmpty) return "\$0,00";
-    // Assuming the input string is in cents
-    double number;
-    if (amountStr.contains('.')) {
-      number = double.parse(amountStr);
-    } else {
-      number = double.parse(amountStr) / 100;
-    }
+    final number = double.tryParse(amountStr) ?? 0.0;
     final formatter = NumberFormat.currency(
       locale: 'en_US',
       symbol: '\$',
       decimalDigits: 2,
     );
     return formatter.format(number).replaceAll('.', ',');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingTransaction;
+    if (existing != null) {
+      _amount = existing.amount.abs().toStringAsFixed(2);
+      _referenceController.text = existing.reference ?? '';
+      _isRecurrenceEnabled = existing.isRecurrenceEnabled;
+      _transactionType =
+          existing.amount >= 0 ? TransactionType.income : TransactionType.expense;
+      _imagePath = existing.imagePath;
+      _loadContextForEdit(existing);
+    }
+  }
+
+  Future<void> _loadContextForEdit(db.Transaction existing) async {
+    final repo = context.read<FinanceRepository>();
+    final accounts = await repo.watchAccounts().first;
+    db.Account? account;
+    for (final candidate in accounts) {
+      if (candidate.id == existing.accountId) {
+        account = candidate;
+        break;
+      }
+    }
+
+    var categories = <db.Category>[];
+    try {
+      categories = await repo.getAllCategories();
+    } catch (_) {}
+    final categoryId = existing.categoryId;
+    for (final candidate in categories) {
+      if (candidate.id == categoryId) {
+        setState(() {
+          category = {
+            'id': candidate.id,
+            'name': candidate.name,
+            'icon': categoryIcons[candidate.icon] ?? Icons.bookmark,
+            'color': Color(candidate.color),
+          };
+        });
+        break;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedAccount = account;
+    });
   }
 
   Future<void> _saveTransaction() async {
@@ -121,7 +169,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
       baseAmount = amountValue;
     }
 
-    await repo.createTransaction(db.TransactionsCompanion(
+    final existing = widget.existingTransaction;
+    final companion = db.TransactionsCompanion(
+      id: existing != null ? Value(existing.id) : const Value.absent(),
       amount: Value(amountValue),
       accountId: Value(_selectedAccount!.id),
       categoryId: Value(category?['id']),
@@ -131,8 +181,48 @@ class _TransactionScreenState extends State<TransactionScreen> {
       date: Value(DateTime.now()),
       exchangeRateAtCreation: Value(rateAtCreation),
       baseCurrencyAmount: Value(baseAmount),
-    ));
+      imagePath: Value(_imagePath),
+    );
 
+    if (existing != null) {
+      await repo.updateTransaction(companion);
+    } else {
+      await repo.createTransaction(companion);
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _pickTransactionImage() async {
+    final path = await pickImageFromGallery(maxWidth: 512, maxHeight: 512);
+    if (path == null || !mounted) return;
+    setState(() => _imagePath = path);
+  }
+
+  Future<void> _deleteTransaction() async {
+    final existing = widget.existingTransaction;
+    if (existing == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete transaction'),
+        content: const Text('This will remove the payment permanently.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await context.read<FinanceRepository>().deleteTransaction(existing.id);
     if (mounted) Navigator.pop(context);
   }
 
@@ -184,7 +274,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       leading: CircleAvatar(
                         backgroundColor: Color(account.iconColor),
                         child: Icon(
-                          _iconDataFrom(account.icon),
+                          accountIconFor(account.icon),
                           color: Colors.white,
                         ),
                       ),
@@ -241,15 +331,32 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   ),
                   Row(
                     children: [
+                      if (widget.existingTransaction != null)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Color(0xFFB71C1C)),
+                          onPressed: _deleteTransaction,
+                        ),
                       Container(
                         decoration: const BoxDecoration(
                           color: Color(0xFFD3E6D3),
                           shape: BoxShape.circle,
                         ),
-                        child: const IconButton(
-                          icon: Icon(Icons.image, color: Color(0xFF1A3A1B)),
-                          onPressed: null, // No action
-                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _imagePath != null
+                            ? GestureDetector(
+                                onTap: _pickTransactionImage,
+                                child: Image.file(
+                                  File(_imagePath!),
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.image,
+                                    color: Color(0xFF1A3A1B)),
+                                onPressed: _pickTransactionImage,
+                              ),
                       ),
                       // const SizedBox(width: 10),
                       // Container(
@@ -824,11 +931,4 @@ GestureDetector(
       ),
     );
   }
-}
-
-IconData _iconDataFrom(String codePoint) {
-  final parsed = int.tryParse(codePoint);
-  if (parsed == null) return Icons.account_balance;
-  // ignore: non_const_argument_for_const_parameter
-  return IconData(parsed);
 }
