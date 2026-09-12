@@ -3,6 +3,7 @@ import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 import 'package:finance_mvp/services/net_worth_tracker.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/services/revaluation_service.dart';
@@ -11,9 +12,7 @@ import 'package:finance_mvp/widget/appbar.dart';
 import 'package:finance_mvp/widget/info_section_title.dart';
 import 'package:finance_mvp/widget/profile_avatar.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _autoSyncTriggered = false;
+  String _baseSymbol = r'$';
 
   void _onDateChanged(DateTime newDate) {
     setState(() {
@@ -49,7 +49,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final currencyProvider = context.read<CurrencyProvider>();
     final revaluationService = context.read<RevaluationService>();
     final revaluationProvider = context.read<RevaluationProvider>();
-    final tracker = NetWorthTracker(context.read<FinanceRepository>(), revaluationService);
+    final repo = context.read<FinanceRepository>();
+    final tracker =
+        NetWorthTracker(context.read<FinanceRepository>(), revaluationService);
+
+    final baseSymbol = await repo.getBaseCurrencySymbol();
+    if (mounted && baseSymbol != _baseSymbol) {
+      setState(() => _baseSymbol = baseSymbol);
+    }
 
     // Auto-sync rates when settings allow it.
     final settings = await currencyProvider.watchUserSettings().first;
@@ -86,20 +93,20 @@ class _HomeScreenState extends State<HomeScreen> {
               const _RevaluationSummaryStrip(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               StreamBuilder<MonthlySummary>(
-                stream: repo.watchMonthlySummary(_selectedDate),
-                builder: (context, snapshot) {
-                  final summary = snapshot.data;
-                  final income = summary?.income ?? 0.0;
-                  final expenses = summary?.expenses ?? 0.0;
+                  stream: repo.watchMonthlySummary(_selectedDate),
+                  builder: (context, snapshot) {
+                    final summary = snapshot.data;
+                    final income = summary?.income ?? 0.0;
+                    final expenses = summary?.expenses ?? 0.0;
 
-                  final currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
+                    const currencyFormat = formatMoney;
 
-                  return _MonthlySummary(
-                    income: '+${currencyFormat.format(income)}',
-                    expenses: '-${currencyFormat.format(expenses)}',
-                  );
-                }
-              ),
+                    return _MonthlySummary(
+                      income: '+${currencyFormat(income, symbol: _baseSymbol)}',
+                      expenses:
+                          '-${currencyFormat(expenses, symbol: _baseSymbol)}',
+                    );
+                  }),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               InfoSectionTitle(
                 icon: Icons.receipt_long_outlined,
@@ -140,7 +147,7 @@ class _UserGreeting extends StatefulWidget {
 }
 
 class _UserGreetingState extends State<_UserGreeting> {
-Future<void> _pickProfilePicture() async {
+  Future<void> _pickProfilePicture() async {
     final path = await pickImageFromGallery();
     if (path == null || !mounted) return;
     await context.read<FinanceRepository>().saveProfilePicturePath(path);
@@ -162,20 +169,20 @@ Future<void> _pickProfilePicture() async {
               onEdit: _pickProfilePicture,
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Hi,',
               style: TextStyle(
                 fontSize: 18,
-                color: AppColors.textLight,
+                color: context.colors.textLight,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               username?.trim().isNotEmpty == true ? username! : 'Maucoder',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textDark,
+                color: context.colors.textDark,
               ),
             ),
           ],
@@ -200,7 +207,7 @@ class _MonthlySummary extends StatelessWidget {
             child: _SummaryCard(
               label: 'Income',
               amount: income,
-              amountColor: const Color(0xFF0B2013),
+              amountColor: context.colors.textDark,
             ),
           ),
           const SizedBox(width: 16),
@@ -208,7 +215,7 @@ class _MonthlySummary extends StatelessWidget {
             child: _SummaryCard(
               label: 'Expenses',
               amount: expenses,
-              amountColor: AppColors.textDark,
+              amountColor: context.colors.textDark,
             ),
           ),
         ],
@@ -222,22 +229,32 @@ class _SummaryCard extends StatelessWidget {
   final String amount;
   final Color amountColor;
 
-  const _SummaryCard({required this.label, required this.amount, required this.amountColor});
+  const _SummaryCard(
+      {required this.label, required this.amount, required this.amountColor});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4EF), // surface-container-low
+        color: context.colors.stackCardBackground[0],
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC3C8C1)), // outline-variant
+        border: Border.all(color: context.colors.cardBorder),
       ),
       child: Column(
         children: [
-          Text(label.toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          Text(label.toUpperCase(),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: context.colors.textLight,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
           const SizedBox(height: 4),
-          Text(amount, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: amountColor)),
+          Text(amount,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: amountColor)),
         ],
       ),
     );
@@ -253,43 +270,13 @@ class _RevaluationSummaryStrip extends StatelessWidget {
     final revaluationProvider = context.watch<RevaluationProvider>();
     final summary = revaluationProvider.summary;
 
-    if (summary == null) {
-      return InkWell(
-        onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, Color(0xFF1E6B34)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.trending_up, color: Colors.white),
-              SizedBox(width: 12),
-              Text(
-                'Revaluation analytics',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-              Spacer(),
-              Icon(Icons.chevron_right, color: Colors.white70),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final isGain = summary.totalUnrealizedGainLoss >= 0;
-    final color = isGain ? const Color(0xFFB9F6CA) : const Color(0xFFFFCDD2);
+    final isGain = summary?.totalUnrealizedGainLoss != null
+        ? summary!.totalUnrealizedGainLoss >= 0
+        : true;
+    final color = isGain ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
     final icon = isGain ? Icons.trending_up : Icons.trending_down;
-    final formatted = NumberFormat.currency(
-      locale: 'en_US',
-      symbol: '',
-      decimalDigits: 2,
-    ).format(summary.totalUnrealizedGainLoss);
+    final formatted =
+        summary == null ? '—' : formatMoney(summary.totalUnrealizedGainLoss);
 
     return InkWell(
       onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
@@ -298,12 +285,9 @@ class _RevaluationSummaryStrip extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primary, Color(0xFF1E6B34)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: context.colors.primaryLight.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.colors.cardBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,27 +296,25 @@ class _RevaluationSummaryStrip extends StatelessWidget {
               children: [
                 Icon(icon, color: color, size: 22),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'UNREALIZED FX',
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: context.colors.primary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 1.2,
                   ),
                 ),
                 const Spacer(),
-                const Text(
-                  'Details',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const Icon(Icons.chevron_right,
-                    color: Colors.white70, size: 16),
+                Icon(Icons.chevron_right,
+                    color: context.colors.primary, size: 16),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              '${isGain ? '+' : ''}$formatted USD',
+              summary == null
+                  ? formatted
+                  : '${isGain ? '+' : ''}$formatted USD',
               style: TextStyle(
                 color: color,
                 fontSize: 28,
@@ -340,12 +322,12 @@ class _RevaluationSummaryStrip extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            if (summary.purchasingPowerChangePercent != null) ...[
+            if (summary?.purchasingPowerChangePercent != null) ...[
               const SizedBox(height: 4),
               Text(
-                '${summary.nationalCurrencyCode} devalued '
+                '${summary!.nationalCurrencyCode} devalued '
                 '${summary.purchasingPowerChangePercent!.toStringAsFixed(1)}% in 12 months',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: TextStyle(color: context.colors.textLight, fontSize: 12),
               ),
             ],
           ],

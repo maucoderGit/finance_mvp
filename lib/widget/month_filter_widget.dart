@@ -1,3 +1,4 @@
+import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -37,15 +38,19 @@ class _MonthFilterWidgetState extends State<MonthFilterWidget> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8E8E4), // surface-container-high
+          color: context.colors.segmentedControlBackground,
           borderRadius: BorderRadius.circular(9999),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(DateFormat('MMMM yyyy').format(_selectedDate), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(DateFormat('MMMM yyyy').format(_selectedDate),
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: context.colors.textDark)),
             const SizedBox(width: 4),
-            const Icon(Icons.expand_more, size: 20),
+            Icon(Icons.expand_more, size: 20, color: context.colors.textDark),
           ],
         ),
       ),

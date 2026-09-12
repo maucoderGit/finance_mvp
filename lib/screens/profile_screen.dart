@@ -35,14 +35,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final repo = context.read<FinanceRepository>();
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         title: const Text('Profile'),
         centerTitle: true,
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back, color: context.colors.textDark),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -64,17 +64,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
                   Text(
                     username?.trim().isNotEmpty == true ? username! : 'User',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
+                      color: context.colors.textDark,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Tap the edit icon to change your profile picture',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textLight),
+                    style: TextStyle(color: context.colors.textLight),
                   ),
                 ],
               ),

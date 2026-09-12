@@ -21,7 +21,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     _loadBaseCurrency();
   }
 
@@ -59,32 +59,32 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
     final baseCode = summary?.nationalCurrencyCode ?? 'VES';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back, color: context.colors.textDark),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Revaluation',
           style: TextStyle(
-            color: AppColors.textDark,
+            color: context.colors.textDark,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.cloud_sync, color: AppColors.primary),
+            icon: Icon(Icons.cloud_sync, color: context.colors.primary),
             tooltip: 'Sync rates from API',
             onPressed: currencyProvider.isSyncing ? null : _syncNow,
           ),
           IconButton(
             icon: Icon(
               Icons.refresh,
-              color: provider.loading ? Colors.grey : AppColors.primary,
+              color: provider.loading ? Colors.grey : context.colors.primary,
             ),
             tooltip: 'Refresh',
             onPressed: provider.loading ? null : _refresh,
@@ -115,10 +115,10 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
 
                     const SizedBox(height: 28),
 
-                    const Text(
+                    Text(
                       'GAIN / LOSS BY CURRENCY',
                       style: TextStyle(
-                        color: AppColors.textLight,
+                        color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                         letterSpacing: 1.2,
@@ -144,10 +144,10 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
 
                     const SizedBox(height: 28),
 
-                    const Text(
+                    Text(
                       'PURCHASING POWER',
                       style: TextStyle(
-                        color: AppColors.textLight,
+                        color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                         letterSpacing: 1.2,
@@ -161,10 +161,10 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
 
                     const SizedBox(height: 28),
 
-                    const Text(
+                    Text(
                       'NET WORTH',
                       style: TextStyle(
-                        color: AppColors.textLight,
+                        color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                         letterSpacing: 1.2,

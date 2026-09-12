@@ -132,7 +132,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -161,8 +161,39 @@ class AppDatabase extends _$AppDatabase {
           if (from < 4) {
             await m.addColumn(transactions, transactions.imagePath);
           }
+          if (from < 5) {
+            // Fresh DBs get UNIQUE(currency_code, date) from customConstraints,
+            // but pre-v5 installs never had it — so re-syncs piled up
+            // duplicate rates. Dedupe (keep the newest id per code+date) and
+            // add the index for existing databases.
+            await m.database.customStatement(
+              'DELETE FROM currency_rates WHERE id NOT IN '
+              '(SELECT MAX(id) FROM currency_rates GROUP BY currency_code, date)',
+            );
+            await m.database.customStatement(
+              'CREATE UNIQUE INDEX currency_rates_code_date '
+              'ON currency_rates (currency_code, date)',
+            );
+          }
         },
       );
+
+  /// Delete every row across all tables, then re-seed the default currencies,
+  /// categories and an un-onboarded settings row (fresh-install state).
+  Future<void> resetAllData() async {
+    await transaction(() async {
+      // Children first so foreign keys never dangle regardless of enforcement.
+      await delete(netWorthHistory).go();
+      await delete(exchangeRateSnapshots).go();
+      await delete(currencyRates).go();
+      await delete(transactions).go();
+      await delete(accounts).go();
+      await delete(categories).go();
+      await delete(userSettings).go();
+      await delete(currencies).go();
+      await _seedDefaultData();
+    });
+  }
 
   Future<void> _seedDefaultData() async {
     final now = DateTime.now();

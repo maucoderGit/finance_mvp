@@ -1,5 +1,10 @@
+import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
+import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/widgets/account_icon_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -27,6 +32,19 @@ const List<_CurrencyOption> _currencyOptions = [
   _CurrencyOption('PYG', 'Paraguayan Guarani', '\u20b2'),
 ];
 
+class _AccountTemplate {
+  final String label;
+  final String icon;
+  final int color;
+  const _AccountTemplate(this.label, this.icon, this.color);
+}
+
+final List<_AccountTemplate> _accountTemplates = [
+  for (final label in accountTypeLabels)
+    _AccountTemplate(label, accountIconSlug(label),
+        accountTypeColors[accountIconSlug(label)]!),
+];
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -37,6 +55,13 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _accountController = TextEditingController();
+  final TextEditingController _balanceController = TextEditingController();
+
+  final List<_AccountDraft> _accounts = [];
+  String _accountCurrency = 'VES';
+  String _accountType = 'cash';
+  int _accountColor = 0xFF4CAF50;
 
   int _currentStep = 0;
   bool _saving = false;
@@ -49,16 +74,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _nationalSymbol = 'Bs.';
   String _syncMode = 'auto';
 
-  static const int _totalSteps = 6;
+  static const int _totalSteps = 7;
 
   @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
+    _accountController.dispose();
+    _balanceController.dispose();
     super.dispose();
   }
 
   void _goToStep(int step) {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _currentStep = step);
     _pageController.animateToPage(
       step,
@@ -71,27 +99,87 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_saving) return;
     setState(() => _saving = true);
 
-    final username =
-        _nameController.text.trim().isEmpty ? 'User' : _nameController.text.trim();
+    final username = _nameController.text.trim().isEmpty
+        ? 'User'
+        : _nameController.text.trim();
 
-    await context.read<CurrencyProvider>().completeOnboarding(
-          username: username,
-          baseCode: _baseCode,
-          baseName: _baseName,
-          baseSymbol: _baseSymbol,
-          nationalCode: _nationalCode,
-          nationalName: _nationalName,
-          nationalSymbol: _nationalSymbol,
-          syncMode: _syncMode,
-        );
+    final currencyProvider = context.read<CurrencyProvider>();
+    await currencyProvider.completeOnboarding(
+      username: username,
+      baseCode: _baseCode,
+      baseName: _baseName,
+      baseSymbol: _baseSymbol,
+      nationalCode: _nationalCode,
+      nationalName: _nationalName,
+      nationalSymbol: _nationalSymbol,
+      syncMode: _syncMode,
+    );
+
+    if (!mounted) return;
+    final repo = context.read<FinanceRepository>();
+    for (final account in _accounts) {
+      await repo.createAccountWithInitialTransaction(
+        AccountsCompanion.insert(
+          name: account.name,
+          currencyCode: account.code,
+          icon: account.icon,
+          iconColor: account.iconColor,
+        ),
+        account.balance,
+      );
+    }
 
     // RootScreen watches user settings and swaps to home automatically.
+  }
+
+  void _addAccount({
+    String? name,
+    String? icon,
+    int? iconColor,
+  }) {
+    final accountName = (name ?? _accountController.text).trim();
+    if (accountName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Give the account a name.')),
+      );
+      return;
+    }
+
+    var balance = 0.0;
+    final balanceText = _balanceController.text.trim();
+    if (balanceText.isNotEmpty) {
+      final parsed = double.tryParse(balanceText);
+      if (parsed == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid initial balance.')),
+        );
+        return;
+      }
+      balance = parsed;
+    }
+
+    setState(() {
+      _accounts.add(_AccountDraft(
+        name: accountName,
+        code: _accountCurrency,
+        balance: balance,
+        icon: icon ?? _accountType,
+        iconColor: iconColor ?? _accountColor,
+      ));
+      _accountController.clear();
+      _balanceController.clear();
+    });
+  }
+
+  void _addAccountTemplate(_AccountTemplate template) {
+    _addAccount(
+        name: template.label, icon: template.icon, iconColor: template.color);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -104,8 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _NameStep(controller: _nameController),
                   _CurrencyStep(
                     title: 'Reference currency',
-                    subtitle:
-                        'The currency you use to measure your savings '
+                    subtitle: 'The currency you use to measure your savings '
                         '(net worth is shown in it).',
                     options: _currencyOptions,
                     selectedCode: _baseCode,
@@ -119,8 +206,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   _CurrencyStep(
                     title: 'Local currency',
-                    subtitle:
-                        'The currency you earn and spend daily. '
+                    subtitle: 'The currency you earn and spend daily. '
                         'Your purchasing power is tracked against it.',
                     options: _currencyOptions,
                     selectedCode: _nationalCode,
@@ -136,15 +222,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     selected: _syncMode,
                     onSelected: (mode) => setState(() => _syncMode = mode),
                   ),
+                  _AccountStep(
+                    controller: _accountController,
+                    balanceController: _balanceController,
+                    accounts: _accounts,
+                    options: _currencyOptions,
+                    templates: _accountTemplates,
+                    accountCurrency: _accountCurrency,
+                    selectedType: _accountType,
+                    selectedColor: _accountColor,
+                    onCurrencyChanged: (code) =>
+                        setState(() => _accountCurrency = code),
+                    onTypeChanged: (slug) => setState(() {
+                      _accountType = slug;
+                      _accountColor = accountTypeColors[slug] ?? _accountColor;
+                    }),
+                    onColorChanged: (color) =>
+                        setState(() => _accountColor = color),
+                    onAdd: _addAccount,
+                    onAddTemplate: _addAccountTemplate,
+                    onRemove: (index) =>
+                        setState(() => _accounts.removeAt(index)),
+                  ),
                   DoneStep(
                     saving: _saving,
-                    username:
-                        _nameController.text.trim().isEmpty
-                            ? 'User'
-                            : _nameController.text.trim(),
+                    username: _nameController.text.trim().isEmpty
+                        ? 'User'
+                        : _nameController.text.trim(),
                     baseCode: _baseCode,
                     nationalCode: _nationalCode,
                     syncMode: _syncMode,
+                    accountCount: _accounts.length,
                   ),
                 ],
               ),
@@ -164,9 +272,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           if (_currentStep > 0)
             TextButton(
               onPressed: () => _goToStep(_currentStep - 1),
-              child: const Text(
+              child: Text(
                 'Back',
-                style: TextStyle(color: AppColors.textLight, fontSize: 16),
+                style: TextStyle(color: context.colors.textLight, fontSize: 16),
               ),
             )
           else
@@ -182,8 +290,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 8,
                 decoration: BoxDecoration(
                   color: i == _currentStep
-                      ? AppColors.primaryLight
-                      : AppColors.cardBorder.withValues(alpha: 0.4),
+                      ? context.colors.primaryLight
+                      : context.colors.cardBorder.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -193,7 +301,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           if (_currentStep < _totalSteps - 1)
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: context.colors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
@@ -205,7 +313,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           else
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: context.colors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
@@ -244,26 +352,26 @@ class _WelcomeStep extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.account_balance_wallet,
-              size: 96, color: AppColors.primary),
+          Icon(Icons.account_balance_wallet,
+              size: 96, color: context.colors.primary),
           const SizedBox(height: 40),
-          const Text(
-            'Welcome to\nAtelier Finance',
+          Text(
+            'Welcome to\nFinance',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textDark,
+              color: context.colors.textDark,
               fontSize: 28,
               fontWeight: FontWeight.bold,
               height: 1.2,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Track your savings across currencies and protect your '
             'purchasing power against exchange-rate changes.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textLight,
+              color: context.colors.textLight,
               fontSize: 15,
               height: 1.5,
             ),
@@ -271,7 +379,7 @@ class _WelcomeStep extends StatelessWidget {
           const SizedBox(height: 48),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: context.colors.primary,
               padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(28),
@@ -301,13 +409,13 @@ class _NameStep extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.person_outline, size: 72, color: AppColors.primary),
+          Icon(Icons.person_outline, size: 72, color: context.colors.primary),
           const SizedBox(height: 32),
-          const Text(
+          Text(
             'How should we call you?',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textDark,
+              color: context.colors.textDark,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -320,7 +428,7 @@ class _NameStep extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Your name',
               filled: true,
-              fillColor: AppColors.cardBackground,
+              fillColor: context.colors.cardBackground,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
@@ -364,8 +472,8 @@ class _CurrencyStep extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: AppColors.textDark,
+                style: TextStyle(
+                  color: context.colors.textDark,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
@@ -373,8 +481,8 @@ class _CurrencyStep extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 subtitle,
-                style: const TextStyle(
-                    color: AppColors.textLight, fontSize: 14, height: 1.4),
+                style: TextStyle(
+                    color: context.colors.textLight, fontSize: 14, height: 1.4),
               ),
             ],
           ),
@@ -417,7 +525,9 @@ class _CurrencyTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isSelected ? AppColors.fieldsBackground : AppColors.cardBackground,
+      color: isSelected
+          ? context.colors.fieldsBackground
+          : context.colors.cardBackground,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -427,19 +537,22 @@ class _CurrencyTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.cardBorder.withValues(alpha: 0.3),
+              color: isSelected
+                  ? context.colors.primary
+                  : context.colors.cardBorder.withValues(alpha: 0.3),
               width: isSelected ? 2 : 1,
             ),
           ),
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor:
-                    isSelected ? AppColors.primary : AppColors.segmentedControlBackground,
+                backgroundColor: isSelected
+                    ? context.colors.primary
+                    : context.colors.segmentedControlBackground,
                 child: Text(
                   option.code.substring(0, 1),
                   style: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textDark,
+                    color: isSelected ? Colors.white : context.colors.textDark,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -452,23 +565,23 @@ class _CurrencyTile extends StatelessWidget {
                   children: [
                     Text(
                       option.code,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
+                      style: TextStyle(
+                        color: context.colors.textDark,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
                       '${option.name} (${option.symbol})',
-                      style: const TextStyle(
-                          color: AppColors.textLight, fontSize: 13),
+                      style: TextStyle(
+                          color: context.colors.textLight, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               if (isSelected)
-                const Icon(Icons.check_circle,
-                    color: AppColors.primary, size: 22),
+                Icon(Icons.check_circle,
+                    color: context.colors.primary, size: 22),
             ],
           ),
         ),
@@ -493,20 +606,21 @@ class _SyncModeStep extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Exchange rates',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textDark,
+              color: context.colors.textDark,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'How do you want currency rates to be kept up to date?',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textLight, fontSize: 14, height: 1.4),
+            style: TextStyle(
+                color: context.colors.textLight, fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 32),
           _SyncModeCard(
@@ -550,7 +664,9 @@ class _SyncModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isSelected ? AppColors.fieldsBackground : AppColors.cardBackground,
+      color: isSelected
+          ? context.colors.fieldsBackground
+          : context.colors.cardBackground,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -560,7 +676,9 @@ class _SyncModeCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.cardBorder.withValues(alpha: 0.3),
+              color: isSelected
+                  ? context.colors.primary
+                  : context.colors.cardBorder.withValues(alpha: 0.3),
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -568,7 +686,9 @@ class _SyncModeCard extends StatelessWidget {
             children: [
               Icon(icon,
                   size: 34,
-                  color: isSelected ? AppColors.primary : AppColors.textLight),
+                  color: isSelected
+                      ? context.colors.primary
+                      : context.colors.textLight),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -576,8 +696,8 @@ class _SyncModeCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
+                      style: TextStyle(
+                        color: context.colors.textDark,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
@@ -585,15 +705,17 @@ class _SyncModeCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style: const TextStyle(
-                          color: AppColors.textLight, fontSize: 13, height: 1.4),
+                      style: TextStyle(
+                          color: context.colors.textLight,
+                          fontSize: 13,
+                          height: 1.4),
                     ),
                   ],
                 ),
               ),
               if (isSelected)
-                const Icon(Icons.check_circle,
-                    color: AppColors.primary, size: 22),
+                Icon(Icons.check_circle,
+                    color: context.colors.primary, size: 22),
             ],
           ),
         ),
@@ -602,7 +724,269 @@ class _SyncModeCard extends StatelessWidget {
   }
 }
 
-// ── Step 5: Summary ──────────────────────────────────────────────────────────
+// ── Step 5: First account ────────────────────────────────────────────────────
+
+class _AccountDraft {
+  final String name;
+  final String code;
+  final double balance;
+  final String icon;
+  final int iconColor;
+  const _AccountDraft({
+    required this.name,
+    required this.code,
+    this.balance = 0,
+    this.icon = 'cash',
+    this.iconColor = 0xFF4CAF50,
+  });
+}
+
+class _AccountStep extends StatelessWidget {
+  final TextEditingController controller;
+  final TextEditingController balanceController;
+  final List<_AccountDraft> accounts;
+  final List<_CurrencyOption> options;
+  final List<_AccountTemplate> templates;
+  final String accountCurrency;
+  final String selectedType;
+  final int selectedColor;
+  final ValueChanged<String> onCurrencyChanged;
+  final ValueChanged<String> onTypeChanged;
+  final ValueChanged<int> onColorChanged;
+  final VoidCallback onAdd;
+  final ValueChanged<_AccountTemplate> onAddTemplate;
+  final ValueChanged<int> onRemove;
+
+  const _AccountStep({
+    required this.controller,
+    required this.balanceController,
+    required this.accounts,
+    required this.options,
+    required this.templates,
+    required this.accountCurrency,
+    required this.selectedType,
+    required this.selectedColor,
+    required this.onCurrencyChanged,
+    required this.onTypeChanged,
+    required this.onColorChanged,
+    required this.onAdd,
+    required this.onAddTemplate,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your first account',
+                        style: TextStyle(
+                          color: context.colors.textDark,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Accounts are optional. Tap a template for a quick start, '
+                        'or pick an icon and add your own below.',
+                        style: TextStyle(
+                            color: context.colors.textLight,
+                            fontSize: 14,
+                            height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final template in templates)
+                        ActionChip(
+                          avatar: Icon(accountIconFor(template.icon),
+                              size: 16, color: Color(template.color)),
+                          label: Text(template.label),
+                          backgroundColor: context.colors.cardBackground,
+                          onPressed: () => onAddTemplate(template),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: AccountIconPicker(
+                    selectedType: selectedType,
+                    selectedColor: selectedColor,
+                    onTypeChanged: onTypeChanged,
+                    onColorChanged: onColorChanged,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      TextField(
+                        key: const Key('onboarding-account-name'),
+                        controller: controller,
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          hintText: 'Account name',
+                          filled: true,
+                          fillColor: context.colors.cardBackground,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: balanceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          hintText: 'Initial balance (optional)',
+                          filled: true,
+                          fillColor: context.colors.cardBackground,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: accountCurrency,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: context.colors.cardBackground,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              isExpanded: true,
+                              items: [
+                                for (final option in options)
+                                  DropdownMenuItem(
+                                    value: option.code,
+                                    child:
+                                        Text('${option.code} — ${option.name}'),
+                                  ),
+                              ],
+                              onChanged: (code) {
+                                if (code != null) onCurrencyChanged(code);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: context.colors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: onAdd,
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (accounts.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: Text(
+              'No accounts yet — this step is optional.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.colors.textLight),
+            ),
+          )
+        else
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 180),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              itemCount: accounts.length,
+              itemBuilder: (context, index) {
+                final account = accounts[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: context.colors.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color:
+                              context.colors.cardBorder.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            Color(account.iconColor).withValues(alpha: 0.15),
+                        child: Icon(accountIconFor(account.icon),
+                            color: Color(account.iconColor), size: 16),
+                      ),
+                      title: Text(account.name,
+                          style: TextStyle(
+                              color: context.colors.textDark,
+                              fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                        account.balance == 0
+                            ? account.code
+                            : '${account.code} · ${formatMoney(account.balance)}',
+                        style: TextStyle(
+                            color: context.colors.textLight, fontSize: 13),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Remove account',
+                        onPressed: () => onRemove(index),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Step 6: Summary ──────────────────────────────────────────────────────────
 
 class DoneStep extends StatelessWidget {
   final bool saving;
@@ -610,6 +994,7 @@ class DoneStep extends StatelessWidget {
   final String baseCode;
   final String nationalCode;
   final String syncMode;
+  final int accountCount;
 
   const DoneStep({
     super.key,
@@ -618,6 +1003,7 @@ class DoneStep extends StatelessWidget {
     required this.baseCode,
     required this.nationalCode,
     required this.syncMode,
+    required this.accountCount,
   });
 
   @override
@@ -629,14 +1015,14 @@ class DoneStep extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.celebration_outlined,
-              size: 80, color: AppColors.primary),
+          Icon(Icons.celebration_outlined,
+              size: 80, color: context.colors.primary),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             "You're all set!",
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textDark,
+              color: context.colors.textDark,
               fontSize: 26,
               fontWeight: FontWeight.bold,
             ),
@@ -646,7 +1032,12 @@ class DoneStep extends StatelessWidget {
           _SummaryRow(label: 'Reference currency', value: baseCode),
           _SummaryRow(label: 'Local currency', value: nationalCode),
           _SummaryRow(
-              label: 'Rates', value: isAuto ? 'Automatic sync' : 'Manual entry'),
+              label: 'Accounts',
+              value:
+                  accountCount == 1 ? '1 account' : '$accountCount accounts'),
+          _SummaryRow(
+              label: 'Rates',
+              value: isAuto ? 'Automatic sync' : 'Manual entry'),
         ],
       ),
     );
@@ -667,13 +1058,13 @@ class _SummaryRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(color: AppColors.textLight, fontSize: 15),
+            style: TextStyle(color: context.colors.textLight, fontSize: 15),
           ),
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(
-                color: AppColors.textDark,
+            style: TextStyle(
+                color: context.colors.textDark,
                 fontSize: 15,
                 fontWeight: FontWeight.w600),
           ),

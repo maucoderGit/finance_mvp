@@ -1,9 +1,8 @@
-
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 import 'package:finance_mvp/widget/forecast/goal_projection_card.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -20,12 +19,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? AppColors.darkBackground : AppColors.background;
-    final textColor = isDarkMode ? AppColors.primary : AppColors.textDark;
-    final cardBackgroundColor = isDarkMode ? AppColors.darkCardBackground : AppColors.cardBackground;
-    final segmentedControlBackgroundColor = isDarkMode ? AppColors.darkSegmentedControlBackground : AppColors.segmentedControlBackground;
-    final segmentedControlActiveColor = isDarkMode ? AppColors.darkSegmentedControlActive : AppColors.segmentedControlActive;
-    const primaryColor = AppColors.primaryLight;
+    final backgroundColor =
+        isDarkMode ? AppColors.darkBackground : context.colors.background;
+    final textColor =
+        isDarkMode ? AppColors.darkPrimary : context.colors.textDark;
+    final cardBackgroundColor = isDarkMode
+        ? AppColors.darkCardBackground
+        : context.colors.cardBackground;
+    final segmentedControlBackgroundColor = isDarkMode
+        ? AppColors.darkSegmentedControlBackground
+        : context.colors.segmentedControlBackground;
+    final segmentedControlActiveColor = isDarkMode
+        ? AppColors.darkSegmentedControlActive
+        : context.colors.segmentedControlActive;
+    final primaryColor = context.colors.primaryLight;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -81,15 +88,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<String> _loadTotalBalance() async {
     final repo = context.read<FinanceRepository>();
-    final baseCode = await repo.getBaseCurrencyCode();
-    final total = await repo.calculateTotalBalance(baseCode);
-    return NumberFormat.currency(locale: 'en_US', symbol: '\$').format(total);
+    final total =
+        await repo.calculateTotalBalance(await repo.getBaseCurrencyCode());
+    return formatMoney(total, symbol: await repo.getBaseCurrencySymbol());
   }
 
-  Future<double> _loadMonthNet() async {
+  Future<({double value, String symbol})> _loadMonthNet() async {
     final repo = context.read<FinanceRepository>();
     final summary = await repo.watchMonthlySummary(DateTime.now()).first;
-    return summary.income - summary.expenses;
+    return (
+      value: summary.income - summary.expenses,
+      symbol: await repo.getBaseCurrencySymbol(),
+    );
   }
 
   Widget _buildTopAppBar(Color textColor) {
@@ -103,7 +113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () {
               Navigator.of(context).pop();
             },
-            ),
+          ),
           Text(
             'Dashboard',
             style: TextStyle(
@@ -150,26 +160,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Column(
         children: [
-          _buildSegmentedControl(
-            segmentedControlBackgroundColor,
-            segmentedControlActiveColor,
-            primaryColor,
-            textColor
-          ),
+          _buildSegmentedControl(segmentedControlBackgroundColor,
+              segmentedControlActiveColor, primaryColor, textColor),
           const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              FutureBuilder<double>(
+              FutureBuilder<({double value, String symbol})>(
                 future: _loadMonthNet(),
                 builder: (context, snapshot) {
-                  final value = snapshot.data ?? 0.0;
+                  final value = snapshot.data?.value ?? 0.0;
+                  final symbol = snapshot.data?.symbol ?? r'$';
                   return Text(
-                    NumberFormat.currency(
-                      locale: 'en_US',
-                      symbol: '\$',
-                    ).format(value),
+                    formatMoney(value, symbol: symbol),
                     style: TextStyle(
                       color: textColor,
                       fontSize: 24,
@@ -236,12 +240,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSegmentedControl(
-    Color backgroundColor,
-    Color activeColor,
-    Color primaryColor,
-    Color textColor
-  ) {
+  Widget _buildSegmentedControl(Color backgroundColor, Color activeColor,
+      Color primaryColor, Color textColor) {
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -302,7 +302,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBottomFilterBar(BuildContext context, Color primaryColor) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final barBackgroundColor = isDarkMode ? const Color(0xFF1F2937) : Colors.white;
+    final barBackgroundColor =
+        isDarkMode ? const Color(0xFF1F2937) : Colors.white;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -383,57 +384,96 @@ class _ChartPainter extends CustomPainter {
     final path = Path();
     path.moveTo(0, size.height * 0.726); // 109 / 150
     path.cubicTo(
-        size.width * 0.0385, size.height * 0.726, // 18.15 / 472
-        size.width * 0.0385, size.height * 0.14,  // 21 / 150
-        size.width * 0.0769, size.height * 0.14); // 36.3 / 472
+        size.width * 0.0385,
+        size.height * 0.726, // 18.15 / 472
+        size.width * 0.0385,
+        size.height * 0.14, // 21 / 150
+        size.width * 0.0769,
+        size.height * 0.14); // 36.3 / 472
     path.cubicTo(
-        size.width * 0.115, size.height * 0.14,   // 54.46 / 472
-        size.width * 0.115, size.height * 0.273,  // 41 / 150
-        size.width * 0.153, size.height * 0.273); // 72.6 / 472
+        size.width * 0.115,
+        size.height * 0.14, // 54.46 / 472
+        size.width * 0.115,
+        size.height * 0.273, // 41 / 150
+        size.width * 0.153,
+        size.height * 0.273); // 72.6 / 472
     path.cubicTo(
-        size.width * 0.192, size.height * 0.273,  // 90.76 / 472
-        size.width * 0.192, size.height * 0.62,   // 93 / 150
-        size.width * 0.23, size.height * 0.62);   // 108.9 / 472
+        size.width * 0.192,
+        size.height * 0.273, // 90.76 / 472
+        size.width * 0.192,
+        size.height * 0.62, // 93 / 150
+        size.width * 0.23,
+        size.height * 0.62); // 108.9 / 472
     path.cubicTo(
-        size.width * 0.269, size.height * 0.62,   // 127.07 / 472
-        size.width * 0.269, size.height * 0.22,   // 33 / 150
-        size.width * 0.307, size.height * 0.22);  // 145.23 / 472
+        size.width * 0.269,
+        size.height * 0.62, // 127.07 / 472
+        size.width * 0.269,
+        size.height * 0.22, // 33 / 150
+        size.width * 0.307,
+        size.height * 0.22); // 145.23 / 472
     path.cubicTo(
-        size.width * 0.346, size.height * 0.22,   // 163.38 / 472
-        size.width * 0.346, size.height * 0.673,  // 101 / 150
-        size.width * 0.384, size.height * 0.673); // 181.53 / 472
+        size.width * 0.346,
+        size.height * 0.22, // 163.38 / 472
+        size.width * 0.346,
+        size.height * 0.673, // 101 / 150
+        size.width * 0.384,
+        size.height * 0.673); // 181.53 / 472
     path.cubicTo(
-        size.width * 0.423, size.height * 0.673,  // 199.69 / 472
-        size.width * 0.423, size.height * 0.406,  // 61 / 150
-        size.width * 0.461, size.height * 0.406); // 217.84 / 472
+        size.width * 0.423,
+        size.height * 0.673, // 199.69 / 472
+        size.width * 0.423,
+        size.height * 0.406, // 61 / 150
+        size.width * 0.461,
+        size.height * 0.406); // 217.84 / 472
     path.cubicTo(
-        size.width * 0.5, size.height * 0.406,    // 236 / 472
-        size.width * 0.5, size.height * 0.3,      // 45 / 150
-        size.width * 0.538, size.height * 0.3);   // 254.15 / 472
+        size.width * 0.5,
+        size.height * 0.406, // 236 / 472
+        size.width * 0.5,
+        size.height * 0.3, // 45 / 150
+        size.width * 0.538,
+        size.height * 0.3); // 254.15 / 472
     path.cubicTo(
-        size.width * 0.576, size.height * 0.3,    // 272.3 / 472
-        size.width * 0.576, size.height * 0.806,  // 121 / 150
-        size.width * 0.615, size.height * 0.806); // 290.46 / 472
+        size.width * 0.576,
+        size.height * 0.3, // 272.3 / 472
+        size.width * 0.576,
+        size.height * 0.806, // 121 / 150
+        size.width * 0.615,
+        size.height * 0.806); // 290.46 / 472
     path.cubicTo(
-        size.width * 0.653, size.height * 0.806,  // 308.6 / 472
-        size.width * 0.653, size.height * 0.993,  // 149 / 150
-        size.width * 0.692, size.height * 0.993); // 326.76 / 472
+        size.width * 0.653,
+        size.height * 0.806, // 308.6 / 472
+        size.width * 0.653,
+        size.height * 0.993, // 149 / 150
+        size.width * 0.692,
+        size.height * 0.993); // 326.76 / 472
     path.cubicTo(
-        size.width * 0.73, size.height * 0.993,   // 344.92 / 472
-        size.width * 0.73, size.height * 0.006,   // 1 / 150
-        size.width * 0.769, size.height * 0.006); // 363.07 / 472
+        size.width * 0.73,
+        size.height * 0.993, // 344.92 / 472
+        size.width * 0.73,
+        size.height * 0.006, // 1 / 150
+        size.width * 0.769,
+        size.height * 0.006); // 363.07 / 472
     path.cubicTo(
-        size.width * 0.807, size.height * 0.006,  // 381.23 / 472
-        size.width * 0.807, size.height * 0.54,   // 81 / 150
-        size.width * 0.846, size.height * 0.54);  // 399.38 / 472
+        size.width * 0.807,
+        size.height * 0.006, // 381.23 / 472
+        size.width * 0.807,
+        size.height * 0.54, // 81 / 150
+        size.width * 0.846,
+        size.height * 0.54); // 399.38 / 472
     path.cubicTo(
-        size.width * 0.884, size.height * 0.54,   // 417.53 / 472
-        size.width * 0.884, size.height * 0.86,   // 129 / 150
-        size.width * 0.923, size.height * 0.86);  // 435.69 / 472
+        size.width * 0.884,
+        size.height * 0.54, // 417.53 / 472
+        size.width * 0.884,
+        size.height * 0.86, // 129 / 150
+        size.width * 0.923,
+        size.height * 0.86); // 435.69 / 472
     path.cubicTo(
-        size.width * 0.961, size.height * 0.86,   // 453.84 / 472
-        size.width * 0.961, size.height * 0.166,  // 25 / 150
-        size.width, size.height * 0.166);         // 472 / 472
+        size.width * 0.961,
+        size.height * 0.86, // 453.84 / 472
+        size.width * 0.961,
+        size.height * 0.166, // 25 / 150
+        size.width,
+        size.height * 0.166); // 472 / 472
 
     canvas.drawPath(path, paint);
 

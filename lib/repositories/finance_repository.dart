@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/database/app_database.dart';
 
@@ -44,6 +46,11 @@ class FinanceRepository {
     return (db.select(db.accounts)).get();
   }
 
+  Future<void> updateAccount(AccountsCompanion account) async {
+    await (db.update(db.accounts)..where((a) => a.id.equals(account.id.value!)))
+        .write(account);
+  }
+
   Future<void> createAccountWithInitialTransaction(
       AccountsCompanion account, double initialBalance) async {
     await db.transaction(() async {
@@ -58,9 +65,8 @@ class FinanceRepository {
             date: drift.Value(DateTime.now()),
             categoryId: const drift.Value.absent(),
             reference: const drift.Value('Initial Balance'),
-            exchangeRateAtCreation: drift.Value(
-                await _getExchangeRateForDate(
-                    newAccount.currencyCode, DateTime.now())),
+            exchangeRateAtCreation: drift.Value(await _getExchangeRateForDate(
+                newAccount.currencyCode, DateTime.now())),
           ),
         );
       }
@@ -74,11 +80,36 @@ class FinanceRepository {
     return allTransactions.fold<double>(0.0, (sum, t) => sum + t.amount);
   }
 
+  /// Set an account's balance to [newBalance] by posting a "Balance
+  /// adjustment" transaction for the delta, keeping the ledger consistent.
+  Future<void> adjustAccountBalance({
+    required int accountId,
+    required String currencyCode,
+    required double newBalance,
+  }) async {
+    final current = await getAccountBalance(accountId);
+    final delta = newBalance - current;
+    if (delta == 0) return;
+    await createTransaction(
+      TransactionsCompanion(
+        amount: drift.Value(delta),
+        accountId: drift.Value(accountId),
+        currencyCode: drift.Value(currencyCode),
+        date: drift.Value(DateTime.now()),
+        categoryId: const drift.Value.absent(),
+        reference: const drift.Value('Balance adjustment'),
+        exchangeRateAtCreation: drift.Value(
+            await _getExchangeRateForDate(currencyCode, DateTime.now())),
+      ),
+    );
+  }
+
   Stream<double> watchAccountBalance(int accountId) {
     final query = db.select(db.transactions)
       ..where((t) => t.accountId.equals(accountId));
-    return query.watch().map((txs) =>
-        txs.fold<double>(0.0, (sum, t) => sum + t.amount));
+    return query
+        .watch()
+        .map((txs) => txs.fold<double>(0.0, (sum, t) => sum + t.amount));
   }
 
   // ── Exchange Rates ──
@@ -86,36 +117,43 @@ class FinanceRepository {
   Future<List<ExchangeRate>> getRatesForCurrency(String currencyCode) {
     return (db.select(db.currencyRates)
           ..where((tbl) => tbl.currencyCode.equals(currencyCode))
-          ..orderBy([(t) =>
-              drift.OrderingTerm(expression: t.date, mode: drift.OrderingMode.desc)]))
+          ..orderBy([
+            (t) => drift.OrderingTerm(
+                expression: t.date, mode: drift.OrderingMode.desc)
+          ]))
         .get();
   }
 
   Stream<List<ExchangeRate>> watchRatesForCurrency(String currencyCode) {
     return (db.select(db.currencyRates)
           ..where((tbl) => tbl.currencyCode.equals(currencyCode))
-          ..orderBy([(t) =>
-              drift.OrderingTerm(expression: t.date, mode: drift.OrderingMode.desc)]))
+          ..orderBy([
+            (t) => drift.OrderingTerm(
+                expression: t.date, mode: drift.OrderingMode.desc)
+          ]))
         .watch();
   }
 
   Future<ExchangeRate?> getLatestRate(String currencyCode) {
     return (db.select(db.currencyRates)
           ..where((r) => r.currencyCode.equals(currencyCode))
-          ..orderBy([(r) =>
-              drift.OrderingTerm(expression: r.date, mode: drift.OrderingMode.desc)])
+          ..orderBy([
+            (r) => drift.OrderingTerm(
+                expression: r.date, mode: drift.OrderingMode.desc)
+          ])
           ..limit(1))
         .getSingleOrNull();
   }
 
-  Future<ExchangeRate?> getRateAtDate(
-      String currencyCode, DateTime date) {
+  Future<ExchangeRate?> getRateAtDate(String currencyCode, DateTime date) {
     return (db.select(db.currencyRates)
           ..where((r) =>
               r.currencyCode.equals(currencyCode) &
               r.date.isSmallerOrEqualValue(date))
-          ..orderBy([(r) =>
-              drift.OrderingTerm(expression: r.date, mode: drift.OrderingMode.desc)])
+          ..orderBy([
+            (r) => drift.OrderingTerm(
+                expression: r.date, mode: drift.OrderingMode.desc)
+          ])
           ..limit(1))
         .getSingleOrNull();
   }
@@ -123,14 +161,15 @@ class FinanceRepository {
   /// Rate ("1 base = X currency") at or before [date], falling back to the
   /// newest stored rate.
   Future<double?> getRateWithFallback(
-          String currencyCode, DateTime date) async {
+      String currencyCode, DateTime date) async {
     final rate = await getRateAtDate(currencyCode, date);
     return rate?.rate ?? (await getLatestRate(currencyCode))?.rate;
   }
 
   Future<void> addExchangeRate(CurrencyRatesCompanion rate) {
-    return db.into(db.currencyRates).insert(rate,
-        mode: drift.InsertMode.insertOrReplace);
+    return db
+        .into(db.currencyRates)
+        .insert(rate, mode: drift.InsertMode.insertOrReplace);
   }
 
   Future<void> addExchangeRatesBatch(List<CurrencyRatesCompanion> rates) {
@@ -138,6 +177,17 @@ class FinanceRepository {
       batch.insertAll(db.currencyRates, rates,
           mode: drift.InsertMode.insertOrReplace);
     });
+  }
+
+  Future<void> deleteExchangeRate(int id) {
+    return (db.delete(db.currencyRates)..where((r) => r.id.equals(id))).go();
+  }
+
+  Future<DateTime?> getLastAutoFetchDate() async {
+    final setting = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+    return setting?.lastAutoFetchDate;
   }
 
   Future<double?> _getExchangeRateForDate(
@@ -170,8 +220,7 @@ class FinanceRepository {
   }
 
   Stream<UserSetting?> watchUserSettings() {
-    return (db.select(db.userSettings)
-          ..where((tbl) => tbl.id.equals(0)))
+    return (db.select(db.userSettings)..where((tbl) => tbl.id.equals(0)))
         .watchSingleOrNull();
   }
 
@@ -188,11 +237,12 @@ class FinanceRepository {
     final companion = existing != null
         ? patch(existing.toCompanion(false)).copyWith(id: const drift.Value(0))
         : patch(UserSettingsCompanion.insert(baseCurrencyCode: 'USD')).copyWith(
-              id: const drift.Value(0),
-              hasCompletedOnboarding: const drift.Value(true),
-            );
+            id: const drift.Value(0),
+            hasCompletedOnboarding: const drift.Value(true),
+          );
 
-    await db.into(db.userSettings)
+    await db
+        .into(db.userSettings)
         .insert(companion, mode: drift.InsertMode.insertOrReplace);
   }
 
@@ -201,12 +251,45 @@ class FinanceRepository {
         (c) => c.copyWith(baseCurrencyCode: drift.Value(currencyCode)));
   }
 
-  Future<void> updateUserSettings(UserSettingsCompanion settings) {
+  /// Delete the stored profile picture, then reset the whole database to its
+  /// fresh-install state (no accounts, transactions, rates or preferences).
+  Future<void> wipeAllData() async {
+    final setting = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+    final profilePicture = setting?.profilePicturePath;
+    if (profilePicture != null && profilePicture.isNotEmpty) {
+      try {
+        await File(profilePicture).delete();
+      } catch (_) {
+        // File may not exist; clearing the DB is what matters.
+      }
+    }
+    await db.resetAllData();
+  }
+
+  /// Patch the settings row (id=0) with only the fields present in [settings],
+  /// preserving every other stored value. Uses UPDATE so a partial patch
+  /// (e.g. [CurrencyProvider] syncing just `lastAutoFetchDate`) never touches
+  /// or requires the other columns.
+  Future<void> updateUserSettings(UserSettingsCompanion settings) async {
     final companion = settings.copyWith(id: const drift.Value(0));
-    return db.into(db.userSettings).insert(
-          companion,
-          mode: drift.InsertMode.insertOrReplace,
-        );
+    final existing = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.userSettings)..where((tbl) => tbl.id.equals(0)))
+          .write(companion);
+    } else {
+      await db.into(db.userSettings).insert(
+            companion.copyWith(
+              baseCurrencyCode: const drift.Value('USD'),
+              hasCompletedOnboarding: const drift.Value(true),
+            ),
+            mode: drift.InsertMode.insertOrReplace,
+          );
+    }
   }
 
   Future<String?> getProfilePicturePath() async {
@@ -216,8 +299,13 @@ class FinanceRepository {
     return setting?.profilePicturePath;
   }
 
-  Future<void> saveProfilePicturePath(String path) {
-    return _updateSettings(
+  Future<void> saveProfilePicturePath(String path) async {
+    final old = await getProfilePicturePath();
+    if (old != null && old != path) {
+      final file = File(old);
+      if (file.existsSync()) file.delete();
+    }
+    await _updateSettings(
         (c) => c.copyWith(profilePicturePath: drift.Value(path)));
   }
 
@@ -232,9 +320,14 @@ class FinanceRepository {
   }
 
   Future<Currency?> getCurrency(String code) {
-    return (db.select(db.currencies)
-          ..where((c) => c.code.equals(code)))
+    return (db.select(db.currencies)..where((c) => c.code.equals(code)))
         .getSingleOrNull();
+  }
+
+  /// Symbol of the base currency, defaulting to '$' when unknown.
+  Future<String> getBaseCurrencySymbol() async {
+    final code = await getBaseCurrencyCode();
+    return (await getCurrency(code))?.symbol ?? r'$';
   }
 
   Future<void> addCurrency(CurrenciesCompanion currency) {
@@ -272,8 +365,8 @@ class FinanceRepository {
       return rate != null ? amount * rate.rate : amount;
     }
 
-    final amountInBase =
-        await convertAmount(amount: amount, fromCode: fromCode, toCode: baseCurrencyCode);
+    final amountInBase = await convertAmount(
+        amount: amount, fromCode: fromCode, toCode: baseCurrencyCode);
     return await convertAmount(
         amount: amountInBase, fromCode: baseCurrencyCode, toCode: toCode);
   }
@@ -317,8 +410,10 @@ class FinanceRepository {
 
   Stream<List<ExchangeRateSnapshot>> watchRateSnapshots({int limit = 30}) {
     return (db.select(db.exchangeRateSnapshots)
-          ..orderBy([(s) =>
-              drift.OrderingTerm(expression: s.date, mode: drift.OrderingMode.desc)])
+          ..orderBy([
+            (s) => drift.OrderingTerm(
+                expression: s.date, mode: drift.OrderingMode.desc)
+          ])
           ..limit(limit))
         .watch();
   }
@@ -327,8 +422,10 @@ class FinanceRepository {
 
   Stream<List<NetWorthHistoryData>> watchNetWorthHistory({int limit = 90}) {
     return (db.select(db.netWorthHistory)
-          ..orderBy([(n) =>
-              drift.OrderingTerm(expression: n.date, mode: drift.OrderingMode.desc)])
+          ..orderBy([
+            (n) => drift.OrderingTerm(
+                expression: n.date, mode: drift.OrderingMode.desc)
+          ])
           ..limit(limit))
         .watch();
   }
@@ -361,8 +458,8 @@ class FinanceRepository {
     final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
 
     final query = db.select(db.transactions)
-      ..where((t) =>
-          t.date.isBetween(drift.Variable(startOfMonth), drift.Variable(endOfMonth)));
+      ..where((t) => t.date
+          .isBetween(drift.Variable(startOfMonth), drift.Variable(endOfMonth)));
 
     return db.transaction(() async {
       final transactionsInMonth = await query.get();

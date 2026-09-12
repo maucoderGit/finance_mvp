@@ -27,22 +27,22 @@ class InfoSectionTitle extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.stackCardBackground[index],
+        color: context.colors.stackCardBackground[index],
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: AppColors.textDark,
-                child: Icon(icon, color: AppColors.background),
+                backgroundColor: context.colors.textDark,
+                child: Icon(icon, color: context.colors.background),
               ),
               const SizedBox(width: 16),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
+                  color: context.colors.textDark,
                 ),
               ),
               const Spacer(),
@@ -51,11 +51,11 @@ class InfoSectionTitle extends StatelessWidget {
               //   style: const TextStyle(
               //     fontSize: 14,
               //     fontWeight: FontWeight.w600,
-              //     color: AppColors.primary,
+              //     color: context.colors.primary,
               //   ),
               // ),
-              const Icon(Icons.chevron_right,
-                  color: AppColors.primary, size: 20),
+              Icon(Icons.chevron_right,
+                  color: context.colors.primary, size: 20),
               const SizedBox(width: 50),
             ],
           )),

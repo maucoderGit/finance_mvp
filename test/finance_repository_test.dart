@@ -81,6 +81,167 @@ void main() {
     expect(after!.rate, 1.2);
   });
 
+  test('edit updates the same row and delete removes it', () async {
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'EUR',
+      rate: 1.1,
+      date: DateTime(2026, 2, 1),
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'EUR',
+      rate: 1.2,
+      date: DateTime(2026, 2, 2),
+    ));
+
+    final rates = await repo.getRatesForCurrency('EUR');
+    expect(rates, hasLength(2));
+
+    final first = rates.first;
+    final edited = CurrencyRatesCompanion(
+      id: drift.Value(first.id),
+      currencyCode: drift.Value(first.currencyCode),
+      rate: const drift.Value(1.15),
+      date: drift.Value(first.date),
+    );
+    await repo.addExchangeRate(edited);
+
+    final afterEdit = await repo.getRatesForCurrency('EUR');
+    expect(afterEdit, hasLength(2));
+    expect(afterEdit.first.id, first.id);
+    expect(afterEdit.first.rate, 1.15);
+
+    await repo.deleteExchangeRate(first.id);
+    final afterDelete = await repo.getRatesForCurrency('EUR');
+    expect(afterDelete, hasLength(1));
+    expect(afterDelete.first.id, isNot(first.id));
+  });
+
+  test('partial settings patch preserves other stored values', () async {
+    await repo.updateUserSettings(const UserSettingsCompanion(
+      username: drift.Value('Ana'),
+      baseCurrencyCode: drift.Value('USD'),
+      nationalCurrencyCode: drift.Value('VES'),
+      currencySelectionMode: drift.Value('manual'),
+      hasCompletedOnboarding: drift.Value(true),
+    ));
+
+    await repo.updateUserSettings(UserSettingsCompanion(
+      currencySelectionMode: const drift.Value('auto'),
+      lastAutoFetchDate: drift.Value(DateTime(2026, 9, 11, 23, 33)),
+    ));
+
+    final setting = await repo.watchUserSettings().first;
+    expect(setting!.username, 'Ana');
+    expect(setting.baseCurrencyCode, 'USD');
+    expect(setting.nationalCurrencyCode, 'VES');
+    expect(setting.currencySelectionMode, 'auto');
+    expect(setting.lastAutoFetchDate, DateTime(2026, 9, 11, 23, 33));
+    expect(setting.hasCompletedOnboarding, isTrue);
+  });
+
+  test('adjustAccountBalance posts a delta transaction', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'cash',
+        iconColor: 0xFF4CAF50,
+      ),
+      100,
+    );
+
+    final account = (await repo.getAllAccounts()).first;
+    expect(await repo.getAccountBalance(account.id), 100);
+
+    await repo.adjustAccountBalance(
+        accountId: account.id, currencyCode: 'USD', newBalance: 250);
+    expect(await repo.getAccountBalance(account.id), 250);
+
+    await repo.adjustAccountBalance(
+        accountId: account.id, currencyCode: 'USD', newBalance: 250);
+    final txs = await repo.watchTransactions().first;
+    expect(txs.where((t) => t.accountId == account.id).length, 2);
+
+    await repo.adjustAccountBalance(
+        accountId: account.id, currencyCode: 'USD', newBalance: 150);
+    expect(await repo.getAccountBalance(account.id), 150);
+  });
+
+  test('updateAccount patches name, icon and inclusion flag', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'cash',
+        iconColor: 0xFF4CAF50,
+      ),
+      100,
+    );
+
+    var account = (await repo.getAllAccounts()).first;
+    expect(account.includeInRevaluation, isTrue);
+
+    await repo.updateAccount(AccountsCompanion(
+      id: drift.Value(account.id),
+      name: const drift.Value('Wallet'),
+      icon: const drift.Value('bank'),
+      iconColor: const drift.Value(0xFF2196F3),
+      includeInRevaluation: const drift.Value(false),
+    ));
+
+    account = (await repo.getAllAccounts()).first;
+    expect(account.name, 'Wallet');
+    expect(account.icon, 'bank');
+    expect(account.iconColor, 0xFF2196F3);
+    expect(account.includeInRevaluation, isFalse);
+  });
+
+  test('wipeAllData clears everything and restores fresh-install state',
+      () async {
+    await repo.addCurrency(CurrenciesCompanion.insert(
+      code: 'MXN',
+      name: 'Mexican Peso',
+      symbol: r'$',
+    ));
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'MXN',
+        icon: 'cash',
+        iconColor: 0xFF4CAF50,
+      ),
+      100,
+    );
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'MXN',
+      rate: 18.5,
+      date: DateTime(2026, 1, 1),
+    ));
+    await repo.updateUserSettings(const UserSettingsCompanion(
+      username: drift.Value('Ana'),
+      baseCurrencyCode: drift.Value('MXN'),
+      currencySelectionMode: drift.Value('manual'),
+      hasCompletedOnboarding: drift.Value(true),
+    ));
+
+    await repo.wipeAllData();
+
+    expect(await repo.getAllAccounts(), isEmpty);
+    expect((await repo.watchTransactions().first)
+        .where((t) => t.accountId > 0), isEmpty);
+    expect(await repo.getRatesForCurrency('MXN'), isEmpty);
+
+    final currencies = await repo.getAllCurrencies();
+    final codes = currencies.map((c) => c.code).toSet();
+    expect(codes, {'USD', 'VES', 'EUR'});
+    expect((await repo.getAllCategories()).length, 10);
+
+    final setting = await repo.watchUserSettings().first;
+    expect(setting!.username, 'User');
+    expect(setting.baseCurrencyCode, 'USD');
+    expect(setting.hasCompletedOnboarding, isFalse);
+  });
+
   test('calculateTotalBalance converts all accounts to the target currency',
       () async {
     await repo.updateUserSettings(const UserSettingsCompanion(

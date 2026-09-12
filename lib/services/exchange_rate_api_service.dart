@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'rate_source.dart';
+
 class ExchangeRateApiException implements Exception {
   final String message;
   ExchangeRateApiException(this.message);
@@ -15,7 +17,7 @@ class ExchangeRateApiException implements Exception {
 /// No API key required. Supports 201 currencies with history back to 1948.
 ///
 /// Docs: https://www.frankfurter.dev/docs/
-class ExchangeRateApiService {
+class ExchangeRateApiService implements RateSource {
   final http.Client _client;
   final Duration timeout;
 
@@ -30,8 +32,12 @@ class ExchangeRateApiService {
   ExchangeRateApiService({http.Client? client, this.timeout = const Duration(seconds: 15)})
       : _client = client ?? http.Client();
 
+  @override
   bool isSupported(String currencyCode) =>
       !_unsupportedCodes.contains(currencyCode.toUpperCase());
+
+  @override
+  int get historyDays => 365;
 
   /// Fetch the latest exchange rate between [base] and [quote].
   /// Returns how many units of [quote] buy 1 unit of [base].
@@ -82,6 +88,7 @@ class ExchangeRateApiService {
   }
 
   /// Fetch the latest rate as a map of quote → rate for a list of quotes.
+  @override
   Future<Map<String, double>> fetchLatestRates({
     required String base,
     required List<String> quotes,
@@ -201,6 +208,7 @@ class ExchangeRateApiService {
     };
   }
 
+  @override
   void dispose() {
     _client.close();
   }

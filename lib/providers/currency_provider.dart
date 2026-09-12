@@ -1,21 +1,26 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/bcv_rate_source.dart';
 import 'package:finance_mvp/services/exchange_rate_api_service.dart';
+import 'package:finance_mvp/services/rate_source.dart';
+import 'package:flutter/foundation.dart';
 
-/// Manages exchange-rate state: syncing from the API, manual overrides, and
-/// the base currency.
+/// Manages exchange-rate state: syncing from the available rate sources,
+/// manual overrides, the base currency and once-per-day automatic sync.
 class CurrencyProvider extends ChangeNotifier {
   final FinanceRepository _repository;
-  final ExchangeRateApiService _apiService;
+  final List<RateSource> _sources;
 
   bool _syncing = false;
   String? _syncError;
   DateTime? _lastSyncDate;
+  Timer? _dailyTimer;
 
-  CurrencyProvider(this._repository, {ExchangeRateApiService? apiService})
-      : _apiService = apiService ?? ExchangeRateApiService();
+  CurrencyProvider(this._repository, {List<RateSource>? sources})
+      : _sources = sources ?? [ExchangeRateApiService(), BcvRateSource()];
 
   bool get isSyncing => _syncing;
   String? get syncError => _syncError;
@@ -64,11 +69,12 @@ class CurrencyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sync today's rates for all non-base currencies via the API.
-  /// Falls back gracefully when a currency is unsupported (e.g. VES).
-  /// Returns how many currencies were updated.
+  /// Sync today's rates for all non-base currencies, fanning the list out
+  /// across every [RateSource] that supports each currency (one HTTP call per
+  /// source). A failing source no longer blocks the others.
+  ///
+  /// Returns how many rates were stored.
   Future<int> syncRates({bool force = false}) async {
-    // Don't run concurrently.
     if (_syncing) return 0;
     _syncing = true;
     _syncError = null;
@@ -77,100 +83,146 @@ class CurrencyProvider extends ChangeNotifier {
     try {
       final baseCode = await _repository.getBaseCurrencyCode();
       final currencies = await _repository.getAllCurrencies();
+      final toSync = currencies.where((c) => c.code != baseCode).toList();
 
-      final supported = currencies
-          .where((c) => c.code != baseCode && _apiService.isSupported(c.code))
+      final unsupported = toSync
+          .where((c) => !_sources.any((s) => s.isSupported(c.code)))
+          .map((c) => c.code)
           .toList();
 
-      if (supported.isEmpty) {
-        _syncError = 'No supported currencies to sync (VES may require manual entry).';
-        return 0;
-      }
-
-      final quotes = supported.map((c) => c.code).toList();
       final today = DateTime.now();
-      final start = DateTime(today.year, today.month, today.day);
-
-      final rates = await _apiService.fetchTimeSeries(
-        base: baseCode,
-        quotes: quotes,
-        from: start,
-        to: today,
-      );
+      final todayDate = DateTime(today.year, today.month, today.day);
 
       var updated = 0;
-      rates.forEach((dateStr, quoteRates) {
-        if (dateStr.isEmpty) return;
-        final date = DateTime.tryParse(dateStr);
-        if (date == null) return;
+      for (final source in _sources) {
+        final quotes = toSync
+            .map((c) => c.code)
+            .where(source.isSupported)
+            .toList();
+        if (quotes.isEmpty) continue;
 
-        for (final quote in quotes) {
-          final rate = quoteRates[quote];
-          if (rate == null || rate <= 0) continue;
-          updated++;
-          _repository.addExchangeRate(CurrencyRatesCompanion(
-            currencyCode: Value(quote),
-            rate: Value(rate),
-            date: Value(date),
-          ));
+        try {
+          final rates = await source.fetchLatestRates(
+              base: baseCode, quotes: quotes);
+          for (final entry in rates.entries) {
+            if (entry.value <= 0) continue;
+            updated++;
+            await _repository.addExchangeRate(CurrencyRatesCompanion(
+              currencyCode: Value(entry.key),
+              rate: Value(entry.value),
+              date: Value(todayDate),
+            ));
+          }
+        } catch (e) {
+          _syncError = e.toString();
         }
-      });
+      }
 
-      _lastSyncDate = DateTime.now();
-      // Persist last fetch time in settings.
-      await _repository.updateUserSettings(UserSettingsCompanion(
-        lastAutoFetchDate: Value(DateTime.now()),
-        currencySelectionMode: const Value('auto'),
-      ));
+      if (updated > 0) {
+        _syncError = unsupported.isEmpty
+            ? null
+            : 'Unsupported: ${unsupported.join(', ')}. Add manually.';
+        _lastSyncDate = DateTime.now();
+        await _repository.updateUserSettings(UserSettingsCompanion(
+          lastAutoFetchDate: Value(DateTime.now()),
+          currencySelectionMode: const Value('auto'),
+        ));
+      } else {
+        _syncError ??= unsupported.isEmpty
+            ? 'No rate source returned data.'
+            : 'Unsupported: ${unsupported.join(', ')}. Add manually.';
+      }
 
       return updated;
-    } catch (e) {
-      _syncError = e.toString();
-      return 0;
     } finally {
       _syncing = false;
       notifyListeners();
     }
   }
 
-  /// Fetch a series of historical rates for [currencyCode] from the API.
+  /// Fetch up to [daysBack] of historical rates for [currencyCode] via its
+  /// rate source. Sources with no history (e.g. BCV) store today's rate only.
   /// Returns the number of rate rows stored.
   Future<int> syncHistoricalRates(
     String currencyCode, {
     required int daysBack,
   }) async {
-    if (!_apiService.isSupported(currencyCode)) {
-      _syncError = 'Currency $currencyCode is not supported by the API. Add rates manually.';
+    final source = _sources.where((s) => s.isSupported(currencyCode)).firstOrNull;
+    if (source == null) {
+      _syncError = 'Currency $currencyCode is not supported by any source. Add rates manually.';
       return 0;
     }
 
     final baseCode = await _repository.getBaseCurrencyCode();
     if (currencyCode == baseCode) return 0;
 
-    final today = DateTime.now();
-    final start = today.subtract(Duration(days: daysBack));
+    if (source is ExchangeRateApiService) {
+      final today = DateTime.now();
+      final start = today.subtract(Duration(days: daysBack));
+      final rates = await source.fetchTimeSeries(
+        base: baseCode,
+        quotes: [currencyCode],
+        from: start,
+        to: today,
+      );
 
-    final rates = await _apiService.fetchTimeSeries(
-      base: baseCode,
-      quotes: [currencyCode],
-      from: start,
-      to: today,
-    );
+      var count = 0;
+      rates.forEach((dateStr, quoteRates) {
+        final date = DateTime.tryParse(dateStr);
+        final rate = quoteRates[currencyCode];
+        if (date == null || rate == null || rate <= 0) return;
+        count++;
+        _repository.addExchangeRate(CurrencyRatesCompanion(
+          currencyCode: Value(currencyCode),
+          rate: Value(rate),
+          date: Value(date),
+        ));
+      });
+      return count;
+    }
 
-    var count = 0;
-    rates.forEach((dateStr, quoteRates) {
-      final date = DateTime.tryParse(dateStr);
-      final rate = quoteRates[currencyCode];
-      if (date == null || rate == null || rate <= 0) return;
-      count++;
-      _repository.addExchangeRate(CurrencyRatesCompanion(
-        currencyCode: Value(currencyCode),
-        rate: Value(rate),
-        date: Value(date),
-      ));
+    final rates = await source.fetchLatestRates(base: baseCode, quotes: [currencyCode]);
+    final rate = rates[currencyCode];
+    if (rate == null || rate <= 0) return 0;
+    _repository.addExchangeRate(CurrencyRatesCompanion(
+      currencyCode: Value(currencyCode),
+      rate: Value(rate),
+      date: Value(DateTime.now()),
+    ));
+    return 1;
+  }
+
+  /// Kick off automatic daily fetching: sync now if it hasn't happened today
+  /// yet, then re-arm a timer for every following midnight (auto mode only).
+  void startDailyAutoSync() {
+    unawaited(_runDailySchedule());
+  }
+
+  Future<void> _runDailySchedule() async {
+    final setting = await _repository.watchUserSettings().first;
+    if (setting?.currencySelectionMode != 'auto') return;
+
+    final last = await _repository.getLastAutoFetchDate();
+    final now = DateTime.now();
+    final alreadyFetchedToday = last != null &&
+        last.year == now.year &&
+        last.month == now.month &&
+        last.day == now.day;
+    if (!alreadyFetchedToday) {
+      await syncRates(force: true);
+    }
+
+    _dailyTimer?.cancel();
+    _dailyTimer = Timer(_untilNextMidnight(), () {
+      _dailyTimer = null;
+      unawaited(_runDailySchedule());
     });
+  }
 
-    return count;
+  Duration _untilNextMidnight() {
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1);
+    return next.difference(now);
   }
 
   /// Set the base currency. Returns the new code.
@@ -194,7 +246,10 @@ class CurrencyProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _apiService.dispose();
+    _dailyTimer?.cancel();
+    for (final source in _sources) {
+      source.dispose();
+    }
     super.dispose();
   }
 }

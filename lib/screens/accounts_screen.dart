@@ -1,32 +1,113 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/add_account_sheet.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
+
+  void _showAccountSheet(BuildContext context, {db.Account? account}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (_, controller) => Container(
+            decoration: BoxDecoration(
+                color: context.colors.background,
+                borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16))),
+            child: AddAccountSheet(existing: account)),
+      ),
+    );
+  }
+
+  Future<void> _adjustBalance(
+      BuildContext context, db.Account account, double currentBalance) async {
+    final repository = context.read<FinanceRepository>();
+    final controller =
+        TextEditingController(text: currentBalance.toStringAsFixed(2));
+
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Adjust ${account.name} balance'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'New balance'),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Sets the balance to this value. A "Balance adjustment" '
+                'transaction is recorded for the difference.',
+                style: TextStyle(
+                    color: context.colors.textLight, fontSize: 12, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (shouldSave == true) {
+      final value = double.tryParse(controller.text);
+      if (value == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Enter a valid balance.')),
+          );
+        }
+        return;
+      }
+      await repository.adjustAccountBalance(
+        accountId: account.id,
+        currencyCode: account.currencyCode,
+        newBalance: value,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final repository = context.watch<FinanceRepository>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back, color: context.colors.textDark),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          'Atelier Finance',
+        title: Text(
+          'Finance',
           style: TextStyle(
-            color: AppColors.textDark,
+            color: context.colors.textDark,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -34,20 +115,8 @@ class AccountsScreen extends StatelessWidget {
         centerTitle: false,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => DraggableScrollableSheet(
-              initialChildSize: 0.8,
-              maxChildSize: 0.9,
-              minChildSize: 0.5,
-              builder: (_, controller) => Container(decoration: const BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16))), child: const AddAccountSheet()),
-            ),
-          );
-        },
-        backgroundColor: AppColors.primary,
+        onPressed: () => _showAccountSheet(context),
+        backgroundColor: context.colors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: StreamBuilder<List<db.Account>>(
@@ -61,46 +130,57 @@ class AccountsScreen extends StatelessWidget {
 
           return SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'BALANCE',
                     style: TextStyle(
-                      color: AppColors.textLight,
+                      color: context.colors.textLight,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                       letterSpacing: 1.2,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  FutureBuilder<String>(
-                    future: repository.getBaseCurrencyCode(),
+                  FutureBuilder<({String code, String symbol})>(
+                    future: () async {
+                      final code = await repository.getBaseCurrencyCode();
+                      return (
+                        code: code,
+                        symbol: await repository.getBaseCurrencySymbol(),
+                      );
+                    }(),
                     builder: (context, balanceSnapshot) {
-                      final baseCurrencyCode = balanceSnapshot.data ?? 'USD';
+                      final baseCurrencyCode =
+                          balanceSnapshot.data?.code ?? 'USD';
+                      final baseSymbol = balanceSnapshot.data?.symbol ?? r'$';
                       return FutureBuilder<double>(
-                        future: repository.calculateTotalBalance(baseCurrencyCode),
+                        future:
+                            repository.calculateTotalBalance(baseCurrencyCode),
                         builder: (context, totalSnapshot) {
                           final total = totalSnapshot.data ?? 0.0;
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                NumberFormat.currency(symbol: '\$').format(total), // Assuming base is USD-like for symbol
-                                style: const TextStyle(
+                                formatMoney(total, symbol: baseSymbol),
+                                style: TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
+                                  color: context.colors.primary,
                                   letterSpacing: -1,
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0, left: 8.0),
+                                padding: const EdgeInsets.only(
+                                    bottom: 8.0, left: 8.0),
                                 child: Text(
                                   baseCurrencyCode,
-                                  style: const TextStyle(
-                                    color: AppColors.textLight,
+                                  style: TextStyle(
+                                    color: context.colors.textLight,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -115,24 +195,25 @@ class AccountsScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'My Accounts',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
+                          color: context.colors.textDark,
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
+                          color: context.colors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '${accounts.length} ACTIVE',
-                          style: const TextStyle(
-                            color: AppColors.primary,
+                          style: TextStyle(
+                            color: context.colors.primary,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -141,25 +222,35 @@ class AccountsScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  ...accounts.map((account) => FutureBuilder<Map<String, dynamic>>(
+                  ...accounts.map((account) =>
+                      FutureBuilder<Map<String, dynamic>>(
                         future: () async {
-                          final allTransactions = await repository.db.select(repository.db.transactions).get();
+                          final allTransactions = await repository.db
+                              .select(repository.db.transactions)
+                              .get();
                           final accountBalance = allTransactions
                               .where((t) => t.accountId == account.id)
                               .fold<double>(0.0, (sum, t) => sum + t.amount);
 
-                          final baseCurrencyCode = await repository.getBaseCurrencyCode();
+                          final baseCurrencyCode =
+                              await repository.getBaseCurrencyCode();
                           final converted = await repository.convertAmount(
                             amount: accountBalance,
                             fromCode: account.currencyCode,
                             toCode: baseCurrencyCode,
                           );
-                          return {'balance': accountBalance, 'converted': converted, 'baseCode': baseCurrencyCode};
+                          return {
+                            'balance': accountBalance,
+                            'converted': converted,
+                            'baseCode': baseCurrencyCode
+                          };
                         }(),
                         builder: (context, balanceSnapshot) {
-                          final balance = balanceSnapshot.data?['balance'] ?? 0.0;
+                          final balance =
+                              balanceSnapshot.data?['balance'] ?? 0.0;
                           final converted = balanceSnapshot.data?['converted'];
-                          final baseCode = balanceSnapshot.data?['baseCode'] ?? 'USD';
+                          final baseCode =
+                              balanceSnapshot.data?['baseCode'] ?? 'USD';
                           return _AccountCard(
                             name: account.name,
                             subtitle: account.subtitle ?? '',
@@ -168,7 +259,11 @@ class AccountsScreen extends StatelessWidget {
                             convertedAmount: converted,
                             baseCurrencyCode: baseCode,
                             icon: accountIconFor(account.icon),
-                            iconBgColor: Color(account.iconColor),
+                            iconColor: account.iconColor,
+                            onAdjustBalance: () =>
+                                _adjustBalance(context, account, balance),
+                            onTap: () =>
+                                _showAccountSheet(context, account: account),
                           );
                         },
                       )),
@@ -190,7 +285,9 @@ class _AccountCard extends StatelessWidget {
   final double? convertedAmount;
   final String baseCurrencyCode;
   final IconData icon;
-  final Color iconBgColor;
+  final int iconColor;
+  final VoidCallback onAdjustBalance;
+  final VoidCallback onTap;
 
   const _AccountCard({
     required this.name,
@@ -200,63 +297,93 @@ class _AccountCard extends StatelessWidget {
     this.convertedAmount,
     required this.baseCurrencyCode,
     required this.icon,
-    required this.iconBgColor,
+    required this.iconColor,
+    required this.onAdjustBalance,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: BoxBorder.all(color: AppColors.cardBorder, width: 0.35)
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+            color: context.colors.background,
+            borderRadius: BorderRadius.circular(16),
+            border:
+                BoxBorder.all(color: context.colors.cardBorder, width: 0.35)),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Color(iconColor).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Color(iconColor), size: 22),
             ),
-            child: Icon(icon, color: AppColors.primary),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text(subtitle,
+                      style: TextStyle(
+                          color: context.colors.textLight, fontSize: 13)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                Text(subtitle, style: const TextStyle(color: AppColors.textLight, fontSize: 13)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      formatMoney(
+                        amount,
+                        decimalDigits: currencyCode == 'BTC' ? 3 : 2,
+                      ),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      currencyCode,
+                      style: TextStyle(
+                          color: context.colors.textLight, fontSize: 11),
+                    ),
+                  ],
+                ),
+                if (convertedAmount != null &&
+                    currencyCode != baseCurrencyCode) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '≈ ${formatMoney(convertedAmount!)}',
+                    style: TextStyle(
+                        color: context.colors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$currencyCode ${amount.toStringAsFixed(currencyCode == 'BTC' ? 3 : 2)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              if (convertedAmount != null && currencyCode != baseCurrencyCode)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '≈ \$${convertedAmount!.toStringAsFixed(2)}', // Assuming base currency uses '$'
-                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
-          ),
-        ],
+            IconButton(
+              onPressed: onAdjustBalance,
+              tooltip: 'Adjust balance',
+              icon: Icon(Icons.tune, color: context.colors.textLight, size: 20),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,26 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:intl/intl.dart';
+
+/// Formats [amount] with the phone locale's group/decimal separators, so
+/// 1234.50 reads "1.234,50" in es-VE but "1,234.50" in en-US. Prepend
+/// [currencyCode] (e.g. "VES") and/or override the [symbol] to customize.
+String formatMoney(
+  double amount, {
+  String? currencyCode,
+  String? symbol,
+  String? locale,
+  int decimalDigits = 2,
+}) {
+  final activeLocale = locale ?? PlatformDispatcher.instance.locale.toString();
+  final formatted = NumberFormat.currency(
+    locale: activeLocale,
+    symbol: symbol ?? '',
+    decimalDigits: decimalDigits,
+  ).format(amount);
+  return currencyCode == null ? formatted : '$formatted $currencyCode';
+}
 
 /// Currency conversion utilities built on top of stored exchange rates.
 ///
@@ -75,7 +97,6 @@ class CurrencyConverter {
           toCode: currencyCode);
 
   /// Format a number for display in a given currency.
-  String formatAmount(double amount, String currencyCode) {
-    return '$currencyCode ${amount.toStringAsFixed(2)}';
-  }
+  String formatAmount(double amount, String currencyCode) =>
+      formatMoney(amount, currencyCode: currencyCode);
 }

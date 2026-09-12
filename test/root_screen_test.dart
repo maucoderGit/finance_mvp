@@ -31,9 +31,11 @@ void main() {
     service = RevaluationService(repo);
     currencyProvider = CurrencyProvider(
       repo,
-      apiService: ExchangeRateApiService(
-        client: MockClient((_) async => http.Response('[]', 200)),
-      ),
+      sources: [
+        ExchangeRateApiService(
+          client: MockClient((_) async => http.Response('[]', 200)),
+        ),
+      ],
     );
     revaluationProvider = RevaluationProvider(service);
   });
@@ -61,7 +63,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Not onboarded yet → RootScreen renders the wizard.
-    expect(find.text('Welcome to\nAtelier Finance'), findsOneWidget);
+    expect(find.text('Welcome to\nFinance'), findsOneWidget);
 
     // Walk the wizard to the end.
     await tester.tap(find.text('Get started'));
@@ -75,6 +77,14 @@ void main() {
 
     // Step: sync mode → choose manual so no HTTP is fired by the home screen.
     await tester.tap(find.text('Manual'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    // Step: first account → must register at least one to continue.
+    await tester.enterText(
+        find.byKey(const Key('onboarding-account-name')), 'Cash');
+    await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();

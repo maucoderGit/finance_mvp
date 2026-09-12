@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 
 /// Card displaying the gain/loss for a single account or currency.
 class GainLossCard extends StatelessWidget {
@@ -82,7 +83,7 @@ class GainLossCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${balanceNative.toStringAsFixed(2)} $currencyCode',
+            formatMoney(balanceNative, currencyCode: currencyCode),
             style: TextStyle(
                 fontSize: 14, color: Colors.grey.shade600, height: 1.2),
           ),
@@ -103,7 +104,7 @@ class GainLossCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      currentValueInBase.toStringAsFixed(2),
+                      formatMoney(currentValueInBase),
                       style: const TextStyle(
                           fontSize: 20, fontWeight: FontWeight.bold),
                     ),
@@ -123,7 +124,7 @@ class GainLossCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${isGain ? '+' : '-'}${gainLoss.abs().toStringAsFixed(2)} '
+                    '${isGain ? '+' : '-'}${formatMoney(gainLoss.abs())} '
                     '(${percentChange.toStringAsFixed(1)}%)',
                     style: TextStyle(
                         color: color, fontWeight: FontWeight.bold, fontSize: 16),

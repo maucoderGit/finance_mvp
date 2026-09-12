@@ -43,7 +43,7 @@ class GoalProjectionCard extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  color: AppColors.cardBackground,
+                  color: context.colors.cardBackground,
                 ),
               ),
               const SizedBox(width: 16.0),

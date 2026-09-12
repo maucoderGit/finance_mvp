@@ -39,19 +39,19 @@ class _SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.background,
+    return Scaffold(
+      backgroundColor: context.colors.background,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.account_balance_wallet,
-                size: 72, color: AppColors.primary),
+                size: 72, color: context.colors.primary),
             SizedBox(height: 16),
             Text(
-              'Atelier Finance',
+              'Finance',
               style: TextStyle(
-                color: AppColors.textDark,
+                color: context.colors.textDark,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
@@ -62,7 +62,7 @@ class _SplashScreen extends StatelessWidget {
               height: 24,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                color: AppColors.primary,
+                color: context.colors.primary,
               ),
             ),
           ],

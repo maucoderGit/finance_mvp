@@ -65,60 +65,108 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
     }
   }
 
-  Future<void> _addRate() async {
+  Future<void> _showRateDialog({ExchangeRate? existing}) async {
     final repo = context.read<FinanceRepository>();
-    DateTime? selectedDate = DateTime.now();
-    final rateController = TextEditingController();
+    final rateController =
+        TextEditingController(text: existing != null ? existing.rate.toString() : '');
+    var selectedDate = existing?.date ?? DateTime.now();
+    final isEdit = existing != null;
 
     final bool? shouldSave = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Rate for ${widget.currency.code}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: rateController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Rate (1 USD = ?)',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+              '${isEdit ? 'Edit' : 'Add'} Rate for ${widget.currency.code}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: rateController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Rate (1 USD = ?)',
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                final pickedDate = await showDatePicker(
-                  context: context,
-                  initialDate: selectedDate!,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime.now(),
-                );
-                if (pickedDate != null) {
-                  selectedDate = pickedDate;
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (pickedDate != null) {
+                    setDialogState(() => selectedDate = pickedDate);
+                  }
+                },
+                child: Text(
+                    'Date: ${DateFormat('MMMM dd, yyyy').format(selectedDate)}'),
+              )
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                if (double.tryParse(rateController.text) == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter a valid rate.')),
+                  );
+                  return;
                 }
+                Navigator.of(context).pop(true);
               },
-              child: const Text('Select Date'),
-            )
+              child: const Text('Save'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Save')),
-        ],
       ),
     );
 
     if (shouldSave == true) {
       final rate = double.tryParse(rateController.text);
-      if (rate != null && selectedDate != null) {
-        final newRate = CurrencyRatesCompanion(
+      if (rate != null) {
+        var companion = CurrencyRatesCompanion(
           currencyCode: drift.Value(widget.currency.code),
           rate: drift.Value(rate),
-          date: drift.Value(selectedDate!),
+          date: drift.Value(selectedDate),
         );
-        await repo.addExchangeRate(newRate);
+        if (existing != null) {
+          companion = companion.copyWith(id: drift.Value(existing.id));
+        }
+        await repo.addExchangeRate(companion);
         _loadRates();
       }
+    }
+  }
+
+  Future<void> _confirmDelete(ExchangeRate rate) async {
+    final repo = context.read<FinanceRepository>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete rate?'),
+        content: Text(
+            'Remove the rate for ${DateFormat('MMMM dd, yyyy').format(rate.date)}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await repo.deleteExchangeRate(rate.id);
+      if (mounted) _loadRates();
     }
   }
 
@@ -143,7 +191,7 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addRate,
+        onPressed: () => _showRateDialog(),
         child: const Icon(Icons.add),
       ),
       body: FutureBuilder<List<ExchangeRate>>(
@@ -241,9 +289,27 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                       subtitle: isLatest
                           ? const Text('Latest', style: TextStyle(color: Colors.green))
                           : null,
-                      trailing: Text(
-                        rate.rate.toStringAsFixed(4),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      onTap: () => _showRateDialog(existing: rate),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            rate.rate.toStringAsFixed(4),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Edit rate',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _showRateDialog(existing: rate),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            tooltip: 'Delete rate',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _confirmDelete(rate),
+                          ),
+                        ],
                       ),
                     );
                   },

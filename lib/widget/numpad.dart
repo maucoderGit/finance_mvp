@@ -1,3 +1,4 @@
+import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class Numpad extends StatelessWidget {
@@ -17,15 +18,15 @@ class Numpad extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _buildRow(['1', '2', '3']),
-          _buildRow(['4', '5', '6']),
-          _buildRow(['7', '8', '9']),
+          _buildRow(context, ['1', '2', '3']),
+          _buildRow(context, ['4', '5', '6']),
+          _buildRow(context, ['7', '8', '9']),
           // Last row with decimal, 0 and backspace
           Row(
             children: [
-              Expanded(child: _buildNumberButton('.')),
-              Expanded(child: _buildNumberButton('0')),
-              Expanded(child: _buildBackspaceButton()),
+              Expanded(child: _buildNumberButton(context, '.')),
+              Expanded(child: _buildNumberButton(context, '0')),
+              Expanded(child: _buildBackspaceButton(context)),
             ],
           ),
         ],
@@ -33,13 +34,15 @@ class Numpad extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(List<String> numbers) {
+  Widget _buildRow(BuildContext context, List<String> numbers) {
     return Row(
-      children: numbers.map((number) => Expanded(child: _buildNumberButton(number))).toList(),
+      children: numbers
+          .map((n) => Expanded(child: _buildNumberButton(context, n)))
+          .toList(),
     );
   }
 
-  Widget _buildNumberButton(String number) {
+  Widget _buildNumberButton(BuildContext context, String number) {
     return TextButton(
       onPressed: () => onNumberTap(number),
       style: TextButton.styleFrom(
@@ -48,25 +51,25 @@ class Numpad extends StatelessWidget {
       ),
       child: Text(
         number,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 36,
           fontWeight: FontWeight.w400,
-          color: Colors.black,
+          color: context.colors.textDark,
         ),
       ),
     );
   }
 
-  Widget _buildBackspaceButton() {
+  Widget _buildBackspaceButton(BuildContext context) {
     return TextButton(
       onPressed: onBackspaceTap,
       style: TextButton.styleFrom(
         padding: const EdgeInsets.all(10),
         shape: const CircleBorder(),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.backspace_outlined,
-        color: Colors.black,
+        color: context.colors.textDark,
         size: 30,
       ),
     );

@@ -55,7 +55,7 @@ class ProfileAvatar extends StatelessWidget {
                     onTap: onEdit,
                     child: CircleAvatar(
                       radius: size * 0.14,
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: context.colors.primary,
                       child:
                           const Icon(Icons.edit, color: Colors.white, size: 20),
                     ),

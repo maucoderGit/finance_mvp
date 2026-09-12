@@ -69,6 +69,9 @@ class CurrencyDao extends DatabaseAccessor<AppDatabase>
     });
   }
 
+  Future<void> deleteExchangeRate(int id) =>
+      (delete(currencyRates)..where((r) => r.id.equals(id))).go();
+
   // User settings
   Stream<UserSetting?> watchUserSettings() {
     return (select(userSettings)..where((s) => s.id.equals(0)))

@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 
 /// Line chart of net worth over time in the base currency.
 class NetWorthLineChart extends StatelessWidget {
@@ -83,7 +84,7 @@ class NetWorthLineChart extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Latest: ${data.last.baseAmount.toStringAsFixed(2)} $baseCurrencyCode',
+            'Latest: ${formatMoney(data.last.baseAmount, currencyCode: baseCurrencyCode)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),

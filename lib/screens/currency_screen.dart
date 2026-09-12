@@ -62,8 +62,8 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
         ),
         actions: [
           CircleAvatar(
-            backgroundColor: AppColors.primary,
-            child: IconButton(icon: const Icon(Icons.add, color: AppColors.background), onPressed: () {
+            backgroundColor: context.colors.primary,
+            child: IconButton(icon: Icon(Icons.add, color: context.colors.background), onPressed: () {
               showModalBottomSheet<db.Currency>(
                 context: context,
                 isScrollControlled: true,

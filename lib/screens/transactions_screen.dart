@@ -1,9 +1,10 @@
+import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transaction_list_view.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 import 'package:finance_mvp/widget/transaction_card.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class TransactionPage extends StatefulWidget {
@@ -17,14 +18,21 @@ class _TransactionPageState extends State<TransactionPage> {
   String _selectedToggle = 'All'; // State variable for selected toggle
 
   /// Net total of all transactions converted to the base currency.
-  Future<({double total, String baseCode})> _netTotalInBase(
+  Future<({double total, String baseCode, String baseSymbol})> _netTotalInBase(
       FinanceRepository repo, List<db.Transaction> transactions) async {
     final baseCode = await repo.getBaseCurrencyCode();
     double sum = 0;
     for (final t in transactions) {
       sum += await repo.toBaseAmount(t);
     }
-    return (total: sum, baseCode: baseCode);
+    final currencies = await repo.getAllCurrencies();
+    final baseSymbol = currencies.isNotEmpty
+        ? currencies
+            .firstWhere((c) => c.code == baseCode,
+                orElse: () => currencies.first)
+            .symbol
+        : baseCode;
+    return (total: sum, baseCode: baseCode, baseSymbol: baseSymbol);
   }
 
   @override
@@ -42,9 +50,6 @@ class _TransactionPageState extends State<TransactionPage> {
             return true;
           }).toList();
 
-          final formatter = NumberFormat.currency(
-              locale: 'en_US', symbol: '\$', decimalDigits: 2);
-
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -53,16 +58,16 @@ class _TransactionPageState extends State<TransactionPage> {
                 SizedBox(height: MediaQuery.of(context).size.height * 0.05),
                 _buildHeader(context),
                 const SizedBox(height: 20),
-                FutureBuilder<({double total, String baseCode})>(
+                FutureBuilder<
+                    ({double total, String baseCode, String baseSymbol})>(
                   future: _netTotalInBase(repo, allTransactions),
                   builder: (context, snapshot) {
                     final total = snapshot.data?.total ?? 0.0;
-                    final baseCode = snapshot.data?.baseCode ?? 'USD';
+                    final baseSymbol = snapshot.data?.baseSymbol ?? r'$';
                     return TransactionCard(
                       title: 'Summary',
                       amount: total,
-                      displayAmount:
-                          '${formatter.format(total)} $baseCode',
+                      displayAmount: formatMoney(total, symbol: baseSymbol),
                       isTotalCard: true,
                     );
                   },
@@ -71,7 +76,8 @@ class _TransactionPageState extends State<TransactionPage> {
                 _buildMonthSelector(),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: TransactionListView(transactions: filteredTransactions),
+                  child:
+                      TransactionListView(transactions: filteredTransactions),
                 ),
                 const SizedBox(height: 20),
                 _buildToggleSection(),
@@ -84,25 +90,28 @@ class _TransactionPageState extends State<TransactionPage> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final brand = context.colors.primary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back, color: Color(0xFF1A3A1B)),
+              icon: Icon(Icons.arrow_back, color: brand),
               onPressed: () => Navigator.pop(context),
             ),
             const SizedBox(width: 15),
-            const Text(
+            Text(
               'Transactions',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1A3A1B)),
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: brand),
             ),
           ],
         ),
         Row(
           children: [
-            _buildCircleIconButton(Icons.add, () => Navigator.pushNamed(context, '/v1/transactions/create')),
+            _buildCircleIconButton(Icons.add,
+                () => Navigator.pushNamed(context, '/v1/transactions/create')),
             const SizedBox(width: 5),
             _buildCircleIconButton(Icons.search, null, isSearch: true),
           ],
@@ -111,14 +120,18 @@ class _TransactionPageState extends State<TransactionPage> {
     );
   }
 
-  Widget _buildCircleIconButton(IconData icon, VoidCallback? onTap, {bool isSearch = false}) {
+  Widget _buildCircleIconButton(IconData icon, VoidCallback? onTap,
+      {bool isSearch = false}) {
     return Container(
       decoration: BoxDecoration(
-        color: isSearch ? const Color(0xFF1A3A1B) : const Color(0xFFD3E6D3),
+        color: isSearch
+            ? context.colors.primary
+            : context.colors.primaryLight.withValues(alpha: 0.3),
         shape: BoxShape.circle,
       ),
       child: IconButton(
-        icon: Icon(icon, color: isSearch ? Colors.white : const Color(0xFF1A3A1B)),
+        icon:
+            Icon(icon, color: isSearch ? Colors.white : context.colors.primary),
         onPressed: onTap,
       ),
     );
@@ -128,11 +141,14 @@ class _TransactionPageState extends State<TransactionPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
+        Text(
           'This month',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey),
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: context.colors.textLight),
         ),
-        Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
+        Icon(Icons.keyboard_arrow_down, color: context.colors.textLight),
       ],
     );
   }
@@ -142,13 +158,21 @@ class _TransactionPageState extends State<TransactionPage> {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.colors.cardBackground,
           borderRadius: BorderRadius.circular(30),
-          boxShadow: [BoxShadow(color: Colors.grey[100]!, spreadRadius: 1, blurRadius: 5, offset: const Offset(0, 3))],
+          boxShadow: [
+            BoxShadow(
+                color: context.colors.primaryLight.withValues(alpha: 0.15),
+                spreadRadius: 1,
+                blurRadius: 5,
+                offset: const Offset(0, 3))
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: ['All', 'In', 'Out'].map((text) => _buildToggleButton(text)).toList(),
+          children: ['All', 'In', 'Out']
+              .map((text) => _buildToggleButton(text))
+              .toList(),
         ),
       ),
     );
@@ -161,12 +185,14 @@ class _TransactionPageState extends State<TransactionPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4CAF50) : Colors.transparent,
+          color: isSelected ? context.colors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(25),
         ),
         child: Text(
           text,
-          style: TextStyle(color: isSelected ? Colors.white : Colors.grey[600], fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: isSelected ? Colors.white : context.colors.textLight,
+              fontWeight: FontWeight.w600),
         ),
       ),
     );

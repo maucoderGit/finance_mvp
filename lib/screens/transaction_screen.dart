@@ -6,18 +6,16 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/category_screen.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widget/numpad.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 enum TransactionType {
   income,
   expense,
 }
-
-
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key, this.existingTransaction});
@@ -30,11 +28,10 @@ class TransactionScreen extends StatefulWidget {
 }
 
 class _TransactionScreenState extends State<TransactionScreen> {
-
   String _amount = '0';
   int _currentStep = 0;
   TransactionType _transactionType = TransactionType.income;
-  
+
   bool _isRecurrenceEnabled = true;
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _rateController = TextEditingController();
@@ -46,10 +43,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
   /// base currency the amount is converted into.
   double? _previewRate;
   String? _previewBaseCode;
+  String? _previewBaseSymbol;
 
   /// When the account is in the base currency, the preview converts into the
   /// national (local) currency instead.
   String? _previewNationalCode;
+  String? _previewNationalSymbol;
   double? _previewNationalRate;
 
   @override
@@ -83,14 +82,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     });
   }
 
-  String _formatCurrency(String amountStr) {
+  String _formatCurrency(String amountStr, {String symbol = r'$'}) {
     final number = double.tryParse(amountStr) ?? 0.0;
-    final formatter = NumberFormat.currency(
-      locale: 'en_US',
-      symbol: '\$',
-      decimalDigits: 2,
-    );
-    return formatter.format(number).replaceAll('.', ',');
+    return formatMoney(number, symbol: symbol);
   }
 
   @override
@@ -105,8 +99,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
             existing.exchangeRateAtCreation!.toStringAsFixed(2);
       }
       _isRecurrenceEnabled = existing.isRecurrenceEnabled;
-      _transactionType =
-          existing.amount >= 0 ? TransactionType.income : TransactionType.expense;
+      _transactionType = existing.amount >= 0
+          ? TransactionType.income
+          : TransactionType.expense;
       _imagePath = existing.imagePath;
       _loadContextForEdit(existing);
     } else {
@@ -137,14 +132,24 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final baseCode = await repo.getBaseCurrencyCode();
     final nationalCode = await repo.getNationalCurrencyCode();
 
+    final currencies = await repo.getAllCurrencies();
+    String symbolOf(String code) {
+      for (final c in currencies) {
+        if (c.code == code) return c.symbol;
+      }
+      return '';
+    }
+
     double? nationalRate;
     if (nationalCode != baseCode) {
-      nationalRate = await repo.getRateWithFallback(nationalCode, DateTime.now());
+      nationalRate =
+          await repo.getRateWithFallback(nationalCode, DateTime.now());
     }
 
     double? rate;
     if (account.currencyCode != baseCode) {
-      rate = await repo.getRateWithFallback(account.currencyCode, DateTime.now());
+      rate =
+          await repo.getRateWithFallback(account.currencyCode, DateTime.now());
     }
 
     // Prefill the manual rate override (account currency vs base) so the user
@@ -157,7 +162,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     setState(() {
       _previewRate = rate;
       _previewBaseCode = baseCode;
+      _previewBaseSymbol = symbolOf(baseCode);
       _previewNationalCode = nationalCode;
+      _previewNationalSymbol = symbolOf(nationalCode);
       _previewNationalRate = nationalRate;
     });
   }
@@ -221,42 +228,42 @@ class _TransactionScreenState extends State<TransactionScreen> {
       if (nationalCode == baseCode || nationalRate == null) {
         amountLine = Text(
           'No exchange rate available for $nationalCode yet',
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
+          style: TextStyle(fontSize: 14, color: context.colors.textLight),
         );
         rateLine = null;
       } else {
         final localAmount = amount * nationalRate;
         amountLine = Text(
-          '≈ ${_formatCurrency(localAmount.toString())} $nationalCode',
-          style: const TextStyle(
+          '≈ ${_formatCurrency(localAmount.toString(), symbol: _previewNationalSymbol ?? r'$')}',
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
-            color: Colors.black54,
+            color: context.colors.textLight,
           ),
         );
         rateLine = Text(
           '1 $baseCode = ${nationalRate.toStringAsFixed(2)} $nationalCode',
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+          style: TextStyle(fontSize: 12, color: context.colors.textLight),
         );
       }
     } else if (rate != null) {
       final baseAmount = rate != 0 ? amount / rate : 0.0;
       amountLine = Text(
-        '≈ ${_formatCurrency(baseAmount.toString())} $baseCode',
-        style: const TextStyle(
+        '≈ ${_formatCurrency(baseAmount.toString(), symbol: _previewBaseSymbol ?? r'$')}',
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
-          color: Colors.black54,
+          color: context.colors.textLight,
         ),
       );
       rateLine = Text(
         '1 $baseCode = ${rate.toStringAsFixed(2)} $accountCode',
-        style: const TextStyle(fontSize: 12, color: Colors.grey),
+        style: TextStyle(fontSize: 12, color: context.colors.textLight),
       );
     } else {
       amountLine = Text(
         'No exchange rate available for $accountCode yet',
-        style: const TextStyle(fontSize: 14, color: Colors.grey),
+        style: TextStyle(fontSize: 14, color: context.colors.textLight),
       );
       rateLine = null;
     }
@@ -382,7 +389,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (accounts.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Create an account first in "Register Accounts".')),
+        const SnackBar(
+            content: Text('Create an account first in "Register Accounts".')),
       );
       return;
     }
@@ -397,8 +405,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
         minChildSize: 0.4,
         expand: false,
         builder: (context, controller) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: context.colors.cardBackground,
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(20),
               topRight: Radius.circular(20),
@@ -463,18 +471,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Color(0xFF1A3A1B)),
+                        icon: Icon(Icons.arrow_back,
+                            color: context.colors.primary),
                         onPressed: () {
                           Navigator.pop(context);
                         }, // No action
                       ),
                       const SizedBox(width: 15),
-                      const Text(
+                      Text(
                         'Payment',
                         style: TextStyle(
-                          fontSize: 36,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1A3A1B),
+                          color: context.colors.primary,
                         ),
                       ),
                     ],
@@ -483,12 +492,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     children: [
                       if (widget.existingTransaction != null)
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Color(0xFFB71C1C)),
+                          icon: const Icon(Icons.delete_outline,
+                              color: Color(0xFFEF5350)),
                           onPressed: _deleteTransaction,
                         ),
                       Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFD3E6D3),
+                        decoration: BoxDecoration(
+                          color: context.colors.primaryLight
+                              .withValues(alpha: 0.3),
                           shape: BoxShape.circle,
                         ),
                         clipBehavior: Clip.antiAlias,
@@ -503,15 +514,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 ),
                               )
                             : IconButton(
-                                icon: const Icon(Icons.image,
-                                    color: Color(0xFF1A3A1B)),
+                                icon: Icon(Icons.image,
+                                    color: context.colors.primary),
                                 onPressed: _pickTransactionImage,
                               ),
                       ),
                       // const SizedBox(width: 10),
                       // Container(
-                      //   decoration: const BoxDecoration(
-                      //     color: Color(0xFF1A3A1B),
+                      //   decoration: BoxDecoration(
+                      //     color: context.colors.primary,
                       //     shape: BoxShape.circle,
                       //   ),
                       //   child: const IconButton(
@@ -537,225 +548,249 @@ class _TransactionScreenState extends State<TransactionScreen> {
                         child: _currentStep == 0
                             ? SizedBox(
                                 child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Account',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: () {
-                              _pickAccountFromDatabase();
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey[100]!,
-                                    spreadRadius: 1,
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black,
-                                      shape: BoxShape.circle,
+                                  Text(
+                                    'Account',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: context.colors.textLight,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                    child: const Center(
-                                      child: Text(
-                                        'OKX',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  GestureDetector(
+                                    onTap: () {
+                                      _pickAccountFromDatabase();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: context.colors.cardBackground,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                context.colors.cardBackground,
+                                            spreadRadius: 1,
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: context.colors.primary,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Center(
+                                              child: Text(
+                                                'OKX',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            _selectedAccount?.name ??
+                                                'Select Account',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: context.colors.textDark,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: context.colors.primaryLight
+                                                  .withValues(alpha: 0.15),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              _selectedAccount?.currencyCode ??
+                                                  'USD',
+                                              style: TextStyle(
+                                                color: context.colors.primary,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    _selectedAccount?.name ?? 'Select Account',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  const Spacer(),
-Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE8F5E9),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          _selectedAccount?.currencyCode ?? 'USD',
-                                          style: const TextStyle(
-                                            color: Color(0xFF4CAF50),
-                                            fontWeight: FontWeight.w500,
+                                  const SizedBox(height: 24),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Flexible(
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              _formatCurrency(_amount,
+                                                  symbol: ''),
+                                              style: TextStyle(
+                                                fontSize: 50,
+                                                fontWeight: FontWeight.bold,
+                                                color: context.colors.textDark,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Flexible(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      _formatCurrency(_amount),
-                                      style: const TextStyle(
-                                        fontSize: 50,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              top: 12.0, left: 4.0),
+                                          child: Text(
+                                            _selectedAccount?.currencyCode ??
+                                                'USD',
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              color: context.colors.textLight,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 12.0, left: 4.0),
-                                  child: Text(
-                                    _selectedAccount?.currencyCode ?? 'USD',
-                                    style: const TextStyle(
+                                  const SizedBox(height: 4),
+                                  _buildConversionPreview(),
+                                  const SizedBox(height: 4),
+                                  Numpad(
+                                    onNumberTap: _onNumberTap,
+                                    onBackspaceTap: _onBackspaceTap,
+                                  ),
+                                  // SizedBox(height: MediaQuery.of(context).size.height * 0.1,),
+                                ],
+                              ))
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                      onTap: () => setState(() {
+                                            _currentStep -= 1;
+                                          }),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text.rich(
+                                          TextSpan(
+                                            children: [
+                                              TextSpan(
+                                                text: _formatCurrency(_amount,
+                                                    symbol: ''),
+                                                style: TextStyle(
+                                                  fontSize: 48,
+                                                  fontWeight: FontWeight.bold,
+                                                  color:
+                                                      context.colors.textDark,
+                                                ),
+                                              ),
+                                              TextSpan(
+                                                text:
+                                                    ' ${_selectedAccount?.currencyCode ?? 'USD'}',
+                                                style: TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.normal,
+                                                  color:
+                                                      context.colors.textLight,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      )),
+
+                                  const SizedBox(height: 18),
+
+                                  // Exchange rate (only when the account currency
+                                  // differs from the base currency)
+                                  if (_selectedAccount != null &&
+                                      _previewBaseCode != null &&
+                                      _selectedAccount!.currencyCode !=
+                                          _previewBaseCode) ...[
+                                    Text(
+                                      'Exchange rate',
+                                      style: TextStyle(
+                                          color: context.colors.textLight,
+                                          fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildRateField(),
+                                    const SizedBox(height: 20),
+                                  ],
+
+                                  // Category
+                                  Text('Category',
+                                      style: TextStyle(
+                                          color: context.colors.textLight,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 8),
+                                  _buildCategorySelector(),
+
+                                  const SizedBox(height: 20),
+
+                                  // Income/Expense Toggle
+                                  _buildIncomeExpenseToggle(),
+
+                                  const SizedBox(height: 16),
+
+                                  // Add Reference Field
+                                  _buildReferenceField(_referenceController),
+
+                                  const SizedBox(height: 20),
+
+                                  // Contact Field
+                                  Text('Contact',
+                                      style: TextStyle(
+                                          color: context.colors.textLight,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 8),
+                                  _buildContactField(),
+
+                                  const SizedBox(height: 20),
+
+                                  // Recurrence Section
+                                  const Text(
+                                    'Recurrance',
+                                    style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.black54,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          _buildConversionPreview(),
-                          const SizedBox(height: 4),
-                          Numpad(
-                            onNumberTap: _onNumberTap,
-                            onBackspaceTap: _onBackspaceTap,
-                          ),
-                          // SizedBox(height: MediaQuery.of(context).size.height * 0.1,),
-                        ],
-                      ))
-                      : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _currentStep -= 1;
-                            }),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text.rich(
-                                TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: _formatCurrency(_amount),
-                                      style: const TextStyle(
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: ' ${_selectedAccount?.currencyCode ?? 'USD'}',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.normal,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  const SizedBox(height: 16),
+                                  _buildRecurrenceCard(),
+
+                                  // Spacer to push everything above the button to the top
+                                  // const SizedBox(height: 30),
+                                ],
                               ),
-                            )
-                          ),
-                          
-                          const SizedBox(height: 18),
-
-                          // Exchange rate (only when the account currency
-                          // differs from the base currency)
-                          if (_selectedAccount != null &&
-                              _previewBaseCode != null &&
-                              _selectedAccount!.currencyCode != _previewBaseCode) ...[
-                            const Text(
-                              'Exchange rate',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 16),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildRateField(),
-                            const SizedBox(height: 20),
-                          ],
-
-                          // Category
-                          const Text('Category', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          _buildCategorySelector(),
-
-                          const SizedBox(height: 20),
-
-                          // Income/Expense Toggle
-                          _buildIncomeExpenseToggle(),
-
-                          const SizedBox(height: 16),
-
-                          // Add Reference Field
-                          _buildReferenceField(_referenceController),
-
-                          const SizedBox(height: 20),
-                          
-                          // Contact Field
-                          const Text('Contact', style: TextStyle(color: Colors.grey, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          _buildContactField(),
-
-                          const SizedBox(height: 20),
-
-                          // Recurrence Section
-                          const Text(
-                            'Recurrance',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildRecurrenceCard(),
-                          
-                          // Spacer to push everything above the button to the top
-                          // const SizedBox(height: 30),
-                        ],
-),
+                      ),
                     ),
-                  ),
-                  _buildStepControls(),
-                ],
+                    _buildStepControls(),
+                  ],
+                ),
               ),
-            ),
             ],
           ),
         ),
@@ -767,7 +802,7 @@ Container(
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F0E8),
+        color: context.colors.cardBackground,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -785,7 +820,7 @@ Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF1A3A1B) : Colors.transparent,
+        color: isActive ? context.colors.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -793,7 +828,7 @@ Container(
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: isActive ? Colors.white : Colors.black45,
+          color: isActive ? Colors.white : context.colors.textLight,
         ),
       ),
     );
@@ -814,7 +849,7 @@ Container(
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A3A1B),
+                backgroundColor: context.colors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -836,17 +871,17 @@ Container(
               child: ElevatedButton(
                 onPressed: () => setState(() => _currentStep -= 1),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[100]!,
+                  backgroundColor: context.colors.cardBackground,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'Return',
                   style: TextStyle(
                     fontSize: 18,
-                    color: Colors.black,
+                    color: context.colors.textDark,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -864,16 +899,16 @@ Container(
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.fieldsBackground,
+        color: context.colors.fieldsBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.swap_horiz, color: Colors.black54),
+          Icon(Icons.swap_horiz, color: context.colors.textLight),
           const SizedBox(width: 8),
           Text(
             '1 $baseCode =',
-            style: const TextStyle(fontSize: 16, color: Colors.black54),
+            style: TextStyle(fontSize: 16, color: context.colors.textLight),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -885,12 +920,12 @@ Container(
                 hintText: 'Rate',
                 border: InputBorder.none,
               ),
-              style: const TextStyle(fontSize: 16, color: Colors.black),
+              style: TextStyle(fontSize: 16, color: context.colors.textDark),
             ),
           ),
           Text(
             accountCode ?? '',
-            style: const TextStyle(fontSize: 16, color: Colors.black),
+            style: TextStyle(fontSize: 16, color: context.colors.textDark),
           ),
         ],
       ),
@@ -899,115 +934,133 @@ Container(
 
   Widget _buildCategorySelector() {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(context: context, isDismissible: true, builder: (context) => const CategoryScreen()).then((value) {
-          if (value == null) return;
+        onTap: () {
+          showModalBottomSheet(
+              context: context,
+              isDismissible: true,
+              builder: (context) => const CategoryScreen()).then((value) {
+            if (value == null) return;
 
-          setState(() {
-            category = value;
+            setState(() {
+              category = value;
+            });
           });
-        });
-      },
-      child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.fieldsBackground,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(category?["icon"] ?? Icons.bookmark), // Dark green icon
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              category?["name"] ?? "Select category",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: context.colors.fieldsBackground,
+            borderRadius: BorderRadius.circular(12),
           ),
-          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        ],
-      ),
-    ));
+          child: Row(
+            children: [
+              Icon(category?["icon"] ?? Icons.bookmark), // Dark green icon
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  category?["name"] ?? "Select category",
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios,
+                  size: 16, color: context.colors.textLight),
+            ],
+          ),
+        ));
   }
 
   Widget _buildIncomeExpenseToggle() {
     BoxDecoration selectedDecoration = BoxDecoration(
-      color: const Color(0xFF33583A), // Selected (Income) dark green
+      color: context.colors.primary, // Selected (Income) dark green
       borderRadius: BorderRadius.circular(8),
     );
-    
-    TextStyle selectedTextStyle = const TextStyle(color: AppColors.fieldsBackground, fontWeight: FontWeight.bold, fontSize: 16);
-    TextStyle enabledTextStyle = const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16);
+
+    TextStyle selectedTextStyle = TextStyle(
+        color: context.colors.fieldsBackground,
+        fontWeight: FontWeight.bold,
+        fontSize: 16);
+    TextStyle enabledTextStyle = TextStyle(
+        color: context.colors.textDark,
+        fontWeight: FontWeight.bold,
+        fontSize: 16);
 
     return Container(
       height: 55,
       decoration: BoxDecoration(
-        color: AppColors.fieldsBackground, // Light grey background
+        color: context.colors.fieldsBackground, // Light grey background
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+        border: Border.all(color: context.colors.cardBorder, width: 1),
       ),
-      child: Builder(
-        builder: (context) {
-          return Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _transactionType = TransactionType.income;
-                    });
-                  },
-                  child: Container(
-                    decoration: _transactionType == TransactionType.income ? selectedDecoration : BoxDecoration(
-                      color: AppColors.fieldsBackground, // Selected (Income) dark green
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Income',
-                      style: _transactionType == TransactionType.income ? selectedTextStyle : enabledTextStyle,
-                    ),
+      child: Builder(builder: (context) {
+        return Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _transactionType = TransactionType.income;
+                  });
+                },
+                child: Container(
+                  decoration: _transactionType == TransactionType.income
+                      ? selectedDecoration
+                      : BoxDecoration(
+                          color: context.colors
+                              .fieldsBackground, // Selected (Income) dark green
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Income',
+                    style: _transactionType == TransactionType.income
+                        ? selectedTextStyle
+                        : enabledTextStyle,
                   ),
                 ),
               ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _transactionType = TransactionType.expense;
-                    });
-                  },
-                  child: Container(
-                    alignment: Alignment.center,
-                    decoration: _transactionType == TransactionType.expense ? selectedDecoration : BoxDecoration(
-                      color: AppColors.fieldsBackground, // Selected (Income) dark green
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Expense',
-                      style: _transactionType == TransactionType.expense ? selectedTextStyle : enabledTextStyle,
-                    ),
+            ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _transactionType = TransactionType.expense;
+                  });
+                },
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: _transactionType == TransactionType.expense
+                      ? selectedDecoration
+                      : BoxDecoration(
+                          color: context.colors
+                              .fieldsBackground, // Selected (Income) dark green
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                  child: Text(
+                    'Expense',
+                    style: _transactionType == TransactionType.expense
+                        ? selectedTextStyle
+                        : enabledTextStyle,
                   ),
                 ),
               ),
-            ],
-          );
-        }
-      ),
+            ),
+          ],
+        );
+      }),
     );
   }
-
 
   Widget _buildReferenceField(TextEditingController controller) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.fieldsBackground,
+        color: context.colors.fieldsBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.description_outlined, color: Colors.black54),
+          Icon(Icons.description_outlined, color: context.colors.textLight),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -1016,7 +1069,7 @@ Container(
                 hintText: 'Enter reference',
                 border: InputBorder.none,
               ),
-              style: const TextStyle(fontSize: 16, color: Colors.black),
+              style: TextStyle(fontSize: 16, color: context.colors.textDark),
             ),
           ),
         ],
@@ -1028,20 +1081,20 @@ Container(
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.fieldsBackground,
+        color: context.colors.fieldsBackground,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.person_outline, color: Colors.black54),
+          Icon(Icons.person_outline, color: context.colors.textLight),
           SizedBox(width: 8),
           Expanded(
             child: Text(
               'Add contact (optional)',
-              style: TextStyle(fontSize: 18, color: Colors.black54),
+              style: TextStyle(fontSize: 18, color: context.colors.textLight),
             ),
           ),
-          Icon(Icons.add_circle_outline, color: Colors.black54),
+          Icon(Icons.add_circle_outline, color: context.colors.textLight),
         ],
       ),
     );
@@ -1051,9 +1104,10 @@ Container(
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F9F9), // Very light background for the card
+        color:
+            context.colors.cardBackground, // Very light background for the card
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+        border: Border.all(color: context.colors.cardBorder, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1062,14 +1116,15 @@ Container(
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
                   Text(
                     'Enable Recurrence',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   SizedBox(width: 8),
-                  Icon(Icons.calendar_today, size: 18, color: Colors.black54),
+                  Icon(Icons.calendar_today,
+                      size: 18, color: context.colors.textLight),
                 ],
               ),
               Switch(
@@ -1079,23 +1134,28 @@ Container(
                     _isRecurrenceEnabled = value;
                   });
                 },
-                activeThumbColor: const Color(0xFF33583A), // Dark green switch color
+                activeThumbColor:
+                    context.colors.primary, // Dark green switch color
               ),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Repeat/Ends Row
-          Wrap( // Changed Row to Wrap
+          Wrap(
+            // Changed Row to Wrap
             spacing: 12.0, // Horizontal space between chips
             runSpacing: 12.0, // Vertical space between lines of chips
             children: [
               // Repeat Chip
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _isRecurrenceEnabled ? const Color(0xFFE0E0E0) : Colors.transparent,
+                  color: _isRecurrenceEnabled
+                      ? context.colors.cardBorder
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -1105,14 +1165,18 @@ Container(
                       'Repeat: Monthly',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: _isRecurrenceEnabled ? Colors.black : Colors.grey,
+                        color: _isRecurrenceEnabled
+                            ? context.colors.textDark
+                            : context.colors.textLight,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Icon(
                       Icons.grid_view,
                       size: 16,
-                      color: _isRecurrenceEnabled ? Colors.black : Colors.grey,
+                      color: _isRecurrenceEnabled
+                          ? context.colors.textDark
+                          : context.colors.textLight,
                     ),
                   ],
                 ),
@@ -1120,9 +1184,12 @@ Container(
 
               // Ends Chip
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _isRecurrenceEnabled ? const Color(0xFFE0E0E0) : Colors.transparent,
+                  color: _isRecurrenceEnabled
+                      ? context.colors.cardBorder
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -1132,14 +1199,18 @@ Container(
                       'Ends: Until I cancel',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: _isRecurrenceEnabled ? Colors.black : Colors.grey,
+                        color: _isRecurrenceEnabled
+                            ? context.colors.textDark
+                            : context.colors.textLight,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Icon(
                       Icons.close,
                       size: 16,
-                      color: _isRecurrenceEnabled ? Colors.black : Colors.grey,
+                      color: _isRecurrenceEnabled
+                          ? context.colors.textDark
+                          : context.colors.textLight,
                     ),
                   ],
                 ),
@@ -1150,9 +1221,9 @@ Container(
           const SizedBox(height: 16),
 
           // Description Text
-          const Text(
+          Text(
             'Applies to subscriptions, budgets, or saving goals',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+            style: TextStyle(color: context.colors.textLight, fontSize: 14),
           ),
         ],
       ),

@@ -42,17 +42,17 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Select Category',
           style: TextStyle(
-            color: AppColors.textDark,
+            color: context.colors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back, color: context.colors.textDark),
           onPressed: () {
             Navigator.pop(context);
           },

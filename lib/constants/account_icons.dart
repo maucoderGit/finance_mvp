@@ -6,6 +6,7 @@ const List<String> accountTypeLabels = [
   'Savings',
   'Investment',
   'Credit Card',
+  'Crypto Wallet',
 ];
 
 const Map<String, IconData> accountTypeIcons = {
@@ -14,9 +15,21 @@ const Map<String, IconData> accountTypeIcons = {
   'savings': Icons.savings,
   'investment': Icons.show_chart,
   'credit_card': Icons.credit_card,
+  'crypto_wallet': Icons.currency_bitcoin,
 };
 
-String accountIconSlug(String label) => label.toLowerCase().replaceAll(' ', '_');
+/// Default accent color per account type (matching accountTypeIcons).
+const Map<String, int> accountTypeColors = {
+  'cash': 0xFF4CAF50,
+  'bank': 0xFF2196F3,
+  'savings': 0xFFFF9800,
+  'investment': 0xFF9C27B0,
+  'credit_card': 0xFFE91E63,
+  'crypto_wallet': 0xFF673AB7,
+};
+
+String accountIconSlug(String label) =>
+    label.toLowerCase().replaceAll(' ', '_');
 
 IconData accountIconFor(String stored) {
   if (stored.isEmpty) return Icons.account_balance;

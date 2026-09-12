@@ -1,9 +1,13 @@
 import 'dart:io';
 
+import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transaction_screen.dart';
+import 'package:finance_mvp/services/currency_converter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 class TransactionListView extends StatefulWidget {
   final List<db.Transaction> transactions;
@@ -17,39 +21,56 @@ class _TransactionListViewState extends State<TransactionListView> {
   @override
   Widget build(BuildContext context) {
     if (widget.transactions.isEmpty) {
-      return const Center(child: Text('No transactions yet', style: TextStyle(color: Colors.grey)));
+      return Center(
+          child: Text('No transactions yet',
+              style: TextStyle(color: context.colors.textLight)));
     }
+
+    final symbolsFuture = context.read<FinanceRepository>().getAllCurrencies();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Title (h2)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 16.0),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
           child: Text(
             'Recent Transactions',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              // Note: For full dark/light theme support, you'd use Theme.of(context).textTheme...
+              color: context.colors.textDark,
             ),
           ),
         ),
         // The list of transactions (space-y-3)
-        SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.45,
-            child: ListView.separated(
-            shrinkWrap: true,
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: widget.transactions.length,
-            itemBuilder: (context, index) {
-              return TransactionItem(transaction: widget.transactions[index]);
-            },
-            separatorBuilder: (context, index) =>
-                const SizedBox(height: 12), // Mimics space-y-3
-          )),
+        FutureBuilder<List<db.Currency>>(
+          future: symbolsFuture,
+          builder: (context, snapshot) {
+            final symbols = {
+              for (final c in snapshot.data ?? const <db.Currency>[])
+                c.code: c.symbol,
+            };
+            return SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.45,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: widget.transactions.length,
+                    itemBuilder: (context, index) {
+                      final t = widget.transactions[index];
+                      return TransactionItem(
+                        transaction: t,
+                        symbol: symbols[t.currencyCode] ?? t.currencyCode,
+                      );
+                    },
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12), // Mimics space-y-3
+                  )),
+            );
+          },
         )
       ],
     );
@@ -58,17 +79,20 @@ class _TransactionListViewState extends State<TransactionListView> {
 
 class TransactionItem extends StatelessWidget {
   final db.Transaction transaction;
+  final String symbol;
 
-  const TransactionItem({super.key, required this.transaction});
+  const TransactionItem(
+      {super.key, required this.transaction, required this.symbol});
 
   @override
   Widget build(BuildContext context) {
     bool isExpense = transaction.amount < 0;
     String amountText = isExpense
-        ? '-\$${(-transaction.amount).toStringAsFixed(2)}'
-        : '+\$${transaction.amount.toStringAsFixed(2)}';
+        ? '-${formatMoney((-transaction.amount), symbol: symbol)}'
+        : '+${formatMoney(transaction.amount, symbol: symbol)}';
 
-    Color amountColor = isExpense ? Colors.red.shade600 : const Color(0xFF0B2013);
+    Color amountColor =
+        isExpense ? const Color(0xFFC62828) : context.colors.textDark;
 
     return InkWell(
       onTap: () {
@@ -118,9 +142,9 @@ class TransactionItem extends StatelessWidget {
                             height: 40,
                             fit: BoxFit.cover,
                           )
-                        : const Icon(
+                        : Icon(
                             Icons.receipt_long,
-                            color: Colors.black,
+                            color: context.colors.textDark,
                             size: 20,
                           ),
                   ),
@@ -140,10 +164,7 @@ class TransactionItem extends StatelessWidget {
                       DateFormat('MMM dd, yyyy').format(transaction.date),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.color,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
                       ),
                     ),
                   ],
