@@ -120,6 +120,14 @@ class FinanceRepository {
         .getSingleOrNull();
   }
 
+  /// Rate ("1 base = X currency") at or before [date], falling back to the
+  /// newest stored rate.
+  Future<double?> getRateWithFallback(
+          String currencyCode, DateTime date) async {
+    final rate = await getRateAtDate(currencyCode, date);
+    return rate?.rate ?? (await getLatestRate(currencyCode))?.rate;
+  }
+
   Future<void> addExchangeRate(CurrencyRatesCompanion rate) {
     return db.into(db.currencyRates).insert(rate,
         mode: drift.InsertMode.insertOrReplace);
@@ -167,14 +175,30 @@ class FinanceRepository {
         .watchSingleOrNull();
   }
 
+  /// Upsert settings row id=0 while preserving every stored value: plain
+  /// insert-or-replace fills untouched columns with defaults, which would wipe
+  /// username/national currency/onboarding. [patch] applies the caller's change
+  /// on top of the row's current values (or defaults for a fresh row).
+  Future<void> _updateSettings(
+      UserSettingsCompanion Function(UserSettingsCompanion base) patch) async {
+    final existing = await (db.select(db.userSettings)
+          ..where((tbl) => tbl.id.equals(0)))
+        .getSingleOrNull();
+
+    final companion = existing != null
+        ? patch(existing.toCompanion(false)).copyWith(id: const drift.Value(0))
+        : patch(UserSettingsCompanion.insert(baseCurrencyCode: 'USD')).copyWith(
+              id: const drift.Value(0),
+              hasCompletedOnboarding: const drift.Value(true),
+            );
+
+    await db.into(db.userSettings)
+        .insert(companion, mode: drift.InsertMode.insertOrReplace);
+  }
+
   Future<void> setBaseCurrency(String currencyCode) {
-    return db.into(db.userSettings).insert(
-          UserSettingsCompanion(
-            id: const drift.Value(0),
-            baseCurrencyCode: drift.Value(currencyCode),
-          ),
-          mode: drift.InsertMode.insertOrReplace,
-        );
+    return _updateSettings(
+        (c) => c.copyWith(baseCurrencyCode: drift.Value(currencyCode)));
   }
 
   Future<void> updateUserSettings(UserSettingsCompanion settings) {
@@ -192,28 +216,9 @@ class FinanceRepository {
     return setting?.profilePicturePath;
   }
 
-  Future<void> saveProfilePicturePath(String path) async {
-    final existing = await (db.select(db.userSettings)
-          ..where((tbl) => tbl.id.equals(0)))
-        .getSingleOrNull();
-
-    // Preserve every other setting: insert-or-replace fills untouched columns
-    // with defaults, which would wipe username/national currency/onboarding.
-    final companion = existing != null
-        ? existing.toCompanion(false).copyWith(
-            id: const drift.Value(0),
-            profilePicturePath: drift.Value(path),
-          )
-        : UserSettingsCompanion.insert(baseCurrencyCode: 'USD').copyWith(
-            id: const drift.Value(0),
-            profilePicturePath: drift.Value(path),
-            hasCompletedOnboarding: const drift.Value(true),
-          );
-
-    await db.into(db.userSettings).insert(
-          companion,
-          mode: drift.InsertMode.insertOrReplace,
-        );
+  Future<void> saveProfilePicturePath(String path) {
+    return _updateSettings(
+        (c) => c.copyWith(profilePicturePath: drift.Value(path)));
   }
 
   // ── Currencies ──
