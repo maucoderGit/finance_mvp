@@ -47,7 +47,7 @@ class _SplashScreen extends StatelessWidget {
           children: [
             Icon(Icons.account_balance_wallet,
                 size: 72, color: context.colors.primary),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'Finance',
               style: TextStyle(
@@ -56,7 +56,7 @@ class _SplashScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             SizedBox(
               width: 24,
               height: 24,

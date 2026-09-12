@@ -27,7 +27,7 @@ class GoalProjectionCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
         ),
       ),
       child: Column(
@@ -38,7 +38,7 @@ class GoalProjectionCard extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(25.0),
                 ),
                 child: Icon(
@@ -76,7 +76,7 @@ class GoalProjectionCard extends StatelessWidget {
           LinearProgressIndicator(
             value: progress,
             backgroundColor:
-                Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(
                 Theme.of(context).colorScheme.primary),
           ),

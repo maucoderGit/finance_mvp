@@ -47,7 +47,7 @@ class FinanceRepository {
   }
 
   Future<void> updateAccount(AccountsCompanion account) async {
-    await (db.update(db.accounts)..where((a) => a.id.equals(account.id.value!)))
+    await (db.update(db.accounts)..where((a) => a.id.equals(account.id.value)))
         .write(account);
   }
 

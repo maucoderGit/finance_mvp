@@ -407,7 +407,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         builder: (context, controller) => Container(
           decoration: BoxDecoration(
             color: context.colors.cardBackground,
-            borderRadius: BorderRadius.only(
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(20),
               topRight: Radius.circular(20),
             ),
@@ -1087,7 +1087,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       child: Row(
         children: [
           Icon(Icons.person_outline, color: context.colors.textLight),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Add contact (optional)',
@@ -1118,11 +1118,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
             children: [
               Row(
                 children: [
-                  Text(
+                  const Text(
                     'Enable Recurrence',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Icon(Icons.calendar_today,
                       size: 18, color: context.colors.textLight),
                 ],

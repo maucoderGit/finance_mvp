@@ -160,14 +160,14 @@ class _CurrencyListItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
         decoration: isBase
             ? BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 border: Border(left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 4)),
               )
             : null,
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
               child: Text(
                 currency.symbol,
                 style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 18),

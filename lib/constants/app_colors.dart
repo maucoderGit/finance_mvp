@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/widgets.dart';
 
 /// Two-palette theme. Widgets keep reading `AppColors.x`; flipping

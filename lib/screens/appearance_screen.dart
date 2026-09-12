@@ -34,22 +34,28 @@ class AppearanceScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          for (final mode in const [
-            (ThemeMode.light, Icons.light_mode, 'Light'),
-            (ThemeMode.dark, Icons.dark_mode, 'Dark'),
-            (ThemeMode.system, Icons.brightness_auto, 'System'),
-          ])
-            RadioListTile<ThemeMode>(
-              value: mode.$1,
-              groupValue: theme.mode,
-              onChanged: (m) => m != null ? theme.setMode(m) : null,
-              activeColor: context.colors.primary,
-              secondary: Icon(mode.$2, color: context.colors.textDark),
-              title: Text(
-                mode.$3,
-                style: TextStyle(color: context.colors.textDark),
-              ),
+          RadioGroup<ThemeMode>(
+            groupValue: theme.mode,
+            onChanged: (m) => m != null ? theme.setMode(m) : null,
+            child: Column(
+              children: [
+                for (final mode in const [
+                  (ThemeMode.light, Icons.light_mode, 'Light'),
+                  (ThemeMode.dark, Icons.dark_mode, 'Dark'),
+                  (ThemeMode.system, Icons.brightness_auto, 'System'),
+                ])
+                  RadioListTile<ThemeMode>(
+                    value: mode.$1,
+                    activeColor: context.colors.primary,
+                    secondary: Icon(mode.$2, color: context.colors.textDark),
+                    title: Text(
+                      mode.$3,
+                      style: TextStyle(color: context.colors.textDark),
+                    ),
+                  ),
+              ],
             ),
+          ),
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(16),
