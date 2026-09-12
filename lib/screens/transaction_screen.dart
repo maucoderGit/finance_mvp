@@ -527,86 +527,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
               // Client Section
               Expanded(
-                child: Stepper(
-                  type: StepperType.horizontal,
-                  elevation: 0,
-                  onStepTapped: (value) => setState(() {
-                    _currentStep = value;
-                  }),
-                  currentStep: _currentStep,
-                  onStepContinue: () {
-                    setState(() {
-                      if (_currentStep < 1) {
-                        _currentStep += 1;
-                      } else {
-                        _saveTransaction();
-                      }
-                    });
-                  },
-                  onStepCancel: _currentStep > 0 ? () {
-                    setState(() {
-                      if (_currentStep > 0) {
-                        _currentStep -= 1;
-                      } else {
-                        // First step, do something
-                      }
-                    });
-                  } : null,
-                  controlsBuilder: (BuildContext context, ControlsDetails controls) {
-                    return Container(
-                      margin: const EdgeInsets.only(top: 50),
-                      child: Row(
-                        children: [
-                          Expanded(child: ElevatedButton(onPressed: controls.onStepContinue,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A3A1B),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              _currentStep < 1 ? 'Add details' : "Save",
-                              style: const TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          )),
-                          Visibility(
-                            visible: _currentStep > 0,
-                            child: const SizedBox(width: 10),
-                          ),
-                          Visibility(
-                            visible: _currentStep > 0,
-                            child: Expanded(child: ElevatedButton(
-                              onPressed: controls.onStepCancel,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey[100]!,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text(
-                                'Return',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            )))
-                        ],
-                      ),
-                    );
-                  },
-                  steps: [
-                    Step(
-                      title: const Text('Amount'),
-                      content: SizedBox(
-                        child: Column(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStepIndicator(),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: _currentStep == 0
+                            ? SizedBox(
+                                child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
@@ -684,19 +614,24 @@ Container(
                               ),
                             ),
                           ),
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 24),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20.0),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _formatCurrency(_amount),
-                                  style: const TextStyle(
-                                    fontSize: 50,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      _formatCurrency(_amount),
+                                      style: const TextStyle(
+                                        fontSize: 50,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 Padding(
@@ -713,22 +648,17 @@ Container(
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 4),
                           _buildConversionPreview(),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 4),
                           Numpad(
                             onNumberTap: _onNumberTap,
                             onBackspaceTap: _onBackspaceTap,
                           ),
                           // SizedBox(height: MediaQuery.of(context).size.height * 0.1,),
                         ],
-                      )),
-                      isActive: _currentStep >= 0,
-                      state: _currentStep >= 0 ? StepState.complete : StepState.disabled,
-                    ),
-                    Step(
-                      title: const Text('Details'),
-                      content: Column(
+                      ))
+                      : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 8),
@@ -736,26 +666,30 @@ Container(
                             onTap: () => setState(() {
                               _currentStep -= 1;
                             }),
-                            child: Text.rich(
-                              TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: _formatCurrency(_amount),
-                                    style: const TextStyle(
-                                      fontSize: 48,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: _formatCurrency(_amount),
+                                      style: const TextStyle(
+                                        fontSize: 48,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
                                     ),
-                                  ),
-                                  TextSpan(
-                                    text: ' ${_selectedAccount?.currencyCode ?? 'USD'}',
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.normal,
-                                      color: Colors.grey,
+                                    TextSpan(
+                                      text: ' ${_selectedAccount?.currencyCode ?? 'USD'}',
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.normal,
+                                        color: Colors.grey,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             )
                           ),
@@ -815,16 +749,111 @@ Container(
                           // Spacer to push everything above the button to the top
                           // const SizedBox(height: 30),
                         ],
-                      ),
-                      // isActive: _currentStep >= 1,
-                      state: _currentStep >= 1 ? StepState.complete : StepState.indexed,
+),
                     ),
-                  ],
-                ),
+                  ),
+                  _buildStepControls(),
+                ],
               ),
+            ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F0E8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _buildStepSegment('Amount', 0)),
+          Expanded(child: _buildStepSegment('Details', 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepSegment(String label, int stepIndex) {
+    final isActive = _currentStep == stepIndex;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFF1A3A1B) : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: isActive ? Colors.white : Colors.black45,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepControls() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () {
+                if (_currentStep < 1) {
+                  setState(() => _currentStep += 1);
+                } else {
+                  _saveTransaction();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A3A1B),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                _currentStep < 1 ? 'Add details' : 'Save',
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          if (_currentStep > 0) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => setState(() => _currentStep -= 1),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[100]!,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Return',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

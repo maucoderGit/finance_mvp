@@ -13,18 +13,7 @@ class Numpad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(top: 20),
-      // decoration: BoxDecoration(
-      //   gradient: LinearGradient(
-      //     begin: Alignment.topCenter,
-      //     end: Alignment.bottomCenter,
-      //     colors: [
-      //       Colors.white.withOpacity(0.0),
-      //       Colors.grey.withOpacity(0.15),
-      //     ],
-      //     stops: const [0.0, 1.0],
-      //   ),
-      // ),
+      padding: const EdgeInsets.only(top: 8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -33,7 +22,6 @@ class Numpad extends StatelessWidget {
           _buildRow(['7', '8', '9']),
           // Last row with decimal, 0 and backspace
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Expanded(child: _buildNumberButton('.')),
               Expanded(child: _buildNumberButton('0')),
@@ -47,7 +35,6 @@ class Numpad extends StatelessWidget {
 
   Widget _buildRow(List<String> numbers) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: numbers.map((number) => Expanded(child: _buildNumberButton(number))).toList(),
     );
   }
@@ -56,7 +43,7 @@ class Numpad extends StatelessWidget {
     return TextButton(
       onPressed: () => onNumberTap(number),
       style: TextButton.styleFrom(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(10),
         shape: const CircleBorder(),
       ),
       child: Text(
@@ -74,7 +61,7 @@ class Numpad extends StatelessWidget {
     return TextButton(
       onPressed: onBackspaceTap,
       style: TextButton.styleFrom(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(10),
         shape: const CircleBorder(),
       ),
       child: const Icon(

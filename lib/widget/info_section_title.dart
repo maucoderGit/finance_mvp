@@ -25,7 +25,7 @@ class InfoSectionTitle extends StatelessWidget {
     child: Align(
     heightFactor: 0.9,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.stackCardBackground[index],
         borderRadius: BorderRadius.circular(16),

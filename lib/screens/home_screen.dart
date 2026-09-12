@@ -100,8 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
               ),
-              const _ActionButtons(),
-              SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               InfoSectionTitle(
                 icon: Icons.receipt_long_outlined,
                 title: 'Moves',
@@ -183,55 +182,6 @@ Future<void> _pickProfilePicture() async {
         );
       },
     );
-  }
-}
-
-// --- widgets/action_buttons.dart ---
-// Row of main action buttons (Add, Withdraw, Transfer).
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        _ActionButton(icon: Icons.add, label: 'Register Transaction', onTap: () {
-          Navigator.pushNamed(context, '/v1/transactions/create');
-        }),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final GestureTapCallback onTap;
-
-  const _ActionButton({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-      children: [
-        CircleAvatar(
-          radius: 30,
-          backgroundColor: Colors.white,
-          child: Icon(icon, color: AppColors.primary, size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textDark,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    ));
   }
 }
 

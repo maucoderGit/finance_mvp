@@ -12,26 +12,35 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       backgroundColor: AppColors.background,
       elevation: 0,
-      leading: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: CircleAvatar(
-          backgroundColor: AppColors.primaryLight.withValues(alpha: 0.2),
-          child: IconButton(
-            icon: const Icon(Icons.search, color: AppColors.primary),
-            onPressed: () {},
-          ),
-        ),
-      ),
+      toolbarHeight: 64,
       actions: [
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.only(right: 16),
           child: CircleAvatar(
+            radius: 22,
+            backgroundColor: Colors.white,
+            child: IconButton(
+              icon: const Icon(Icons.add, color: AppColors.primary, size: 26),
+              onPressed: () {
+                Navigator.pushNamed(context, '/v1/transactions/create');
+              },
+              padding: EdgeInsets.zero,
+              iconSize: 26,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: CircleAvatar(
+            radius: 22,
             backgroundColor: AppColors.primary,
             child: IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white),
+              icon: const Icon(Icons.settings, color: Colors.white, size: 26),
               onPressed: () {
                 Navigator.pushNamed(context, '/v1/config');
               },
+              padding: EdgeInsets.zero,
+              iconSize: 26,
             ),
           ),
         ),
@@ -40,5 +49,5 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(64);
 }
