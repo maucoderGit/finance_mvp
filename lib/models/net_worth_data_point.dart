@@ -41,15 +41,3 @@ class PowerDataPoint {
     required this.cumulativeChange,
   });
 }
-
-/// Aggregated chart data for the revaluation dashboard.
-@immutable
-class RevaluationChartData {
-  final List<NetWorthDataPoint> netWorthHistory;
-  final List<PowerDataPoint> purchasingPowerHistory;
-
-  const RevaluationChartData({
-    this.netWorthHistory = const [],
-    this.purchasingPowerHistory = const [],
-  });
-}

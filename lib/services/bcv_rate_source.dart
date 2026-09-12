@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -30,9 +29,6 @@ class BcvRateSource implements RateSource {
       currencyCode.toUpperCase() == _quoteCode;
 
   @override
-  int get historyDays => 0;
-
-  @override
   Future<Map<String, double>> fetchLatestRates({
     required String base,
     required List<String> quotes,
@@ -42,7 +38,7 @@ class BcvRateSource implements RateSource {
     }
 
     final uri = Uri.parse(_baseUrl);
-    final body = await _get(uri);
+    final body = await fetchJsonText(_client, uri, timeout);
 
     final data = jsonDecode(body) as Map<String, dynamic>;
     final avg = data['promedio'];
@@ -50,24 +46,6 @@ class BcvRateSource implements RateSource {
       throw ExchangeRateApiException('Malformed BCV response');
     }
     return {_quoteCode: avg.toDouble()};
-  }
-
-  Future<String> _get(Uri uri) async {
-    try {
-      final response = await _client
-          .get(uri, headers: const {'Accept': 'application/json'})
-          .timeout(timeout);
-
-      if (response.statusCode != 200) {
-        throw ExchangeRateApiException(
-            'BCV error ${response.statusCode}: ${response.body}');
-      }
-      return response.body;
-    } on TimeoutException {
-      throw ExchangeRateApiException('Request timed out');
-    } on http.ClientException catch (e) {
-      throw ExchangeRateApiException('Network error: ${e.message}');
-    }
   }
 
   @override

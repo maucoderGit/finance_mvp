@@ -3,7 +3,6 @@ import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
 
 /// Core engine for currency de/revaluation calculations.
 ///
@@ -13,10 +12,8 @@ import 'package:finance_mvp/services/currency_converter.dart';
 /// - Daily net worth snapshots
 class RevaluationService {
   final FinanceRepository _repository;
-  final CurrencyConverter _converter;
 
-  RevaluationService(this._repository)
-      : _converter = CurrencyConverter(_repository);
+  RevaluationService(this._repository);
 
   /// Compute unrealized FX gain/loss for all accounts.
   ///
@@ -28,6 +25,7 @@ class RevaluationService {
   }) async {
     final accounts = await _repository.getAllAccounts();
     final allTransactions = await _repository.watchTransactions().first;
+    final baseCode = await _repository.getBaseCurrencyCode();
 
     final results = <GainLossResult>[];
 
@@ -54,14 +52,19 @@ class RevaluationService {
             costBasis += tx.amount / rate;
           } else {
             // No rate available at creation; fall back to current rate.
-            costBasis += await _converter.toBase(tx.amount, account.currencyCode);
+            costBasis += await _repository.convertAmount(
+                amount: tx.amount,
+                fromCode: account.currencyCode,
+                toCode: baseCode);
           }
         }
       }
 
       // Current value in base currency.
-      final currentValue =
-          await _converter.toBase(balance, account.currencyCode);
+      final currentValue = await _repository.convertAmount(
+          amount: balance,
+          fromCode: account.currencyCode,
+          toCode: baseCode);
 
       final gainLoss = currentValue - costBasis;
       final percent =
@@ -213,40 +216,5 @@ class RevaluationService {
             ))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
-  }
-
-  /// Snapshot the current state of all exchange rates vs the base currency
-  /// into the `ExchangeRateSnapshots` table for historical reference.
-  Future<void> snapshotAllRates(String source) async {
-    final baseCode = await _repository.getBaseCurrencyCode();
-    final currencies = await _repository.getAllCurrencies();
-    final rates = <String, double>{};
-
-    for (final currency in currencies) {
-      if (currency.code == baseCode) {
-        rates[currency.code] = 1.0;
-        continue;
-      }
-      final latest = await _repository.getLatestRate(currency.code);
-      if (latest != null) {
-        rates[currency.code] = latest.rate;
-      }
-    }
-
-    if (rates.isEmpty) return;
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    await _repository.addRateSnapshot(ExchangeRateSnapshotsCompanion(
-      date: Value(today),
-      ratesJson: Value(_jsonEncodeRates(rates)),
-      source: Value(source),
-    ));
-  }
-
-  String _jsonEncodeRates(Map<String, double> rates) {
-    if (rates.isEmpty) return '{}';
-    return '{${rates.entries.map((e) => '"${e.key}":${e.value}').join(',')}}';
   }
 }

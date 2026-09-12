@@ -13,6 +13,27 @@ class ExchangeRateApiException implements Exception {
   String toString() => message;
 }
 
+/// GET [uri] with a JSON Accept header, mapping transport/status failures to
+/// [ExchangeRateApiException]. Shared by the HTTP-backed rate sources.
+Future<String> fetchJsonText(
+    http.Client client, Uri uri, Duration timeout) async {
+  try {
+    final response = await client
+        .get(uri, headers: const {'Accept': 'application/json'})
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ExchangeRateApiException(
+          'API error ${response.statusCode}: ${response.body}');
+    }
+    return response.body;
+  } on TimeoutException {
+    throw ExchangeRateApiException('Request timed out');
+  } on http.ClientException catch (e) {
+    throw ExchangeRateApiException('Network error: ${e.message}');
+  }
+}
+
 /// Client for the free Frankfurter exchange rates API.
 /// No API key required. Supports 201 currencies with history back to 1948.
 ///
@@ -36,36 +57,6 @@ class ExchangeRateApiService implements RateSource {
   bool isSupported(String currencyCode) =>
       !_unsupportedCodes.contains(currencyCode.toUpperCase());
 
-  @override
-  int get historyDays => 365;
-
-  /// Fetch the latest exchange rate between [base] and [quote].
-  /// Returns how many units of [quote] buy 1 unit of [base].
-  Future<double> fetchLatestRate({
-    required String base,
-    required String quote,
-  }) async {
-    final uri = Uri.parse('$_baseUrl/rates')
-        .replace(queryParameters: {'base': base, 'quotes': quote});
-
-    final response = await _get(uri);
-    return _extractRate(response, quote);
-  }
-
-  /// Fetch the exchange rate between [base] and [quote] on a specific [date].
-  Future<double> fetchHistoricalRate({
-    required String base,
-    required String quote,
-    required DateTime date,
-  }) async {
-    final dateStr = _formatDate(date);
-    final uri = Uri.parse('$_baseUrl/rates')
-        .replace(queryParameters: {'date': dateStr, 'base': base, 'quotes': quote});
-
-    final response = await _get(uri);
-    return _extractRate(response, quote);
-  }
-
   /// Fetch a time series of rates between [base] and each quote in [quotes]
   /// over the range [from]–[to].
   ///
@@ -83,7 +74,7 @@ class ExchangeRateApiService implements RateSource {
       'to': _formatDate(to),
     });
 
-    final response = await _get(uri);
+    final response = await fetchJsonText(_client, uri, timeout);
     return _parseTimeSeries(response, quotes);
   }
 
@@ -96,67 +87,11 @@ class ExchangeRateApiService implements RateSource {
     final uri = Uri.parse('$_baseUrl/rates')
         .replace(queryParameters: {'base': base, 'quotes': quotes.join(',')});
 
-    final response = await _get(uri);
+    final response = await fetchJsonText(_client, uri, timeout);
     return _parseRates(response, quotes);
   }
 
-  /// Check whether the API currently lists [currencyCode].
-  Future<bool> isCurrencyAvailable(String currencyCode) async {
-    if (!isSupported(currencyCode)) return false;
-    try {
-      final uri = Uri.parse('$_baseUrl/currencies?scope=all');
-      final response = await _get(uri);
-      final data = jsonDecode(response) as Map<String, dynamic>;
-      return data.containsKey(currencyCode.toUpperCase());
-    } on ExchangeRateApiException {
-      return false;
-    }
-  }
-
-  /// Fetch historical daily rates for [quotes] vs [base] back to [daysBack].
-  Future<Map<String, Map<String, double>>> fetchHistoryForLastNDays({
-    required String base,
-    required List<String> quotes,
-    required int daysBack,
-    DateTime? upTo,
-  }) async {
-    final end = upTo ?? DateTime.now();
-    final start = end.subtract(Duration(days: daysBack));
-    return fetchTimeSeries(base: base, quotes: quotes, from: start, to: end);
-  }
-
   // ── Internals ──
-
-  Future<String> _get(Uri uri) async {
-    try {
-      final response = await _client
-          .get(uri, headers: const {'Accept': 'application/json'})
-          .timeout(timeout);
-
-      if (response.statusCode != 200) {
-        throw ExchangeRateApiException(
-            'API error ${response.statusCode}: ${response.body}');
-      }
-      return response.body;
-    } on TimeoutException {
-      throw ExchangeRateApiException('Request timed out');
-    } on http.ClientException catch (e) {
-      throw ExchangeRateApiException('Network error: ${e.message}');
-    }
-  }
-
-  double _extractRate(String body, String quote) {
-    final data = jsonDecode(body) as Map<String, dynamic>;
-    final rates = data['rates'];
-    if (rates is! Map) {
-      throw ExchangeRateApiException('Malformed API response');
-    }
-    final rate = rates[quote.toUpperCase()];
-    if (rate is! num) {
-      throw ExchangeRateApiException('Rate not available for $quote');
-    }
-    return rate.toDouble();
-  }
 
   Map<String, double> _parseRates(String body, List<String> quotes) {
     final data = jsonDecode(body) as Map<String, dynamic>;
@@ -195,17 +130,6 @@ class ExchangeRateApiService implements RateSource {
     final m = date.month.toString().padLeft(2, '0');
     final d = date.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
-  }
-
-  /// Fetch available currencies from the API.
-  Future<Map<String, String>> fetchCurrencies() async {
-    final uri = Uri.parse('$_baseUrl/currencies?scope=all');
-    final body = await _get(uri);
-    final data = jsonDecode(body) as Map<String, dynamic>;
-    return {
-      for (final entry in data.entries)
-        entry.key: (entry.value as Map?)?['name']?.toString() ?? entry.key,
-    };
   }
 
   @override

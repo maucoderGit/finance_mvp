@@ -4,10 +4,6 @@ import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-import 'daos/account_dao.dart';
-import 'daos/transaction_dao.dart';
-import 'daos/currency_dao.dart';
-
 part 'app_database.g.dart';
 
 class Currencies extends Table {
@@ -96,17 +92,6 @@ class UserSettings extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-class ExchangeRateSnapshots extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  DateTimeColumn get date => dateTime()();
-  TextColumn get ratesJson => text()();
-  TextColumn get source => text()();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  List<String> get customConstraints => ['UNIQUE(date)'];
-}
-
 class NetWorthHistory extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get date => dateTime().unique()();
@@ -123,10 +108,8 @@ class NetWorthHistory extends Table {
     Categories,
     Transactions,
     UserSettings,
-    ExchangeRateSnapshots,
     NetWorthHistory,
   ],
-  daos: [AccountDao, TransactionDao, CurrencyDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
@@ -149,7 +132,6 @@ class AppDatabase extends _$AppDatabase {
                 userSettings, userSettings.currencySelectionMode);
             await m.addColumn(
                 userSettings, userSettings.lastAutoFetchDate);
-            await m.createTable(exchangeRateSnapshots);
             await m.createTable(netWorthHistory);
           }
           if (from < 3) {
@@ -184,7 +166,6 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       // Children first so foreign keys never dangle regardless of enforcement.
       await delete(netWorthHistory).go();
-      await delete(exchangeRateSnapshots).go();
       await delete(currencyRates).go();
       await delete(transactions).go();
       await delete(accounts).go();

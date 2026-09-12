@@ -34,20 +34,6 @@ class GainLossResult {
   });
 
   bool get isGain => unrealizedGainLoss >= 0;
-
-  /// Returns the store carrying the unrealized gain/loss,
-  factory GainLossResult.empty() {
-    return const GainLossResult(
-      accountId: 0,
-      accountName: '',
-      currencyCode: '',
-      balanceInNativeCurrency: 0,
-      costBasisInBase: 0,
-      currentValueInBase: 0,
-      unrealizedGainLoss: 0,
-      percentChange: 0,
-    );
-  }
 }
 
 /// Gain/loss aggregated across all accounts holding a specific currency.

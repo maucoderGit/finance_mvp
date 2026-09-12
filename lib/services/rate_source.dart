@@ -14,8 +14,6 @@ abstract class RateSource {
     required List<String> quotes,
   });
 
-  /// How many business days of history the source provides (0 = latest only).
-  int get historyDays;
-
+  /// Release any transport resources held by the source.
   void dispose();
 }

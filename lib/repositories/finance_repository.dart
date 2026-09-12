@@ -399,25 +399,6 @@ class FinanceRepository {
     return total;
   }
 
-  // ── Rate Snapshots ──
-
-  Future<void> addRateSnapshot(ExchangeRateSnapshotsCompanion snapshot) {
-    return db.into(db.exchangeRateSnapshots).insert(
-          snapshot,
-          mode: drift.InsertMode.insertOrReplace,
-        );
-  }
-
-  Stream<List<ExchangeRateSnapshot>> watchRateSnapshots({int limit = 30}) {
-    return (db.select(db.exchangeRateSnapshots)
-          ..orderBy([
-            (s) => drift.OrderingTerm(
-                expression: s.date, mode: drift.OrderingMode.desc)
-          ])
-          ..limit(limit))
-        .watch();
-  }
-
   // ── Net Worth History ──
 
   Stream<List<NetWorthHistoryData>> watchNetWorthHistory({int limit = 90}) {
