@@ -4,6 +4,7 @@ import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/widgets/gain_loss_card.dart';
 import 'package:finance_mvp/widgets/net_worth_line_chart.dart';
 import 'package:finance_mvp/widgets/purchasing_power_chart.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/revaluation_summary_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -36,16 +37,15 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
 
   Future<void> _syncNow() async {
     final currencyProvider = context.read<CurrencyProvider>();
-    final messenger = ScaffoldMessenger.of(context);
 
     final count = await currencyProvider.syncRates(force: true);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(count > 0
-            ? 'Synced $count rate(s) from the API.'
-            : 'Nothing to sync. Add rates manually if needed.'),
-        duration: const Duration(seconds: 2),
-      ),
+    if (!mounted) return;
+    showToast(
+      context,
+      message: count > 0
+          ? 'Synced $count rate(s) from the API.'
+          : 'Nothing to sync. Add rates manually if needed.',
+      type: count > 0 ? ToastType.success : ToastType.warning,
     );
     await _refresh();
   }

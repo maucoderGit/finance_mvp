@@ -4,6 +4,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/widgets/account_icon_picker.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -60,9 +61,8 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
         double.tryParse(_initialBalanceController.text) ?? 0.0;
 
     if (_selectedCurrencyCode == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a currency.')),
-      );
+      showToast(context,
+          message: 'Please select a currency.', type: ToastType.error);
       return;
     }
 

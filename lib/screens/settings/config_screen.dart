@@ -2,6 +2,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/screens/settings/about_screen.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/screens/settings/appearance_screen.dart';
 import 'package:finance_mvp/screens/settings/currency_screen.dart';
 import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
@@ -39,9 +40,7 @@ class ConfigScreen extends StatelessWidget {
 
     await repository.wipeAllData();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All data cleared.')),
-    );
+    showToast(context, message: 'All data cleared.');
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 

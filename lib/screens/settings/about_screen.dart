@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -135,8 +136,9 @@ class AboutScreen extends StatelessWidget {
       }
     } catch (_) {}
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Could not open browser. URL: ${uri.toString()}')));
+    showToast(context,
+        message: 'Could not open browser', description: uri.toString(),
+        type: ToastType.error);
   }
 }
 

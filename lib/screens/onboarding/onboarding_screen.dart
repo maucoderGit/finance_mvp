@@ -5,6 +5,7 @@ import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/widgets/account_icon_picker.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -139,9 +140,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }) {
     final accountName = (name ?? _accountController.text).trim();
     if (accountName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Give the account a name.')),
-      );
+      showToast(context,
+            message: 'Give the account a name.',
+            type: ToastType.error);
       return;
     }
 
@@ -150,9 +151,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (balanceText.isNotEmpty) {
       final parsed = double.tryParse(balanceText);
       if (parsed == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid initial balance.')),
-        );
+        showToast(context,
+            message: 'Enter a valid initial balance.',
+            type: ToastType.error);
         return;
       }
       balance = parsed;
@@ -307,7 +308,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
-              onPressed: () => _goToStep(_currentStep + 1),
+              onPressed: () {
+                if (_currentStep == 5 && _accounts.isEmpty) {
+                  showToast(context,
+                      message: 'Add at least one account first.',
+                      type: ToastType.error);
+                  return;
+                }
+                _goToStep(_currentStep + 1);
+              },
               child: const Text('Next', style: TextStyle(fontSize: 16)),
             )
           else
@@ -799,8 +808,9 @@ class _AccountStep extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Accounts are optional. Tap a template for a quick start, '
-                        'or pick an icon and add your own below.',
+                        'Add at least one account to continue. The balance is '
+                        'optional. Tap a template for a quick start, or pick '
+                        'an icon and add your own below.',
                         style: TextStyle(
                             color: context.colors.textLight,
                             fontSize: 14,
@@ -927,7 +937,7 @@ class _AccountStep extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
             child: Text(
-              'No accounts yet — this step is optional.',
+              'No accounts yet — add one to continue.',
               textAlign: TextAlign.center,
               style: TextStyle(color: context.colors.textLight),
             ),

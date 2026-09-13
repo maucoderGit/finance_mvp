@@ -2,6 +2,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -23,9 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (path != null && mounted) {
       await context.read<FinanceRepository>().saveProfilePicturePath(path);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile picture updated')),
-        );
+        showToast(context, message: 'Profile picture updated');
       }
     }
     if (mounted) setState(() => _saving = false);

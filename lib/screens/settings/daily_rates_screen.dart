@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -43,20 +44,17 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            count > 0
-                ? 'Synced $count rate(s) from the API.'
-                : 'No rates available from the API. Add them manually.',
-          ),
-        ),
+      showToast(
+        context,
+        message: count > 0
+            ? 'Synced $count rate(s) from the API.'
+            : 'No rates available from the API. Add them manually.',
+        type: count > 0 ? ToastType.success : ToastType.warning,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sync failed: $e')),
-      );
+      showToast(context,
+          message: 'Sync failed: $e', type: ToastType.error);
     } finally {
       if (mounted) {
         setState(() => _syncing = false);
@@ -114,9 +112,9 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
             TextButton(
               onPressed: () {
                 if (double.tryParse(rateController.text) == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid rate.')),
-                  );
+                  showToast(context,
+                      message: 'Enter a valid rate.',
+                      type: ToastType.error);
                   return;
                 }
                 Navigator.of(context).pop(true);

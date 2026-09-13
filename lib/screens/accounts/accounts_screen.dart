@@ -6,6 +6,7 @@ import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/accounts/add_account_sheet.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -77,9 +78,8 @@ class AccountsScreen extends StatelessWidget {
       final value = double.tryParse(controller.text);
       if (value == null) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Enter a valid balance.')),
-          );
+          showToast(context,
+              message: 'Enter a valid balance.', type: ToastType.error);
         }
         return;
       }

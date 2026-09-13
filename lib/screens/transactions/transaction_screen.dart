@@ -9,6 +9,7 @@ import 'package:finance_mvp/screens/settings/category_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/services/finance/fx_delta.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/numpad.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -343,15 +344,22 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final repo = context.read<FinanceRepository>();
 
-    // If no account selected, pick the first one for the MVP flow
     if (_selectedAccount == null) {
-      final accounts = await repo.db.select(repo.db.accounts).get();
-      if (accounts.isNotEmpty) _selectedAccount = accounts.first;
+      if (mounted) {
+        showToast(context,
+            message: 'Select an account first.', type: ToastType.error);
+      }
+      return;
     }
 
-    if (_selectedAccount == null) return;
-
     var amountValue = double.tryParse(_amount) ?? 0.0;
+    if (amountValue <= 0) {
+      if (mounted) {
+        showToast(context,
+            message: 'Enter an amount.', type: ToastType.error);
+      }
+      return;
+    }
     if (_transactionType == TransactionType.expense) {
       amountValue = -amountValue;
     }
@@ -440,18 +448,17 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final to = _transferToAccount;
     if (from == null || to == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Select a destination account first.')),
-        );
+        showToast(context,
+            message: 'Select a destination account first.',
+            type: ToastType.error);
       }
       return;
     }
     if (from.id == to.id) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Source and destination must be different.')),
-        );
+        showToast(context,
+            message: 'Source and destination must be different.',
+            type: ToastType.error);
       }
       return;
     }
@@ -617,11 +624,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     if (accounts.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(exclude == null
-                ? 'Create an account first in "Register Accounts".'
-                : 'Create a second account to transfer between.')),
+      showToast(
+        context,
+        message: exclude == null
+            ? 'Create an account first in "Register Accounts".'
+            : 'Create a second account to transfer between.',
+        type: ToastType.error,
       );
       return;
     }

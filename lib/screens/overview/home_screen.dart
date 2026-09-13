@@ -91,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const _UserGreeting(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               const _RevaluationSummaryStrip(),
-              SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               StreamBuilder<MonthlySummary>(
                   stream: repo.watchMonthlySummary(_selectedDate),
                   builder: (context, snapshot) {

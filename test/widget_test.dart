@@ -51,7 +51,7 @@ void main() {
     expect(find.text('Automatic sync'), findsOneWidget);
   });
 
-  testWidgets('onboarding account step can be skipped', (tester) async {
+  testWidgets('onboarding account step cannot be skipped', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     await tester.tap(find.text('Get started'));
@@ -61,12 +61,12 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    // Step 5 with no account added: Next just moves on — no accounts required.
+    // Step 5 with no account added: Next is blocked.
     expect(find.text('Your first account'), findsOneWidget);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 
-    expect(find.text("You're all set!"), findsOneWidget);
-    expect(find.text('0 accounts'), findsOneWidget);
+    expect(find.text('Add at least one account first.'), findsOneWidget);
+    expect(find.text("You're all set!"), findsNothing);
   });
 }
