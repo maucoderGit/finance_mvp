@@ -366,28 +366,37 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     // Auto-capture the exchange rate ("1 base = X account currency") at the
     // transaction date: the closest stored rate, falling back to the latest.
+    // Only meaningful for non-base accounts — a base-currency account moves
+    // base units 1:1.
     double? rateAtCreation;
     final baseCode = await repo.getBaseCurrencyCode();
-    if (_selectedAccount!.currencyCode != baseCode) {
+    final isBaseAccount = _selectedAccount!.currencyCode == baseCode;
+    if (!isBaseAccount) {
       rateAtCreation = await repo.getRateWithFallback(
           _selectedAccount!.currencyCode, DateTime.now());
     }
 
     // Manual rate override from the Details step. The field is prefilled with
     // the captured rate by _loadConversionPreview, so an empty field just
-    // keeps rateAtCreation unless the user typed something.
-    final customRate =
-        double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
-    if (customRate != null && customRate > 0) {
-      rateAtCreation = customRate;
+    // keeps rateAtCreation unless the user typed something. For base-currency
+    // accounts it is ignored entirely: a stray "1 USD = X VES" value would
+    // otherwise corrupt the base amount of a plain $ expense.
+    if (!isBaseAccount) {
+      final customRate =
+          double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
+      if (customRate != null && customRate > 0) {
+        rateAtCreation = customRate;
+      }
     }
 
     // Compute the transaction value in the base currency at creation time.
+    // Base accounts are already in base units; only non-base accounts convert
+    // by the captured rate.
     double? baseAmount;
-    if (rateAtCreation != null && rateAtCreation != 0) {
-      baseAmount = amountValue / rateAtCreation;
-    } else if (_selectedAccount!.currencyCode == baseCode) {
+    if (isBaseAccount) {
       baseAmount = amountValue;
+    } else if (rateAtCreation != null && rateAtCreation != 0) {
+      baseAmount = amountValue / rateAtCreation;
     }
 
     // FX arbitrage differential (USDT-lived) logged on national-currency
