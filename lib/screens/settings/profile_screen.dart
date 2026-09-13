@@ -2,7 +2,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
-import 'package:finance_mvp/widget/profile_avatar.dart';
+import 'package:finance_mvp/widgets/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

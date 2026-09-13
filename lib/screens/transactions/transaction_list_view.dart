@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/screens/transaction_screen.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/screens/transactions/transaction_screen.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -32,16 +32,13 @@ class _TransactionListViewState extends State<TransactionListView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Title (h2)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: Text(
+        Text(
             'Recent Transactions',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: context.colors.textDark,
             ),
-          ),
         ),
         // The list of transactions (space-y-3)
         FutureBuilder<List<db.Currency>>(
@@ -54,7 +51,7 @@ class _TransactionListViewState extends State<TransactionListView> {
             return SingleChildScrollView(
               scrollDirection: Axis.vertical,
               child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.45,
+                  height: MediaQuery.of(context).size.height * 0.50,
                   child: ListView.separated(
                     shrinkWrap: true,
                     physics: const AlwaysScrollableScrollPhysics(),

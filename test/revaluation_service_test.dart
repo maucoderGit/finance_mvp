@@ -2,7 +2,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/revaluation_service.dart';
+import 'package:finance_mvp/services/finance/revaluation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_db.dart';

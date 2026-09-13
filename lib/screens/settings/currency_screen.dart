@@ -1,7 +1,7 @@
 
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
-import 'package:finance_mvp/screens/currency_form.dart';
+import 'package:finance_mvp/screens/settings/currency_form.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'daily_rates_screen.dart';

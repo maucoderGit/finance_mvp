@@ -1,9 +1,9 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/screens/transaction_list_view.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
-import 'package:finance_mvp/widget/transaction_card.dart';
+import 'package:finance_mvp/screens/transactions/transaction_list_view.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
+import 'package:finance_mvp/widgets/transaction_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -79,7 +79,7 @@ class _TransactionPageState extends State<TransactionPage> {
                   child:
                       TransactionListView(transactions: filteredTransactions),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 _buildToggleSection(),
               ],
             ),

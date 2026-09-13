@@ -73,6 +73,22 @@ class Transactions extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   RealColumn get exchangeRateAtCreation => real().nullable()();
   RealColumn get baseCurrencyAmount => real().nullable()();
+  RealColumn get fxDelta => real().nullable()();
+
+  /// Groups the two legs of an internal transfer/menudeo. Null for plain
+  /// income/expense transactions. Deleting one leg removes the whole pair.
+  TextColumn get transferGroupId => text().nullable()();
+}
+
+/// Cached unofficial/parallel (P2P) VES→USD market rates, one row per day.
+/// The official BCV rate lives in [CurrencyRates] as the VES rate; this table
+/// holds the free-market price used for net-worth valuation and FX deltas.
+class MarketRates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  RealColumn get rate => real()();
+  DateTimeColumn get date => dateTime().unique()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 class UserSettings extends Table {
@@ -109,13 +125,14 @@ class NetWorthHistory extends Table {
     Transactions,
     UserSettings,
     NetWorthHistory,
+    MarketRates,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,6 +174,13 @@ class AppDatabase extends _$AppDatabase {
               'ON currency_rates (currency_code, date)',
             );
           }
+          if (from < 6) {
+            await m.addColumn(transactions, transactions.fxDelta);
+            await m.createTable(marketRates);
+          }
+          if (from < 7) {
+            await m.addColumn(transactions, transactions.transferGroupId);
+          }
         },
       );
 
@@ -166,6 +190,7 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       // Children first so foreign keys never dangle regardless of enforcement.
       await delete(netWorthHistory).go();
+      await delete(marketRates).go();
       await delete(currencyRates).go();
       await delete(transactions).go();
       await delete(accounts).go();

@@ -1,10 +1,10 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
-import 'package:finance_mvp/widget/gain_loss_card.dart';
-import 'package:finance_mvp/widget/net_worth_line_chart.dart';
-import 'package:finance_mvp/widget/purchasing_power_chart.dart';
-import 'package:finance_mvp/widget/revaluation_summary_card.dart';
+import 'package:finance_mvp/widgets/gain_loss_card.dart';
+import 'package:finance_mvp/widgets/net_worth_line_chart.dart';
+import 'package:finance_mvp/widgets/purchasing_power_chart.dart';
+import 'package:finance_mvp/widgets/revaluation_summary_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,7 +38,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
     final currencyProvider = context.read<CurrencyProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final count = await currencyProvider.syncRates();
+    final count = await currencyProvider.syncRates(force: true);
     messenger.showSnackBar(
       SnackBar(
         content: Text(count > 0

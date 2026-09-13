@@ -3,14 +3,14 @@ import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
-import 'package:finance_mvp/services/net_worth_tracker.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
+import 'package:finance_mvp/services/finance/net_worth_tracker.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
-import 'package:finance_mvp/services/revaluation_service.dart';
-import 'package:finance_mvp/widget/month_filter_widget.dart';
-import 'package:finance_mvp/widget/appbar.dart';
-import 'package:finance_mvp/widget/info_section_title.dart';
-import 'package:finance_mvp/widget/profile_avatar.dart';
+import 'package:finance_mvp/services/finance/revaluation_service.dart';
+import 'package:finance_mvp/widgets/month_filter_widget.dart';
+import 'package:finance_mvp/widgets/appbar.dart';
+import 'package:finance_mvp/widgets/info_section_title.dart';
+import 'package:finance_mvp/widgets/profile_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -98,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final summary = snapshot.data;
                     final income = summary?.income ?? 0.0;
                     final expenses = summary?.expenses ?? 0.0;
+                    final fxImpact = summary?.fxImpact ?? 0.0;
 
                     const currencyFormat = formatMoney;
 
@@ -105,6 +106,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       income: '+${currencyFormat(income, symbol: _baseSymbol)}',
                       expenses:
                           '-${currencyFormat(expenses, symbol: _baseSymbol)}',
+                      fxImpactText:
+                          currencyFormat(fxImpact, symbol: _baseSymbol),
+                      fxImpactPositive: fxImpact >= 0,
                     );
                   }),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
@@ -195,28 +199,45 @@ class _UserGreetingState extends State<_UserGreeting> {
 class _MonthlySummary extends StatelessWidget {
   final String income;
   final String expenses;
-  const _MonthlySummary({required this.income, required this.expenses});
+  final String fxImpactText;
+  final bool fxImpactPositive;
+
+  const _MonthlySummary({
+    required this.income,
+    required this.expenses,
+    required this.fxImpactText,
+    required this.fxImpactPositive,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: _SummaryCard(
-              label: 'Income',
-              amount: income,
-              amountColor: context.colors.textDark,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryCard(
+                  label: 'Income',
+                  amount: income,
+                  amountColor: context.colors.textDark,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _SummaryCard(
+                  label: 'Expenses',
+                  amount: expenses,
+                  amountColor: context.colors.textDark,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: _SummaryCard(
-              label: 'Expenses',
-              amount: expenses,
-              amountColor: context.colors.textDark,
-            ),
+          const SizedBox(height: 12),
+          _FxImpactCard(
+            amount: fxImpactText,
+            positive: fxImpactPositive,
           ),
         ],
       ),
@@ -255,6 +276,51 @@ class _SummaryCard extends StatelessWidget {
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: amountColor)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact strip showing the month's Net FX Impact (sum of fxDelta):
+/// green for positive gap savings, red for negative replacement losses.
+class _FxImpactCard extends StatelessWidget {
+  final String amount;
+  final bool positive;
+
+  const _FxImpactCard({required this.amount, required this.positive});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.stackCardBackground[0],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.colors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('NET FX IMPACT',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: context.colors.textLight,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text(amount,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+          const SizedBox(height: 2),
+          Text(
+            positive ? 'Gap Savings' : 'Replacement Loss',
+            style: TextStyle(color: context.colors.textLight, fontSize: 12),
+          ),
         ],
       ),
     );

@@ -4,8 +4,8 @@ import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/screens/add_account_sheet.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/screens/accounts/add_account_sheet.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});

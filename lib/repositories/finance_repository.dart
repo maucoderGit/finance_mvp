@@ -7,7 +7,15 @@ class MonthlySummary {
   final double income;
   final double expenses;
 
-  MonthlySummary({required this.income, required this.expenses});
+  /// Sum of `fxDelta` over the filtered transactions (USDT-lived Net FX
+  /// Impact: positive = gap savings, negative = replacement loss).
+  final double fxImpact;
+
+  MonthlySummary({
+    required this.income,
+    required this.expenses,
+    this.fxImpact = 0,
+  });
 }
 
 class FinanceRepository {
@@ -32,8 +40,47 @@ class FinanceRepository {
         );
   }
 
-  Future<void> deleteTransaction(int id) {
-    return (db.delete(db.transactions)..where((t) => t.id.equals(id))).go();
+  /// Delete a single income/expense, or both legs of a transfer (identified by
+  /// [id] being either leg of the pair).
+  Future<void> deleteTransaction(int id) async {
+    final existing = await (db.select(db.transactions)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) return;
+
+    final groupId = existing.transferGroupId;
+    if (groupId != null) {
+      await (db.delete(db.transactions)..where((t) => t.transferGroupId.equals(groupId)))
+          .go();
+    } else {
+      await (db.delete(db.transactions)..where((t) => t.id.equals(id))).go();
+    }
+  }
+
+  /// Insert the two linked legs of an internal transfer/menudeo atomically:
+  /// seeing half a transfer (one leg committed, the other not) would corrupt
+  /// balances. Both rows share [groupId] on `transferGroupId`.
+  Future<void> createTransfer({
+    required String groupId,
+    required TransactionsCompanion fromLeg,
+    required TransactionsCompanion toLeg,
+  }) {
+    return db.transaction(() async {
+      final from = fromLeg.copyWith(transferGroupId: drift.Value(groupId));
+      final to = toLeg.copyWith(transferGroupId: drift.Value(groupId));
+      await db.into(db.transactions).insert(from);
+      await db.into(db.transactions).insert(to);
+    });
+  }
+
+  Future<Transaction?> getTransaction(int id) {
+    return (db.select(db.transactions)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<List<Transaction>> getTransactionsByGroup(String groupId) {
+    return (db.select(db.transactions)..where((t) => t.transferGroupId.equals(groupId)))
+        .get();
   }
 
   // ── Accounts ──
@@ -181,6 +228,42 @@ class FinanceRepository {
 
   Future<void> deleteExchangeRate(int id) {
     return (db.delete(db.currencyRates)..where((r) => r.id.equals(id))).go();
+  }
+
+  // ── Market (P2P) Rates ──
+
+  /// Store the unofficial/parallel VES→USD rate for [rate.date], replacing any
+  /// rate already recorded for that day.
+  Future<void> addMarketRate(MarketRatesCompanion rate) {
+    return db
+        .into(db.marketRates)
+        .insert(rate, mode: drift.InsertMode.insertOrReplace);
+  }
+
+  /// The newest stored market (P2P) rate, or null when none exists.
+  Future<MarketRate?> getLatestMarketRate() {
+    return (db.select(db.marketRates)
+          ..orderBy([
+            (r) => drift.OrderingTerm(
+                expression: r.date, mode: drift.OrderingMode.desc)
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  /// Market rate at or before [date], falling back to the official BCV rate
+  /// when no parallel rate is known for the period.
+  Future<double?> getMarketRateWithFallback(DateTime date) async {
+    final rate = await (db.select(db.marketRates)
+          ..where((r) => r.date.isSmallerOrEqualValue(date))
+          ..orderBy([
+            (r) => drift.OrderingTerm(
+                expression: r.date, mode: drift.OrderingMode.desc)
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+    final official = await getRateWithFallback('VES', date);
+    return rate?.rate ?? official;
   }
 
   Future<DateTime?> getLastAutoFetchDate() async {
@@ -392,11 +475,36 @@ class FinanceRepository {
     double total = 0;
     for (final account in allAccounts) {
       final balance = totalByAccount[account.id] ?? 0.0;
-      total += await convertAmount(
-          amount: balance, fromCode: account.currencyCode, toCode: toCode);
+      total += await convertForNetWorth(
+          amount: balance,
+          fromCode: account.currencyCode,
+          toCode: toCode);
     }
 
     return total;
+  }
+
+  /// Net-worth aggregation conversion: national-currency (VES) balances are
+  /// valued at the parallel/market rate to reflect true replacement value,
+  /// falling back to the official BCV rate when no market rate is stored.
+  /// Non-national pairs behave exactly like [convertAmount].
+  Future<double> convertForNetWorth({
+    required double amount,
+    required String fromCode,
+    required String toCode,
+  }) async {
+    if (fromCode == toCode) return amount;
+
+    final nationalCode = await getNationalCurrencyCode();
+    if (fromCode == nationalCode || toCode == nationalCode) {
+      final marketRate = await getMarketRateWithFallback(DateTime.now());
+      if (marketRate != null && marketRate > 0) {
+        if (fromCode == nationalCode) return amount / marketRate;
+        return amount * marketRate;
+      }
+    }
+
+    return convertAmount(amount: amount, fromCode: fromCode, toCode: toCode);
   }
 
   // ── Net Worth History ──
@@ -440,12 +548,16 @@ class FinanceRepository {
 
     final query = db.select(db.transactions)
       ..where((t) => t.date
-          .isBetween(drift.Variable(startOfMonth), drift.Variable(endOfMonth)));
+          .isBetween(drift.Variable(startOfMonth), drift.Variable(endOfMonth)) &
+          // Transfers only move money between the user's own accounts; they
+          // are neither income nor expense and must not bend the summary.
+          t.transferGroupId.isNull());
 
     return db.transaction(() async {
       final transactionsInMonth = await query.get();
       double totalIncome = 0;
       double totalExpenses = 0;
+      double totalFxImpact = 0;
 
       for (final t in transactionsInMonth) {
         final baseAmount = await toBaseAmount(t);
@@ -454,8 +566,12 @@ class FinanceRepository {
         } else {
           totalExpenses += baseAmount.abs();
         }
+        totalFxImpact += t.fxDelta ?? 0;
       }
-      return MonthlySummary(income: totalIncome, expenses: totalExpenses);
+      return MonthlySummary(
+          income: totalIncome,
+          expenses: totalExpenses,
+          fxImpact: totalFxImpact);
     }).asStream();
   }
 }

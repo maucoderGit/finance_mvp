@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/revaluation_service.dart';
+import 'package:finance_mvp/services/finance/revaluation_service.dart';
 
 /// Records daily net worth snapshots and periodically syncs rates.
 class NetWorthTracker {

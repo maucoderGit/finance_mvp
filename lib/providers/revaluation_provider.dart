@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
-import 'package:finance_mvp/services/revaluation_service.dart';
+import 'package:finance_mvp/services/finance/revaluation_service.dart';
 
 /// Provides revaluation data (FX gain/loss, purchasing power, net worth) to UI.
 class RevaluationProvider extends ChangeNotifier {

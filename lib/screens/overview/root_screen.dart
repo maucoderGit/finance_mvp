@@ -1,7 +1,7 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
-import 'package:finance_mvp/screens/home_screen.dart';
+import 'package:finance_mvp/screens/overview/home_screen.dart';
 import 'package:finance_mvp/screens/onboarding/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

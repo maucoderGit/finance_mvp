@@ -3,7 +3,7 @@ import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/widgets/account_icon_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

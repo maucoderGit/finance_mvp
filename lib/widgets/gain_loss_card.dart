@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 
 /// Card displaying the gain/loss for a single account or currency.
 class GainLossCard extends StatelessWidget {

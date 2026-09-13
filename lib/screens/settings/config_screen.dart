@@ -1,12 +1,12 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
-import 'package:finance_mvp/screens/about_screen.dart';
-import 'package:finance_mvp/screens/appearance_screen.dart';
-import 'package:finance_mvp/screens/currency_screen.dart';
-import 'package:finance_mvp/screens/dashboard_screen.dart';
-import 'package:finance_mvp/screens/profile_screen.dart';
-import 'package:finance_mvp/screens/revaluation_screen.dart';
+import 'package:finance_mvp/screens/settings/about_screen.dart';
+import 'package:finance_mvp/screens/settings/appearance_screen.dart';
+import 'package:finance_mvp/screens/settings/currency_screen.dart';
+import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
+import 'package:finance_mvp/screens/settings/profile_screen.dart';
+import 'package:finance_mvp/screens/revaluation/revaluation_screen.dart';
 import 'package:provider/provider.dart';
 
 class ConfigScreen extends StatelessWidget {

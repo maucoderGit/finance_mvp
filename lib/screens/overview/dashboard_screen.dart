@@ -1,7 +1,7 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
-import 'package:finance_mvp/widget/forecast/goal_projection_card.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
+import 'package:finance_mvp/widgets/goal_projection_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

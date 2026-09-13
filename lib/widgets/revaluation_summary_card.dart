@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
-import 'package:finance_mvp/services/currency_converter.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 
 /// Summary card showing total value, cost basis, and unrealized gain/loss.
 class RevaluationSummaryCard extends StatelessWidget {

@@ -3,24 +3,29 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/services/bcv_rate_source.dart';
-import 'package:finance_mvp/services/exchange_rate_api_service.dart';
-import 'package:finance_mvp/services/rate_source.dart';
+import 'package:finance_mvp/services/rates/bcv_rate_source.dart';
+import 'package:finance_mvp/services/rates/exchange_rate_api_service.dart';
+import 'package:finance_mvp/services/rates/rate_source.dart';
 import 'package:flutter/foundation.dart';
+
+import 'package:finance_mvp/services/rates/market_rate_source.dart';
 
 /// Manages exchange-rate state: syncing from the available rate sources,
 /// manual overrides, the base currency and once-per-day automatic sync.
 class CurrencyProvider extends ChangeNotifier {
   final FinanceRepository _repository;
   final List<RateSource> _sources;
+  final MarketRateSource _marketRateSource;
 
   bool _syncing = false;
   String? _syncError;
   DateTime? _lastSyncDate;
   Timer? _dailyTimer;
 
-  CurrencyProvider(this._repository, {List<RateSource>? sources})
-      : _sources = sources ?? [ExchangeRateApiService(), BcvRateSource()];
+  CurrencyProvider(this._repository,
+      {List<RateSource>? sources, MarketRateSource? marketRateSource})
+      : _sources = sources ?? [ExchangeRateApiService(), BcvRateSource()],
+        _marketRateSource = marketRateSource ?? MarketRateSource();
 
   bool get isSyncing => _syncing;
   String? get syncError => _syncError;
@@ -69,21 +74,36 @@ class CurrencyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sync today's rates for all non-base currencies, fanning the list out
-  /// across every [RateSource] that supports each currency (one HTTP call per
-  /// source). A failing source no longer blocks the others.
+  /// Sync today's rate for the national currency (VES) plus its market (P2P)
+  /// rate. Auto-sync runs at most once per day; pass [force] to refetch (used
+  /// by the manual cloud-sync buttons).
   ///
-  /// Returns how many rates were stored.
+  /// Returns how many rates were stored (0 when already fetched today).
   Future<int> syncRates({bool force = false}) async {
     if (_syncing) return 0;
+
+    final now = DateTime.now();
+    final lastFetch = await _repository.getLastAutoFetchDate();
+    final alreadyFetchedToday = lastFetch != null &&
+        lastFetch.year == now.year &&
+        lastFetch.month == now.month &&
+        lastFetch.day == now.day;
+    if (alreadyFetchedToday && !force) {
+      _lastSyncDate = lastFetch;
+      return 0;
+    }
+
     _syncing = true;
     _syncError = null;
     notifyListeners();
 
     try {
       final baseCode = await _repository.getBaseCurrencyCode();
-      final currencies = await _repository.getAllCurrencies();
-      final toSync = currencies.where((c) => c.code != baseCode).toList();
+      final nationalCode = await _repository.getNationalCurrencyCode();
+      final national = await _repository.getCurrency(nationalCode);
+      final toSync = nationalCode == baseCode || national == null
+          ? <Currency>[]
+          : [national];
 
       final unsupported = toSync
           .where((c) => !_sources.any((s) => s.isSupported(c.code)))
@@ -116,6 +136,20 @@ class CurrencyProvider extends ChangeNotifier {
         } catch (e) {
           _syncError = e.toString();
         }
+      }
+
+      // Persist today's parallel/market VES rate for net-worth valuation and
+      // FX deltas. Optional: failures don't block the currency sync.
+      try {
+        final marketRate = await _marketRateSource.fetchLatestRate();
+        if (marketRate != null && marketRate > 0) {
+          await _repository.addMarketRate(MarketRatesCompanion(
+            rate: Value(marketRate),
+            date: Value(todayDate),
+          ));
+        }
+      } catch (e) {
+        if (updated == 0) _syncError ??= e.toString();
       }
 
       if (updated > 0) {
@@ -250,6 +284,7 @@ class CurrencyProvider extends ChangeNotifier {
     for (final source in _sources) {
       source.dispose();
     }
+    _marketRateSource.dispose();
     super.dispose();
   }
 }

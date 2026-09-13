@@ -279,6 +279,172 @@ void main() {
     expect(await repo.calculateTotalBalance('VES'), closeTo(8000, 0.001));
   });
 
+  test('calculateTotalBalance values VES at the market rate when stored',
+      () async {
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'VES',
+      rate: 36.5,
+      date: DateTime.now(),
+    ));
+    await repo.addMarketRate(MarketRatesCompanion.insert(
+      rate: 40.0,
+      date: DateTime.now(),
+    ));
+
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'cash',
+        iconColor: 0xFF4CAF50,
+      ),
+      60,
+    );
+
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Bolivares',
+        currencyCode: 'VES',
+        icon: 'account_balance_wallet',
+        iconColor: 0xFF2196F3,
+      ),
+      4000,
+    );
+
+    // 60 USD + 4000 VES at the market rate (40) = 160 USD.
+    expect(await repo.calculateTotalBalance('USD'), closeTo(160, 0.001));
+  });
+
+  test('market rates are stored and fall back to the official rate', () async {
+    expect(await repo.getLatestMarketRate(), isNull);
+
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'VES',
+      rate: 36.5,
+      date: DateTime(2026, 1, 1),
+    ));
+    expect(await repo.getMarketRateWithFallback(DateTime(2026, 1, 10)),
+        closeTo(36.5, 0.001));
+
+    await repo.addMarketRate(MarketRatesCompanion.insert(
+      rate: 40.0,
+      date: DateTime(2026, 1, 10),
+    ));
+    expect((await repo.getLatestMarketRate())!.rate, closeTo(40, 0.001));
+    expect(await repo.getMarketRateWithFallback(DateTime(2026, 1, 10)),
+        closeTo(40, 0.001));
+  });
+
+  test('monthly summary sums fxDelta into fxImpact', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    final now = DateTime.now();
+    await repo.createTransaction(TransactionsCompanion(
+      amount: const drift.Value(-2000),
+      accountId: drift.Value(account.id),
+      currencyCode: const drift.Value('USD'),
+      date: drift.Value(now),
+      fxDelta: const drift.Value(15.0),
+    ));
+    await repo.createTransaction(TransactionsCompanion(
+      amount: const drift.Value(-1000),
+      accountId: drift.Value(account.id),
+      currencyCode: const drift.Value('USD'),
+      date: drift.Value(now),
+      fxDelta: const drift.Value(8.0),
+    ));
+    // Outside the current month: must not affect the aggregate.
+    await repo.createTransaction(TransactionsCompanion(
+      amount: const drift.Value(-500),
+      accountId: drift.Value(account.id),
+      currencyCode: const drift.Value('USD'),
+      date: drift.Value(DateTime(now.year - 1, now.month, now.day)),
+      fxDelta: const drift.Value(99.0),
+    ));
+
+    final summary = await repo.watchMonthlySummary(now).first;
+    expect(summary.income, 0);
+    expect(summary.expenses, closeTo(3000, 0.001));
+    expect(summary.fxImpact, closeTo(23, 0.001));
+  });
+
+  test(
+      'transfer legs are linked, ignored by the monthly summary and deleted as a pair',
+      () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Src',
+        currencyCode: 'VES',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Dst',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final accounts = await repo.getAllAccounts();
+    final ves = accounts.firstWhere((a) => a.currencyCode == 'VES');
+    final usd = accounts.firstWhere((a) => a.currencyCode == 'USD');
+
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'VES',
+      rate: 36.5,
+      date: DateTime.now(),
+    ));
+
+    const groupId = 'g-42';
+    await repo.createTransfer(
+      groupId: groupId,
+      fromLeg: TransactionsCompanion(
+        amount: const drift.Value(-2000),
+        accountId: drift.Value(ves.id),
+        currencyCode: const drift.Value('VES'),
+        date: drift.Value(DateTime.now()),
+        exchangeRateAtCreation: const drift.Value(40.0),
+        baseCurrencyAmount: const drift.Value(-50.0),
+        fxDelta: const drift.Value(4.7945),
+      ),
+      toLeg: TransactionsCompanion(
+        amount: const drift.Value(50),
+        accountId: drift.Value(usd.id),
+        currencyCode: const drift.Value('USD'),
+        date: drift.Value(DateTime.now()),
+        baseCurrencyAmount: const drift.Value(50.0),
+      ),
+    );
+
+    final txs = await repo.watchTransactions().first;
+    expect(txs, hasLength(2));
+    expect(txs.every((t) => t.transferGroupId == groupId), isTrue);
+
+    // Transfers move money between the user's own accounts: neither income,
+    // expense nor FX impact.
+    final summary = await repo.watchMonthlySummary(DateTime.now()).first;
+    expect(summary.income, 0);
+    expect(summary.expenses, 0);
+    expect(summary.fxImpact, 0);
+
+    // Deleting one leg must remove the whole pair.
+    await repo.deleteTransaction(txs.first.id);
+    expect(await repo.watchTransactions().first, isEmpty);
+  });
+
   test('updateTransaction edits an existing payment and deleteTransaction removes it',
       () async {
     await repo.createAccountWithInitialTransaction(

@@ -1,4 +1,4 @@
-import 'package:finance_mvp/services/bcv_rate_source.dart';
+import 'package:finance_mvp/services/rates/bcv_rate_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
