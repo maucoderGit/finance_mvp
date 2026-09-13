@@ -142,47 +142,144 @@ class AppDatabase extends _$AppDatabase {
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
-            await m.addColumn(accounts, accounts.includeInRevaluation);
-            await m.addColumn(transactions, transactions.exchangeRateAtCreation);
-            await m.addColumn(transactions, transactions.baseCurrencyAmount);
-            await m.addColumn(
-                userSettings, userSettings.currencySelectionMode);
-            await m.addColumn(
-                userSettings, userSettings.lastAutoFetchDate);
-            await m.createTable(netWorthHistory);
+            await _addColumnIfMissing(m, accounts, accounts.includeInRevaluation);
+            await _addColumnIfMissing(
+                m, transactions, transactions.exchangeRateAtCreation);
+            await _addColumnIfMissing(
+                m, transactions, transactions.baseCurrencyAmount);
+            await _addColumnIfMissing(
+                m, userSettings, userSettings.currencySelectionMode);
+            await _addColumnIfMissing(
+                m, userSettings, userSettings.lastAutoFetchDate);
+            await _createTableIfMissing(m, netWorthHistory);
           }
           if (from < 3) {
-            await m.addColumn(
-                userSettings, userSettings.nationalCurrencyCode);
-            await m.addColumn(
-                userSettings, userSettings.hasCompletedOnboarding);
+            await _addColumnIfMissing(
+                m, userSettings, userSettings.nationalCurrencyCode);
+            await _addColumnIfMissing(
+                m, userSettings, userSettings.hasCompletedOnboarding);
           }
           if (from < 4) {
-            await m.addColumn(transactions, transactions.imagePath);
+            await _addColumnIfMissing(m, transactions, transactions.imagePath);
           }
           if (from < 5) {
             // Fresh DBs get UNIQUE(currency_code, date) from customConstraints,
             // but pre-v5 installs never had it — so re-syncs piled up
             // duplicate rates. Dedupe (keep the newest id per code+date) and
-            // add the index for existing databases.
-            await m.database.customStatement(
-              'DELETE FROM currency_rates WHERE id NOT IN '
-              '(SELECT MAX(id) FROM currency_rates GROUP BY currency_code, date)',
-            );
-            await m.database.customStatement(
-              'CREATE UNIQUE INDEX currency_rates_code_date '
-              'ON currency_rates (currency_code, date)',
-            );
+            // add the index for existing databases. A `currency_rates` that is
+            // absent or stuck on a stale pre-v5 schema (no currency_code/date)
+            // is just an exchange-rate cache: rebuild it from the current
+            // schema instead of trying to ALTER a table we can't trust.
+            if (!await _hasColumns(
+                m, 'currency_rates', ['currency_code', 'date'])) {
+              if (await _tableExists(m, 'currency_rates')) {
+                await m.deleteTable(currencyRates.actualTableName);
+              }
+              await m.createTable(currencyRates);
+            } else {
+              await m.database.customStatement(
+                'DELETE FROM currency_rates WHERE id NOT IN '
+                '(SELECT MAX(id) FROM currency_rates GROUP BY currency_code, date)',
+              );
+              await m.database.customStatement(
+                'CREATE UNIQUE INDEX IF NOT EXISTS currency_rates_code_date '
+                'ON currency_rates (currency_code, date)',
+              );
+            }
           }
           if (from < 6) {
-            await m.addColumn(transactions, transactions.fxDelta);
-            await m.createTable(marketRates);
+            await _addColumnIfMissing(m, transactions, transactions.fxDelta);
+            await _createTableIfMissing(m, marketRates);
           }
           if (from < 7) {
-            await m.addColumn(transactions, transactions.transferGroupId);
+            await _addColumnIfMissing(
+                m, transactions, transactions.transferGroupId);
+          }
+        },
+        beforeOpen: (details) async {
+          // Last line of defense: a DB from a much older app version (or one
+          // mangled by crashed migrations) can carry a schema no upgrade step
+          // knows how to repair — legacy columns drift declares no longer, or
+          // NOT NULL columns drift never writes. If any declared column is
+          // missing from a live table, rebuild everything from the current
+          // schema. Cheap on healthy DBs: a handful of PRAGMA reads.
+          if (!await _schemaMatchesDrift()) {
+            for (final table in allTables) {
+              await customStatement(
+                  'DROP TABLE IF EXISTS "${table.actualTableName}"');
+            }
+            final migrator = Migrator(this);
+            await migrator.createAll();
+            await _seedDefaultData();
           }
         },
       );
+
+  Future<void> _addColumnIfMissing(
+    Migrator m,
+    TableInfo<Table, DataClass> table,
+    GeneratedColumn column,
+  ) async {
+    // A partially-created DB may lack the whole table, not just the column.
+    // Creating it brings the full current schema, so the column is present and
+    // the ALTER below becomes a no-op.
+    if (!await _tableExists(m, table.actualTableName)) {
+      await m.createTable(table);
+      return;
+    }
+    final columns = await m.database
+        .customSelect('PRAGMA table_info("${table.actualTableName}")')
+        .get();
+    final names = columns.map((r) => r.read<String>('name')).toSet();
+    if (!names.contains(column.name)) {
+      await m.addColumn(table, column);
+    }
+  }
+
+  Future<void> _createTableIfMissing(
+    Migrator m,
+    TableInfo<Table, DataClass> table,
+  ) async {
+    if (!await _tableExists(m, table.actualTableName)) {
+      await m.createTable(table);
+    }
+  }
+
+  Future<bool> _tableExists(Migrator m, String name) async {
+    final rows = await m.database
+        .customSelect(
+          'SELECT name FROM sqlite_master '
+          'WHERE type = \'table\' AND name = ?',
+          variables: [Variable(name)],
+        )
+        .get();
+    return rows.isNotEmpty;
+  }
+
+  Future<bool> _hasColumns(
+    Migrator m,
+    String table,
+    List<String> columns,
+  ) async {
+    final cols = await m.database
+        .customSelect('PRAGMA table_info("$table")')
+        .get();
+    final names = cols.map((r) => r.read<String>('name')).toSet();
+    return columns.every(names.contains);
+  }
+
+  Future<bool> _schemaMatchesDrift() async {
+    for (final table in allTables) {
+      final cols = await customSelect(
+              'PRAGMA table_info("${table.actualTableName}")')
+          .get();
+      final names = cols.map((r) => r.read<String>('name')).toSet();
+      if (!table.$columns.every((c) => names.contains(c.name))) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /// Delete every row across all tables, then re-seed the default currencies,
   /// categories and an un-onboarded settings row (fresh-install state).

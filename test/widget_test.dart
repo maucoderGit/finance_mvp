@@ -68,5 +68,8 @@ void main() {
 
     expect(find.text('Add at least one account first.'), findsOneWidget);
     expect(find.text("You're all set!"), findsNothing);
+
+    // Drain the toast auto-dismiss timer so the test ends with no pending async.
+    await tester.pump(const Duration(seconds: 3));
   });
 }

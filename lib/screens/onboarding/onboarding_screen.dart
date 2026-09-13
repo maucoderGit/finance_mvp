@@ -6,6 +6,7 @@ import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/widgets/account_icon_picker.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
+import 'package:finance_mvp/widgets/onboarding_sidebar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -64,6 +65,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _accountType = 'cash';
   int _accountColor = 0xFF4CAF50;
 
+  int? _editingIndex;
+  bool _editorOpen = false;
+
   int _currentStep = 0;
   bool _saving = false;
 
@@ -76,6 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _syncMode = 'auto';
 
   static const int _totalSteps = 7;
+  static const double _desktopBreakpoint = 900;
 
   @override
   void dispose() {
@@ -133,7 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // RootScreen watches user settings and swaps to home automatically.
   }
 
-  void _addAccount({
+  bool _addAccount({
     String? name,
     String? icon,
     int? iconColor,
@@ -141,9 +146,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final accountName = (name ?? _accountController.text).trim();
     if (accountName.isEmpty) {
       showToast(context,
-            message: 'Give the account a name.',
-            type: ToastType.error);
-      return;
+          message: 'Give the account a name.', type: ToastType.error);
+      return false;
     }
 
     var balance = 0.0;
@@ -152,23 +156,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final parsed = double.tryParse(balanceText);
       if (parsed == null) {
         showToast(context,
-            message: 'Enter a valid initial balance.',
-            type: ToastType.error);
-        return;
+            message: 'Enter a valid initial balance.', type: ToastType.error);
+        return false;
       }
       balance = parsed;
     }
 
     setState(() {
-      _accounts.add(_AccountDraft(
+      final draft = _AccountDraft(
         name: accountName,
         code: _accountCurrency,
         balance: balance,
         icon: icon ?? _accountType,
         iconColor: iconColor ?? _accountColor,
-      ));
+      );
+      final editing = _editingIndex;
+      if (editing != null && editing < _accounts.length) {
+        _accounts[editing] = draft;
+      } else {
+        _accounts.add(draft);
+      }
       _accountController.clear();
       _balanceController.clear();
+      _editingIndex = null;
+      _editorOpen = false;
+    });
+    return true;
+  }
+
+  void _editAccount(int index) {
+    final account = _accounts[index];
+    setState(() {
+      _editingIndex = index;
+      _editorOpen = true;
+      _accountCurrency = account.code;
+      _accountType = account.icon;
+      _accountColor = account.iconColor;
+      _accountController.text = account.name;
+      _balanceController.text =
+          account.balance == 0 ? '' : account.balance.toStringAsFixed(2);
+    });
+  }
+
+  void _openEditor() {
+    setState(() {
+      _editingIndex = null;
+      _editorOpen = true;
+    });
+  }
+
+  void _closeEditor() {
+    _accountController.clear();
+    _balanceController.clear();
+    setState(() {
+      _editingIndex = null;
+      _editorOpen = false;
     });
   }
 
@@ -179,87 +221,160 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = <Widget>[
+      _WelcomeStep(onGetStarted: () => _goToStep(1)),
+      _NameStep(controller: _nameController),
+      _CurrencyStep(
+        title: 'Reference currency',
+        subtitle: 'The currency you use to measure your savings '
+            '(net worth is shown in it).',
+        options: _currencyOptions,
+        selectedCode: _baseCode,
+        onSelected: (option) {
+          setState(() {
+            _baseCode = option.code;
+            _baseName = option.name;
+            _baseSymbol = option.symbol;
+          });
+        },
+      ),
+      _CurrencyStep(
+        title: 'Local currency',
+        subtitle: 'The currency you earn and spend daily. '
+            'Your purchasing power is tracked against it.',
+        options: _currencyOptions,
+        selectedCode: _nationalCode,
+        onSelected: (option) {
+          setState(() {
+            _nationalCode = option.code;
+            _nationalName = option.name;
+            _nationalSymbol = option.symbol;
+          });
+        },
+      ),
+      _SyncModeStep(
+        selected: _syncMode,
+        onSelected: (mode) => setState(() => _syncMode = mode),
+      ),
+      _AccountStep(
+        controller: _accountController,
+        balanceController: _balanceController,
+        accounts: _accounts,
+        options: _currencyOptions,
+        templates: _accountTemplates,
+        accountCurrency: _accountCurrency,
+        selectedType: _accountType,
+        selectedColor: _accountColor,
+        onCurrencyChanged: (code) => setState(() => _accountCurrency = code),
+        onTypeChanged: (slug) => setState(() {
+          _accountType = slug;
+          _accountColor = accountTypeColors[slug] ?? _accountColor;
+        }),
+        onColorChanged: (color) => setState(() => _accountColor = color),
+        onAdd: _addAccount,
+        onAddTemplate: _addAccountTemplate,
+        onRemove: (index) => setState(() => _accounts.removeAt(index)),
+        editingIndex: _editingIndex,
+        editorOpen: _editorOpen,
+        onOpenEditor: _openEditor,
+        onCloseEditor: _closeEditor,
+        onEditAccount: _editAccount,
+      ),
+      DoneStep(
+        saving: _saving,
+        username: _nameController.text.trim().isEmpty
+            ? 'User'
+            : _nameController.text.trim(),
+        baseCode: _baseCode,
+        nationalCode: _nationalCode,
+        syncMode: _syncMode,
+        accountCount: _accounts.length,
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _WelcomeStep(onGetStarted: () => _goToStep(1)),
-                  _NameStep(controller: _nameController),
-                  _CurrencyStep(
-                    title: 'Reference currency',
-                    subtitle: 'The currency you use to measure your savings '
-                        '(net worth is shown in it).',
-                    options: _currencyOptions,
-                    selectedCode: _baseCode,
-                    onSelected: (option) {
-                      setState(() {
-                        _baseCode = option.code;
-                        _baseName = option.name;
-                        _baseSymbol = option.symbol;
-                      });
-                    },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // ponytail: single 900px breakpoint for the whole wizard; split
+            // into a LayoutBuilder helper when screens demand more width tiers.
+            final content = Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: pages,
+                      ),
+                    ),
                   ),
-                  _CurrencyStep(
-                    title: 'Local currency',
-                    subtitle: 'The currency you earn and spend daily. '
-                        'Your purchasing power is tracked against it.',
-                    options: _currencyOptions,
-                    selectedCode: _nationalCode,
-                    onSelected: (option) {
-                      setState(() {
-                        _nationalCode = option.code;
-                        _nationalName = option.name;
-                        _nationalSymbol = option.symbol;
-                      });
-                    },
+                ),
+                _buildBottomBar(),
+              ],
+            );
+            if (constraints.maxWidth < _desktopBreakpoint) return content;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OnboardingSidebar(currentStep: _currentStep),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildStepHeader(context),
+                      Expanded(child: content),
+                    ],
                   ),
-                  _SyncModeStep(
-                    selected: _syncMode,
-                    onSelected: (mode) => setState(() => _syncMode = mode),
-                  ),
-                  _AccountStep(
-                    controller: _accountController,
-                    balanceController: _balanceController,
-                    accounts: _accounts,
-                    options: _currencyOptions,
-                    templates: _accountTemplates,
-                    accountCurrency: _accountCurrency,
-                    selectedType: _accountType,
-                    selectedColor: _accountColor,
-                    onCurrencyChanged: (code) =>
-                        setState(() => _accountCurrency = code),
-                    onTypeChanged: (slug) => setState(() {
-                      _accountType = slug;
-                      _accountColor = accountTypeColors[slug] ?? _accountColor;
-                    }),
-                    onColorChanged: (color) =>
-                        setState(() => _accountColor = color),
-                    onAdd: _addAccount,
-                    onAddTemplate: _addAccountTemplate,
-                    onRemove: (index) =>
-                        setState(() => _accounts.removeAt(index)),
-                  ),
-                  DoneStep(
-                    saving: _saving,
-                    username: _nameController.text.trim().isEmpty
-                        ? 'User'
-                        : _nameController.text.trim(),
-                    baseCode: _baseCode,
-                    nationalCode: _nationalCode,
-                    syncMode: _syncMode,
-                    accountCount: _accounts.length,
-                  ),
-                ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 20, 32, 0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: context.colors.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: context.colors.primary.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: context.colors.primary,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            _buildBottomBar(),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                'Step ${(_currentStep + 1).toString().padLeft(2, '0')} '
+                'of $_totalSteps',
+                style: TextStyle(
+                  color: context.colors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -750,7 +865,7 @@ class _AccountDraft {
   });
 }
 
-class _AccountStep extends StatelessWidget {
+class _AccountStep extends StatefulWidget {
   final TextEditingController controller;
   final TextEditingController balanceController;
   final List<_AccountDraft> accounts;
@@ -762,9 +877,14 @@ class _AccountStep extends StatelessWidget {
   final ValueChanged<String> onCurrencyChanged;
   final ValueChanged<String> onTypeChanged;
   final ValueChanged<int> onColorChanged;
-  final VoidCallback onAdd;
+  final bool Function() onAdd;
   final ValueChanged<_AccountTemplate> onAddTemplate;
   final ValueChanged<int> onRemove;
+  final int? editingIndex;
+  final bool editorOpen;
+  final VoidCallback onOpenEditor;
+  final VoidCallback onCloseEditor;
+  final ValueChanged<int> onEditAccount;
 
   const _AccountStep({
     required this.controller,
@@ -781,217 +901,562 @@ class _AccountStep extends StatelessWidget {
     required this.onAdd,
     required this.onAddTemplate,
     required this.onRemove,
+    required this.editingIndex,
+    required this.editorOpen,
+    required this.onOpenEditor,
+    required this.onCloseEditor,
+    required this.onEditAccount,
   });
 
   @override
+  State<_AccountStep> createState() => _AccountStepState();
+}
+
+class _AccountStepState extends State<_AccountStep> {
+  @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+                Text(
+                  'Your first account',
+                  style: TextStyle(
+                    color: context.colors.textDark,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add at least one account to continue. The balance is '
+                  'optional. Tap a template for a quick start, or customize '
+                  'below.',
+                  style: TextStyle(
+                      color: context.colors.textLight,
+                      fontSize: 14,
+                      height: 1.4),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Text(
+                      'QUICK START TEMPLATES',
+                      style: TextStyle(
+                        color: context.colors.textLight,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Tap to fill presets',
+                      style: TextStyle(
+                          color: context.colors.textLight, fontSize: 11),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final template in widget.templates)
+                      ActionChip(
+                        avatar: Icon(accountIconFor(template.icon),
+                            size: 16, color: Color(template.color)),
+                        label: Text(template.label),
+                        backgroundColor: context.colors.cardBackground,
+                        onPressed: () => widget.onAddTemplate(template),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (widget.editorOpen)
+                  _buildEditorCard(context, isWide)
+                else
+                  _buildAddAccountButton(context),
+                const SizedBox(height: 24),
+                _buildAccountsSection(context),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditorCard(BuildContext context, bool isWide) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.cardBorder.withValues(alpha: 0.25),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: context.colors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Account specifications',
+                style: TextStyle(
+                  color: context.colors.textDark,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                widget.editingIndex == null
+                    ? _appliedTypeLabel
+                    : 'Editing: ${widget.accounts[widget.editingIndex!].name}',
+                style: TextStyle(
+                  color: context.colors.textLight,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close editor',
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.onCloseEditor,
+                color: context.colors.textLight,
+                icon: const Icon(Icons.close, size: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const _FieldLabel('Account name'),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('onboarding-account-name'),
+            controller: widget.controller,
+            decoration: _inputDecoration(context, hintText: 'e.g. Daily Cash'),
+          ),
+          const SizedBox(height: 18),
+          if (isWide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildCurrencyField(context)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildBalanceField(context)),
+              ],
+            )
+          else ...[
+            _buildCurrencyField(context),
+            const SizedBox(height: 16),
+            _buildBalanceField(context),
+          ],
+          const SizedBox(height: 22),
+          Divider(
+            thickness: 1,
+            color: context.colors.cardBorder.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 8),
+          AccountIconPicker(
+            selectedType: widget.selectedType,
+            selectedColor: widget.selectedColor,
+            onTypeChanged: widget.onTypeChanged,
+            onColorChanged: widget.onColorChanged,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: isWide ? null : double.infinity,
+            child: Align(
+              alignment: isWide ? Alignment.centerRight : Alignment.center,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.colors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: widget.onAdd,
+                icon: Icon(
+                    widget.editingIndex == null ? Icons.add : Icons.check,
+                    size: 18),
+                label: Text(widget.editingIndex == null
+                    ? 'Add account'
+                    : 'Save changes'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddAccountButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          foregroundColor: context.colors.primary,
+          side: BorderSide(
+            color: context.colors.primary.withValues(alpha: 0.5),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: widget.onOpenEditor,
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('Add your own account'),
+      ),
+    );
+  }
+
+  Widget _buildCurrencyField(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _FieldLabel('Currency'),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: widget.accountCurrency,
+          isExpanded: true,
+          decoration: _inputDecoration(context),
+          items: [
+            for (final option in widget.options)
+              DropdownMenuItem(
+                value: option.code,
+                child: Text('${option.code} — ${option.name}'),
+              ),
+          ],
+          onChanged: (code) {
+            if (code != null) widget.onCurrencyChanged(code);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBalanceField(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _FieldLabel('Initial balance (optional)'),
+        const SizedBox(height: 8),
+        TextField(
+          controller: widget.balanceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: _inputDecoration(
+            context,
+            hintText: '0.00',
+            prefixText: _symbolFor(widget.accountCurrency),
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _inputDecoration(
+    BuildContext context, {
+    String hintText = '',
+    String? prefixText,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      prefixText: prefixText,
+      filled: true,
+      fillColor: context.colors.fieldsBackground,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    );
+  }
+
+  Widget _buildAccountsSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'CONFIGURED ACCOUNTS',
+              style: TextStyle(
+                color: context.colors.textDark,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              decoration: BoxDecoration(
+                color: context.colors.textLight.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${widget.accounts.length}',
+                style: TextStyle(
+                  color: context.colors.textLight,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Spacer(),
+            if (widget.accounts.isNotEmpty)
+              Text(
+                'Ready for first import',
+                style: TextStyle(color: context.colors.textLight, fontSize: 11),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (widget.accounts.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            decoration: BoxDecoration(
+              color: context.colors.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: context.colors.cardBorder.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.account_balance_wallet_outlined,
+                    size: 18, color: context.colors.textLight),
+                const SizedBox(width: 8),
+                Text(
+                  'No accounts yet — add one to continue.',
+                  style:
+                      TextStyle(color: context.colors.textLight, fontSize: 13),
+                ),
+              ],
+            ),
+          )
+        else
+          for (var i = 0; i < widget.accounts.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _AccountCard(
+                account: widget.accounts[i],
+                currencyName: _currencyNameFor(widget.accounts[i].code),
+                onRemove: () => widget.onRemove(i),
+                onTap: () => widget.onEditAccount(i),
+              ),
+            ),
+      ],
+    );
+  }
+
+  String _currencyNameFor(String code) {
+    for (final option in widget.options) {
+      if (option.code == code) return option.name;
+    }
+    return code;
+  }
+
+  String _symbolFor(String code) {
+    for (final option in widget.options) {
+      if (option.code == code) return option.symbol;
+    }
+    return code;
+  }
+
+  String get _appliedTypeLabel {
+    for (final label in accountTypeLabels) {
+      if (accountIconSlug(label) == widget.selectedType) return label;
+    }
+    return widget.selectedType;
+  }
+}
+
+class _AccountCard extends StatelessWidget {
+  final _AccountDraft account;
+  final String currencyName;
+  final VoidCallback onRemove;
+  final VoidCallback onTap;
+  const _AccountCard({
+    required this.account,
+    required this.currencyName,
+    required this.onRemove,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Color(account.iconColor);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.cardBorder.withValues(alpha: 0.25),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: accent.withValues(alpha: 0.25)),
+                  ),
+                  child: Icon(accountIconFor(account.icon),
+                      color: accent, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Your first account',
-                        style: TextStyle(
-                          color: context.colors.textDark,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Add at least one account to continue. The balance is '
-                        'optional. Tap a template for a quick start, or pick '
-                        'an icon and add your own below.',
-                        style: TextStyle(
-                            color: context.colors.textLight,
-                            fontSize: 14,
-                            height: 1.4),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final template in templates)
-                        ActionChip(
-                          avatar: Icon(accountIconFor(template.icon),
-                              size: 16, color: Color(template.color)),
-                          label: Text(template.label),
-                          backgroundColor: context.colors.cardBackground,
-                          onPressed: () => onAddTemplate(template),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: AccountIconPicker(
-                    selectedType: selectedType,
-                    selectedColor: selectedColor,
-                    onTypeChanged: onTypeChanged,
-                    onColorChanged: onColorChanged,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      TextField(
-                        key: const Key('onboarding-account-name'),
-                        controller: controller,
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          hintText: 'Account name',
-                          filled: true,
-                          fillColor: context.colors.cardBackground,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: balanceController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          hintText: 'Initial balance (optional)',
-                          filled: true,
-                          fillColor: context.colors.cardBackground,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: accountCurrency,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: context.colors.cardBackground,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
+                          Flexible(
+                            child: Text(
+                              account.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.colors.textDark,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                               ),
-                              isExpanded: true,
-                              items: [
-                                for (final option in options)
-                                  DropdownMenuItem(
-                                    value: option.code,
-                                    child:
-                                        Text('${option.code} — ${option.name}'),
-                                  ),
-                              ],
-                              onChanged: (code) {
-                                if (code != null) onCurrencyChanged(code);
-                              },
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: context.colors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _typeLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.colors.textLight,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            onPressed: onAdd,
-                            child: const Text('Add'),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${account.code} · $currencyName',
+                        style: TextStyle(
+                          color: context.colors.textLight,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Balance · ${formatMoney(account.balance, currencyCode: account.code)}',
+                        style: TextStyle(
+                          color: context.colors.textDark,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Edit account',
+                  color: context.colors.textLight,
+                  onPressed: onTap,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Remove account',
+                  color: context.colors.textLight,
+                  onPressed: onRemove,
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        if (accounts.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-            child: Text(
-              'No accounts yet — add one to continue.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: context.colors.textLight),
-            ),
-          )
-        else
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              itemCount: accounts.length,
-              itemBuilder: (context, index) {
-                final account = accounts[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Material(
-                    color: context.colors.cardBackground,
-                    borderRadius: BorderRadius.circular(14),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color:
-                              context.colors.cardBorder.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      leading: CircleAvatar(
-                        backgroundColor:
-                            Color(account.iconColor).withValues(alpha: 0.15),
-                        child: Icon(accountIconFor(account.icon),
-                            color: Color(account.iconColor), size: 16),
-                      ),
-                      title: Text(account.name,
-                          style: TextStyle(
-                              color: context.colors.textDark,
-                              fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                        account.balance == 0
-                            ? account.code
-                            : '${account.code} · ${formatMoney(account.balance)}',
-                        style: TextStyle(
-                            color: context.colors.textLight, fontSize: 13),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Remove account',
-                        onPressed: () => onRemove(index),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
+      ),
+    );
+  }
+
+  String get _typeLabel {
+    for (final label in accountTypeLabels) {
+      if (accountIconSlug(label) == account.icon) return label;
+    }
+    return account.icon;
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        color: context.colors.textLight,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }

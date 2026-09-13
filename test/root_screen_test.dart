@@ -82,9 +82,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // Step: first account → must register at least one to continue.
+    // The editor card is collapsed by default; open it manually.
+    await tester.ensureVisible(find.text('Add your own account'));
+    await tester.tap(find.text('Add your own account'));
+    await tester.pumpAndSettle();
     await tester.enterText(
         find.byKey(const Key('onboarding-account-name')), 'Cash');
-    await tester.tap(find.text('Add'));
+    await tester.ensureVisible(find.text('Add account'));
+    await tester.tap(find.text('Add account'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
