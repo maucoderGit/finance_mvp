@@ -63,6 +63,21 @@ class Contacts extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// A personal loan: money someone owes me (`direction = 'debtor'`) or money
+/// I owe (`direction = 'creditor'`), optionally linked to a contact.
+class Debts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get contactId => integer().nullable().references(Contacts, #id)();
+  TextColumn get direction => text().withDefault(const Constant('debtor'))();
+  TextColumn get description => text().nullable()();
+  RealColumn get amount => real()();
+  TextColumn get currencyCode => text().references(Currencies, #code)();
+  DateTimeColumn get date => dateTime()();
+  BoolColumn get isSettled => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 class Transactions extends Table {
   IntColumn get id => integer().autoIncrement()();
   RealColumn get amount => real()();
@@ -75,6 +90,10 @@ class Transactions extends Table {
   /// The person/vendor this transaction is with. Relational so a contact can
   /// be tracked across many transactions (spending per contact, contacts list).
   IntColumn get contactId => integer().nullable().references(Contacts, #id)();
+
+  /// When set, this transaction is a payment reducing the linked debt's
+  /// outstanding amount.
+  IntColumn get debtId => integer().nullable().references(Debts, #id)();
   TextColumn get imagePath => text().nullable()();
   BoolColumn get isRecurrenceEnabled =>
       boolean().withDefault(const Constant(false))();
@@ -134,6 +153,7 @@ class NetWorthHistory extends Table {
     Accounts,
     Categories,
     Contacts,
+    Debts,
     Transactions,
     UserSettings,
     NetWorthHistory,
@@ -144,7 +164,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -215,6 +235,12 @@ class AppDatabase extends _$AppDatabase {
             if (await _hasColumns(m, 'transactions', ['contact'])) {
               await m.dropColumn(transactions, 'contact');
             }
+          }
+          if (from < 9) {
+            await _createTableIfMissing(m, debts);
+          }
+          if (from < 10) {
+            await _addColumnIfMissing(m, transactions, transactions.debtId);
           }
         },
         beforeOpen: (details) async {

@@ -44,6 +44,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
   /// The contact linked to this transaction; choosing/replacing it happens
   /// from the full-screen [ContactPickerScreen].
   db.Contact? _selectedContact;
+
+  /// The debt this transaction pays toward (reduces its outstanding amount).
+  db.Debt? _selectedDebt;
+  double? _selectedDebtRemaining;
+
+  /// Display metadata for the linked debt (contact name / description and
+  /// the currency symbol), resolved when picking so the row is cheap to build.
+  String? _selectedDebtTitle;
+  String _selectedDebtSymbol = r'$';
   db.Account? _selectedAccount;
   Map? category;
   String? _imagePath;
@@ -271,6 +280,20 @@ class _TransactionScreenState extends State<TransactionScreen> {
       }
     }
 
+    // Resolve the debt this transaction pays toward.
+    if (existing.debtId != null) {
+      final debt = await repo.getDebtById(existing.debtId!);
+      if (debt != null && mounted) {
+        final meta = await _debtMeta(debt);
+        if (!mounted) return;
+        setState(() {
+          _selectedDebt = debt;
+          _selectedDebtTitle = meta.title;
+          _selectedDebtSymbol = meta.symbol;
+        });
+      }
+    }
+
     await _loadConversionPreview();
   }
 
@@ -445,6 +468,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       currencyCode: Value(_selectedAccount!.currencyCode),
       reference: Value(_referenceController.text),
       contactId: Value(_selectedContact?.id),
+      debtId: Value(_selectedDebt?.id),
       isRecurrenceEnabled: Value(_isRecurrenceEnabled),
       date: Value(DateTime.now()),
       exchangeRateAtCreation: Value(rateAtCreation),
@@ -1073,6 +1097,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     _buildContactField(),
                                   ],
 
+                                  // Pay-toward-debt Field
+                                  if (_transactionType !=
+                                      TransactionType.transfer) ...[
+                                    const SizedBox(height: 12),
+                                    _buildDebtField(),
+                                  ],
+
                                   // Recurrence Section
                                   if (_transactionType !=
                                       TransactionType.transfer) ...[
@@ -1485,6 +1516,118 @@ Future<void> _openContactPicker() async {
     );
   }
 
+  Future<void> _pickDebt() async {
+    final picked = await showModalBottomSheet<db.Debt>(
+      context: context,
+      backgroundColor: context.colors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _DebtPickerSheet(repo: context.read<FinanceRepository>()),
+    );
+    if (picked == null || !mounted) return;
+    final repo = context.read<FinanceRepository>();
+    final remaining = await repo.getDebtRemaining(picked);
+    final meta = await _debtMeta(picked);
+    if (!mounted) return;
+    setState(() {
+      _selectedDebt = picked;
+      _selectedDebtRemaining = remaining;
+      _selectedDebtTitle = meta.title;
+      _selectedDebtSymbol = meta.symbol;
+    });
+  }
+
+  /// Contact name (or description) and currency symbol for a debt row.
+  Future<({String title, String symbol})> _debtMeta(db.Debt debt) async {
+    final repo = context.read<FinanceRepository>();
+    var title = debt.description;
+    if (debt.contactId != null) {
+      final contact = await repo.getContactById(debt.contactId!);
+      if (contact != null) title = contact.name;
+    }
+    final currency = await repo.getCurrency(debt.currencyCode);
+    return (
+      title: title?.trim().isEmpty == false ? title!.trim() : 'Debt',
+      symbol: currency?.symbol ?? r'$',
+    );
+  }
+
+  Widget _buildDebtField() {
+    final debt = _selectedDebt;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.colors.fieldsBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: _pickDebt,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Icon(debt == null
+                  ? Icons.account_balance_wallet_outlined
+                  : Icons.account_balance_wallet,
+                  color: debt == null
+                      ? context.colors.textLight
+                      : context.colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: debt == null
+                    ? Text(
+                        'Pay toward debt (optional)',
+                        style: TextStyle(color: context.colors.textLight),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedDebtTitle ?? 'Debt',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: context.colors.textDark,
+                            ),
+                          ),
+                          Text(
+                            _debtSubtitle(debt),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.colors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              if (debt != null)
+                IconButton(
+                  tooltip: 'Remove debt link',
+                  icon: Icon(Icons.close,
+                      size: 18, color: context.colors.textLight),
+                  onPressed: () => setState(() {
+                    _selectedDebt = null;
+                    _selectedDebtRemaining = null;
+                  }),
+                )
+              else
+                Icon(Icons.chevron_right, color: context.colors.textLight),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _debtSubtitle(db.Debt debt) {
+    final remaining = _selectedDebtRemaining;
+    return remaining == null
+        ? (debt.direction == 'creditor' ? 'I owe' : 'They owe me')
+        : '${formatMoney(remaining, symbol: _selectedDebtSymbol)} of '
+            '${formatMoney(debt.amount, symbol: _selectedDebtSymbol)}';
+  }
+
   Widget _buildRecurrenceCard() {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -1612,6 +1755,145 @@ Future<void> _openContactPicker() async {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Bottom sheet listing open (unpaid) debts to link a transaction as a
+/// payment against one of them.
+class _DebtPickerSheet extends StatefulWidget {
+  const _DebtPickerSheet({required this.repo});
+
+  final FinanceRepository repo;
+
+  @override
+  State<_DebtPickerSheet> createState() => _DebtPickerSheetState();
+}
+
+class _DebtPickerSheetState extends State<_DebtPickerSheet> {
+  List<db.Debt> _debts = [];
+  Map<int, double> _remaining = {};
+  Map<String, String> _symbols = {};
+  Map<int, String> _contactNames = {};
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = widget.repo;
+    final debts = await repo.getAllDebts();
+    final contacts = await repo.getAllContacts();
+    final currencies = await repo.getAllCurrencies();
+    final symbolByCode = {
+      for (final c in currencies) c.code: c.symbol,
+    };
+    final remainingByDebt = <int, double>{};
+    for (final debt in debts) {
+      final remaining = await repo.getDebtRemaining(debt);
+      if (debt.isSettled || remaining <= 0) continue;
+      remainingByDebt[debt.id] = remaining;
+    }
+    if (!mounted) return;
+    setState(() {
+      _debts = debts.where((d) => remainingByDebt.containsKey(d.id)).toList();
+      _remaining = remainingByDebt;
+      _symbols = symbolByCode;
+      _contactNames = {for (final c in contacts) c.id: c.name};
+      _loaded = true;
+    });
+  }
+
+  String _titleFor(db.Debt debt) {
+    if (debt.contactId != null && _contactNames[debt.contactId] != null) {
+      return _contactNames[debt.contactId]!;
+    }
+    return (debt.description ?? '').trim().isEmpty
+        ? 'Debt'
+        : debt.description!.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colors;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.9,
+      minChildSize: 0.5,
+      builder: (context, scrollController) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Pay toward debt',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.textDark,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: colorScheme.textLight),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            if (!_loaded)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_debts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: Text(
+                    'No open debts yet.\nAdd one from Settings → Debts & Debtors.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colorScheme.textLight),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: _debts.length,
+                  itemBuilder: (context, index) {
+                    final debt = _debts[index];
+                    final symbol = _symbols[debt.currencyCode] ?? r'$';
+                    return ListTile(
+                      leading: Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      title: Text(_titleFor(debt),
+                          style: TextStyle(color: colorScheme.textDark)),
+                      subtitle: Text(
+                        '${debt.direction == 'creditor' ? 'I owe' : 'They owe me'}'
+                        ' · ${formatMoney(_remaining[debt.id]!,
+                            symbol: symbol)} of '
+                        '${formatMoney(debt.amount, symbol: symbol)}',
+                        style: TextStyle(color: colorScheme.textLight),
+                      ),
+                      onTap: () => Navigator.pop(context, debt),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

@@ -1823,6 +1823,511 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
   }
 }
 
+class $DebtsTable extends Debts with TableInfo<$DebtsTable, Debt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DebtsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _contactIdMeta =
+      const VerificationMeta('contactId');
+  @override
+  late final GeneratedColumn<int> contactId = GeneratedColumn<int>(
+      'contact_id', aliasedName, true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES contacts (id)'));
+  static const VerificationMeta _directionMeta =
+      const VerificationMeta('direction');
+  @override
+  late final GeneratedColumn<String> direction = GeneratedColumn<String>(
+      'direction', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('debtor'));
+  static const VerificationMeta _descriptionMeta =
+      const VerificationMeta('description');
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+      'description', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+      'amount', aliasedName, false,
+      type: DriftSqlType.double, requiredDuringInsert: true);
+  static const VerificationMeta _currencyCodeMeta =
+      const VerificationMeta('currencyCode');
+  @override
+  late final GeneratedColumn<String> currencyCode = GeneratedColumn<String>(
+      'currency_code', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES currencies (code)'));
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+      'date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _isSettledMeta =
+      const VerificationMeta('isSettled');
+  @override
+  late final GeneratedColumn<bool> isSettled = GeneratedColumn<bool>(
+      'is_settled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_settled" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        contactId,
+        direction,
+        description,
+        amount,
+        currencyCode,
+        date,
+        isSettled,
+        createdAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'debts';
+  @override
+  VerificationContext validateIntegrity(Insertable<Debt> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('contact_id')) {
+      context.handle(_contactIdMeta,
+          contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta));
+    }
+    if (data.containsKey('direction')) {
+      context.handle(_directionMeta,
+          direction.isAcceptableOrUnknown(data['direction']!, _directionMeta));
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+          _descriptionMeta,
+          description.isAcceptableOrUnknown(
+              data['description']!, _descriptionMeta));
+    }
+    if (data.containsKey('amount')) {
+      context.handle(_amountMeta,
+          amount.isAcceptableOrUnknown(data['amount']!, _amountMeta));
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('currency_code')) {
+      context.handle(
+          _currencyCodeMeta,
+          currencyCode.isAcceptableOrUnknown(
+              data['currency_code']!, _currencyCodeMeta));
+    } else if (isInserting) {
+      context.missing(_currencyCodeMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+          _dateMeta, date.isAcceptableOrUnknown(data['date']!, _dateMeta));
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('is_settled')) {
+      context.handle(_isSettledMeta,
+          isSettled.isAcceptableOrUnknown(data['is_settled']!, _isSettledMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Debt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Debt(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      contactId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}contact_id']),
+      direction: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}direction'])!,
+      description: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}description']),
+      amount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}amount'])!,
+      currencyCode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}currency_code'])!,
+      date: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}date'])!,
+      isSettled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_settled'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $DebtsTable createAlias(String alias) {
+    return $DebtsTable(attachedDatabase, alias);
+  }
+}
+
+class Debt extends DataClass implements Insertable<Debt> {
+  final int id;
+  final int? contactId;
+  final String direction;
+  final String? description;
+  final double amount;
+  final String currencyCode;
+  final DateTime date;
+  final bool isSettled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Debt(
+      {required this.id,
+      this.contactId,
+      required this.direction,
+      this.description,
+      required this.amount,
+      required this.currencyCode,
+      required this.date,
+      required this.isSettled,
+      required this.createdAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || contactId != null) {
+      map['contact_id'] = Variable<int>(contactId);
+    }
+    map['direction'] = Variable<String>(direction);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['amount'] = Variable<double>(amount);
+    map['currency_code'] = Variable<String>(currencyCode);
+    map['date'] = Variable<DateTime>(date);
+    map['is_settled'] = Variable<bool>(isSettled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  DebtsCompanion toCompanion(bool nullToAbsent) {
+    return DebtsCompanion(
+      id: Value(id),
+      contactId: contactId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contactId),
+      direction: Value(direction),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      amount: Value(amount),
+      currencyCode: Value(currencyCode),
+      date: Value(date),
+      isSettled: Value(isSettled),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Debt.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Debt(
+      id: serializer.fromJson<int>(json['id']),
+      contactId: serializer.fromJson<int?>(json['contactId']),
+      direction: serializer.fromJson<String>(json['direction']),
+      description: serializer.fromJson<String?>(json['description']),
+      amount: serializer.fromJson<double>(json['amount']),
+      currencyCode: serializer.fromJson<String>(json['currencyCode']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      isSettled: serializer.fromJson<bool>(json['isSettled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'contactId': serializer.toJson<int?>(contactId),
+      'direction': serializer.toJson<String>(direction),
+      'description': serializer.toJson<String?>(description),
+      'amount': serializer.toJson<double>(amount),
+      'currencyCode': serializer.toJson<String>(currencyCode),
+      'date': serializer.toJson<DateTime>(date),
+      'isSettled': serializer.toJson<bool>(isSettled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Debt copyWith(
+          {int? id,
+          Value<int?> contactId = const Value.absent(),
+          String? direction,
+          Value<String?> description = const Value.absent(),
+          double? amount,
+          String? currencyCode,
+          DateTime? date,
+          bool? isSettled,
+          DateTime? createdAt,
+          DateTime? updatedAt}) =>
+      Debt(
+        id: id ?? this.id,
+        contactId: contactId.present ? contactId.value : this.contactId,
+        direction: direction ?? this.direction,
+        description: description.present ? description.value : this.description,
+        amount: amount ?? this.amount,
+        currencyCode: currencyCode ?? this.currencyCode,
+        date: date ?? this.date,
+        isSettled: isSettled ?? this.isSettled,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  Debt copyWithCompanion(DebtsCompanion data) {
+    return Debt(
+      id: data.id.present ? data.id.value : this.id,
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      direction: data.direction.present ? data.direction.value : this.direction,
+      description:
+          data.description.present ? data.description.value : this.description,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      currencyCode: data.currencyCode.present
+          ? data.currencyCode.value
+          : this.currencyCode,
+      date: data.date.present ? data.date.value : this.date,
+      isSettled: data.isSettled.present ? data.isSettled.value : this.isSettled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Debt(')
+          ..write('id: $id, ')
+          ..write('contactId: $contactId, ')
+          ..write('direction: $direction, ')
+          ..write('description: $description, ')
+          ..write('amount: $amount, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('date: $date, ')
+          ..write('isSettled: $isSettled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, contactId, direction, description, amount,
+      currencyCode, date, isSettled, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Debt &&
+          other.id == this.id &&
+          other.contactId == this.contactId &&
+          other.direction == this.direction &&
+          other.description == this.description &&
+          other.amount == this.amount &&
+          other.currencyCode == this.currencyCode &&
+          other.date == this.date &&
+          other.isSettled == this.isSettled &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class DebtsCompanion extends UpdateCompanion<Debt> {
+  final Value<int> id;
+  final Value<int?> contactId;
+  final Value<String> direction;
+  final Value<String?> description;
+  final Value<double> amount;
+  final Value<String> currencyCode;
+  final Value<DateTime> date;
+  final Value<bool> isSettled;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const DebtsCompanion({
+    this.id = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.direction = const Value.absent(),
+    this.description = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.currencyCode = const Value.absent(),
+    this.date = const Value.absent(),
+    this.isSettled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  DebtsCompanion.insert({
+    this.id = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.direction = const Value.absent(),
+    this.description = const Value.absent(),
+    required double amount,
+    required String currencyCode,
+    required DateTime date,
+    this.isSettled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  })  : amount = Value(amount),
+        currencyCode = Value(currencyCode),
+        date = Value(date);
+  static Insertable<Debt> custom({
+    Expression<int>? id,
+    Expression<int>? contactId,
+    Expression<String>? direction,
+    Expression<String>? description,
+    Expression<double>? amount,
+    Expression<String>? currencyCode,
+    Expression<DateTime>? date,
+    Expression<bool>? isSettled,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (contactId != null) 'contact_id': contactId,
+      if (direction != null) 'direction': direction,
+      if (description != null) 'description': description,
+      if (amount != null) 'amount': amount,
+      if (currencyCode != null) 'currency_code': currencyCode,
+      if (date != null) 'date': date,
+      if (isSettled != null) 'is_settled': isSettled,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  DebtsCompanion copyWith(
+      {Value<int>? id,
+      Value<int?>? contactId,
+      Value<String>? direction,
+      Value<String?>? description,
+      Value<double>? amount,
+      Value<String>? currencyCode,
+      Value<DateTime>? date,
+      Value<bool>? isSettled,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? updatedAt}) {
+    return DebtsCompanion(
+      id: id ?? this.id,
+      contactId: contactId ?? this.contactId,
+      direction: direction ?? this.direction,
+      description: description ?? this.description,
+      amount: amount ?? this.amount,
+      currencyCode: currencyCode ?? this.currencyCode,
+      date: date ?? this.date,
+      isSettled: isSettled ?? this.isSettled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (contactId.present) {
+      map['contact_id'] = Variable<int>(contactId.value);
+    }
+    if (direction.present) {
+      map['direction'] = Variable<String>(direction.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<double>(amount.value);
+    }
+    if (currencyCode.present) {
+      map['currency_code'] = Variable<String>(currencyCode.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (isSettled.present) {
+      map['is_settled'] = Variable<bool>(isSettled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DebtsCompanion(')
+          ..write('id: $id, ')
+          ..write('contactId: $contactId, ')
+          ..write('direction: $direction, ')
+          ..write('description: $description, ')
+          ..write('amount: $amount, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('date: $date, ')
+          ..write('isSettled: $isSettled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TransactionsTable extends Transactions
     with TableInfo<$TransactionsTable, Transaction> {
   @override
@@ -1885,6 +2390,14 @@ class $TransactionsTable extends Transactions
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('REFERENCES contacts (id)'));
+  static const VerificationMeta _debtIdMeta = const VerificationMeta('debtId');
+  @override
+  late final GeneratedColumn<int> debtId = GeneratedColumn<int>(
+      'debt_id', aliasedName, true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES debts (id)'));
   static const VerificationMeta _imagePathMeta =
       const VerificationMeta('imagePath');
   @override
@@ -1959,6 +2472,7 @@ class $TransactionsTable extends Transactions
         currencyCode,
         reference,
         contactId,
+        debtId,
         imagePath,
         isRecurrenceEnabled,
         recurrenceType,
@@ -2016,6 +2530,10 @@ class $TransactionsTable extends Transactions
     if (data.containsKey('contact_id')) {
       context.handle(_contactIdMeta,
           contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta));
+    }
+    if (data.containsKey('debt_id')) {
+      context.handle(_debtIdMeta,
+          debtId.isAcceptableOrUnknown(data['debt_id']!, _debtIdMeta));
     }
     if (data.containsKey('image_path')) {
       context.handle(_imagePathMeta,
@@ -2094,6 +2612,8 @@ class $TransactionsTable extends Transactions
           .read(DriftSqlType.string, data['${effectivePrefix}reference']),
       contactId: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}contact_id']),
+      debtId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}debt_id']),
       imagePath: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}image_path']),
       isRecurrenceEnabled: attachedDatabase.typeMapping.read(
@@ -2135,6 +2655,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// The person/vendor this transaction is with. Relational so a contact can
   /// be tracked across many transactions (spending per contact, contacts list).
   final int? contactId;
+
+  /// When set, this transaction is a payment reducing the linked debt's
+  /// outstanding amount.
+  final int? debtId;
   final String? imagePath;
   final bool isRecurrenceEnabled;
   final String? recurrenceType;
@@ -2156,6 +2680,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       required this.currencyCode,
       this.reference,
       this.contactId,
+      this.debtId,
       this.imagePath,
       required this.isRecurrenceEnabled,
       this.recurrenceType,
@@ -2181,6 +2706,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || contactId != null) {
       map['contact_id'] = Variable<int>(contactId);
+    }
+    if (!nullToAbsent || debtId != null) {
+      map['debt_id'] = Variable<int>(debtId);
     }
     if (!nullToAbsent || imagePath != null) {
       map['image_path'] = Variable<String>(imagePath);
@@ -2225,6 +2753,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       contactId: contactId == null && nullToAbsent
           ? const Value.absent()
           : Value(contactId),
+      debtId:
+          debtId == null && nullToAbsent ? const Value.absent() : Value(debtId),
       imagePath: imagePath == null && nullToAbsent
           ? const Value.absent()
           : Value(imagePath),
@@ -2263,6 +2793,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       currencyCode: serializer.fromJson<String>(json['currencyCode']),
       reference: serializer.fromJson<String?>(json['reference']),
       contactId: serializer.fromJson<int?>(json['contactId']),
+      debtId: serializer.fromJson<int?>(json['debtId']),
       imagePath: serializer.fromJson<String?>(json['imagePath']),
       isRecurrenceEnabled:
           serializer.fromJson<bool>(json['isRecurrenceEnabled']),
@@ -2289,6 +2820,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'currencyCode': serializer.toJson<String>(currencyCode),
       'reference': serializer.toJson<String?>(reference),
       'contactId': serializer.toJson<int?>(contactId),
+      'debtId': serializer.toJson<int?>(debtId),
       'imagePath': serializer.toJson<String?>(imagePath),
       'isRecurrenceEnabled': serializer.toJson<bool>(isRecurrenceEnabled),
       'recurrenceType': serializer.toJson<String?>(recurrenceType),
@@ -2311,6 +2843,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           String? currencyCode,
           Value<String?> reference = const Value.absent(),
           Value<int?> contactId = const Value.absent(),
+          Value<int?> debtId = const Value.absent(),
           Value<String?> imagePath = const Value.absent(),
           bool? isRecurrenceEnabled,
           Value<String?> recurrenceType = const Value.absent(),
@@ -2329,6 +2862,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         currencyCode: currencyCode ?? this.currencyCode,
         reference: reference.present ? reference.value : this.reference,
         contactId: contactId.present ? contactId.value : this.contactId,
+        debtId: debtId.present ? debtId.value : this.debtId,
         imagePath: imagePath.present ? imagePath.value : this.imagePath,
         isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
         recurrenceType:
@@ -2360,6 +2894,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.currencyCode,
       reference: data.reference.present ? data.reference.value : this.reference,
       contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      debtId: data.debtId.present ? data.debtId.value : this.debtId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       isRecurrenceEnabled: data.isRecurrenceEnabled.present
           ? data.isRecurrenceEnabled.value
@@ -2395,6 +2930,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('currencyCode: $currencyCode, ')
           ..write('reference: $reference, ')
           ..write('contactId: $contactId, ')
+          ..write('debtId: $debtId, ')
           ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
@@ -2418,6 +2954,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       currencyCode,
       reference,
       contactId,
+      debtId,
       imagePath,
       isRecurrenceEnabled,
       recurrenceType,
@@ -2439,6 +2976,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.currencyCode == this.currencyCode &&
           other.reference == this.reference &&
           other.contactId == this.contactId &&
+          other.debtId == this.debtId &&
           other.imagePath == this.imagePath &&
           other.isRecurrenceEnabled == this.isRecurrenceEnabled &&
           other.recurrenceType == this.recurrenceType &&
@@ -2459,6 +2997,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> currencyCode;
   final Value<String?> reference;
   final Value<int?> contactId;
+  final Value<int?> debtId;
   final Value<String?> imagePath;
   final Value<bool> isRecurrenceEnabled;
   final Value<String?> recurrenceType;
@@ -2477,6 +3016,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.currencyCode = const Value.absent(),
     this.reference = const Value.absent(),
     this.contactId = const Value.absent(),
+    this.debtId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
@@ -2496,6 +3036,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     required String currencyCode,
     this.reference = const Value.absent(),
     this.contactId = const Value.absent(),
+    this.debtId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
@@ -2518,6 +3059,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? currencyCode,
     Expression<String>? reference,
     Expression<int>? contactId,
+    Expression<int>? debtId,
     Expression<String>? imagePath,
     Expression<bool>? isRecurrenceEnabled,
     Expression<String>? recurrenceType,
@@ -2537,6 +3079,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (currencyCode != null) 'currency_code': currencyCode,
       if (reference != null) 'reference': reference,
       if (contactId != null) 'contact_id': contactId,
+      if (debtId != null) 'debt_id': debtId,
       if (imagePath != null) 'image_path': imagePath,
       if (isRecurrenceEnabled != null)
         'is_recurrence_enabled': isRecurrenceEnabled,
@@ -2561,6 +3104,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<String>? currencyCode,
       Value<String?>? reference,
       Value<int?>? contactId,
+      Value<int?>? debtId,
       Value<String?>? imagePath,
       Value<bool>? isRecurrenceEnabled,
       Value<String?>? recurrenceType,
@@ -2579,6 +3123,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       currencyCode: currencyCode ?? this.currencyCode,
       reference: reference ?? this.reference,
       contactId: contactId ?? this.contactId,
+      debtId: debtId ?? this.debtId,
       imagePath: imagePath ?? this.imagePath,
       isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
       recurrenceType: recurrenceType ?? this.recurrenceType,
@@ -2616,6 +3161,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (contactId.present) {
       map['contact_id'] = Variable<int>(contactId.value);
+    }
+    if (debtId.present) {
+      map['debt_id'] = Variable<int>(debtId.value);
     }
     if (imagePath.present) {
       map['image_path'] = Variable<String>(imagePath.value);
@@ -2661,6 +3209,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('currencyCode: $currencyCode, ')
           ..write('reference: $reference, ')
           ..write('contactId: $contactId, ')
+          ..write('debtId: $debtId, ')
           ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
@@ -3785,6 +4334,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $ContactsTable contacts = $ContactsTable(this);
+  late final $DebtsTable debts = $DebtsTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $UserSettingsTable userSettings = $UserSettingsTable(this);
   late final $NetWorthHistoryTable netWorthHistory =
@@ -3800,6 +4350,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         accounts,
         categories,
         contacts,
+        debts,
         transactions,
         userSettings,
         netWorthHistory,
@@ -3859,6 +4410,21 @@ final class $$CurrenciesTableReferences
         (f) => f.currencyCode.code.sqlEquals($_itemColumn<String>('code')!));
 
     final cache = $_typedResult.readTableOrNull(_accountsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$DebtsTable, List<Debt>> _debtsRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.debts,
+          aliasName:
+              $_aliasNameGenerator(db.currencies.code, db.debts.currencyCode));
+
+  $$DebtsTableProcessedTableManager get debtsRefs {
+    final manager = $$DebtsTableTableManager($_db, $_db.debts).filter(
+        (f) => f.currencyCode.code.sqlEquals($_itemColumn<String>('code')!));
+
+    final cache = $_typedResult.readTableOrNull(_debtsRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -3944,6 +4510,27 @@ class $$CurrenciesTableFilterComposer
             $$AccountsTableFilterComposer(
               $db: $db,
               $table: $db.accounts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> debtsRefs(
+      Expression<bool> Function($$DebtsTableFilterComposer f) f) {
+    final $$DebtsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.code,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.currencyCode,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableFilterComposer(
+              $db: $db,
+              $table: $db.debts,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -4078,6 +4665,27 @@ class $$CurrenciesTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> debtsRefs<T extends Object>(
+      Expression<T> Function($$DebtsTableAnnotationComposer a) f) {
+    final $$DebtsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.code,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.currencyCode,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.debts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
   Expression<T> transactionsRefs<T extends Object>(
       Expression<T> Function($$TransactionsTableAnnotationComposer a) f) {
     final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
@@ -4112,7 +4720,10 @@ class $$CurrenciesTableTableManager extends RootTableManager<
     (Currency, $$CurrenciesTableReferences),
     Currency,
     PrefetchHooks Function(
-        {bool currencyRatesRefs, bool accountsRefs, bool transactionsRefs})> {
+        {bool currencyRatesRefs,
+        bool accountsRefs,
+        bool debtsRefs,
+        bool transactionsRefs})> {
   $$CurrenciesTableTableManager(_$AppDatabase db, $CurrenciesTable table)
       : super(TableManagerState(
           db: db,
@@ -4172,12 +4783,14 @@ class $$CurrenciesTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {currencyRatesRefs = false,
               accountsRefs = false,
+              debtsRefs = false,
               transactionsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (currencyRatesRefs) db.currencyRates,
                 if (accountsRefs) db.accounts,
+                if (debtsRefs) db.debts,
                 if (transactionsRefs) db.transactions
               ],
               addJoins: null,
@@ -4205,6 +4818,18 @@ class $$CurrenciesTableTableManager extends RootTableManager<
                         managerFromTypedResult: (p0) =>
                             $$CurrenciesTableReferences(db, table, p0)
                                 .accountsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.currencyCode == item.code),
+                        typedResults: items),
+                  if (debtsRefs)
+                    await $_getPrefetchedData<Currency, $CurrenciesTable, Debt>(
+                        currentTable: table,
+                        referencedTable:
+                            $$CurrenciesTableReferences._debtsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$CurrenciesTableReferences(db, table, p0)
+                                .debtsRefs,
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.currencyCode == item.code),
@@ -4241,7 +4866,10 @@ typedef $$CurrenciesTableProcessedTableManager = ProcessedTableManager<
     (Currency, $$CurrenciesTableReferences),
     Currency,
     PrefetchHooks Function(
-        {bool currencyRatesRefs, bool accountsRefs, bool transactionsRefs})>;
+        {bool currencyRatesRefs,
+        bool accountsRefs,
+        bool debtsRefs,
+        bool transactionsRefs})>;
 typedef $$CurrencyRatesTableCreateCompanionBuilder = CurrencyRatesCompanion
     Function({
   Value<int> id,
@@ -5208,6 +5836,20 @@ final class $$ContactsTableReferences
     extends BaseReferences<_$AppDatabase, $ContactsTable, Contact> {
   $$ContactsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
+  static MultiTypedResultKey<$DebtsTable, List<Debt>> _debtsRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.debts,
+          aliasName: $_aliasNameGenerator(db.contacts.id, db.debts.contactId));
+
+  $$DebtsTableProcessedTableManager get debtsRefs {
+    final manager = $$DebtsTableTableManager($_db, $_db.debts)
+        .filter((f) => f.contactId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_debtsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
   static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
       _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
           db.transactions,
@@ -5247,6 +5889,27 @@ class $$ContactsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> debtsRefs(
+      Expression<bool> Function($$DebtsTableFilterComposer f) f) {
+    final $$DebtsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.contactId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableFilterComposer(
+              $db: $db,
+              $table: $db.debts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 
   Expression<bool> transactionsRefs(
       Expression<bool> Function($$TransactionsTableFilterComposer f) f) {
@@ -5319,6 +5982,27 @@ class $$ContactsTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  Expression<T> debtsRefs<T extends Object>(
+      Expression<T> Function($$DebtsTableAnnotationComposer a) f) {
+    final $$DebtsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.contactId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.debts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
   Expression<T> transactionsRefs<T extends Object>(
       Expression<T> Function($$TransactionsTableAnnotationComposer a) f) {
     final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
@@ -5352,7 +6036,7 @@ class $$ContactsTableTableManager extends RootTableManager<
     $$ContactsTableUpdateCompanionBuilder,
     (Contact, $$ContactsTableReferences),
     Contact,
-    PrefetchHooks Function({bool transactionsRefs})> {
+    PrefetchHooks Function({bool debtsRefs, bool transactionsRefs})> {
   $$ContactsTableTableManager(_$AppDatabase db, $ContactsTable table)
       : super(TableManagerState(
           db: db,
@@ -5395,13 +6079,28 @@ class $$ContactsTableTableManager extends RootTableManager<
               .map((e) =>
                   (e.readTable(table), $$ContactsTableReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: ({transactionsRefs = false}) {
+          prefetchHooksCallback: (
+              {debtsRefs = false, transactionsRefs = false}) {
             return PrefetchHooks(
               db: db,
-              explicitlyWatchedTables: [if (transactionsRefs) db.transactions],
+              explicitlyWatchedTables: [
+                if (debtsRefs) db.debts,
+                if (transactionsRefs) db.transactions
+              ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
                 return [
+                  if (debtsRefs)
+                    await $_getPrefetchedData<Contact, $ContactsTable, Debt>(
+                        currentTable: table,
+                        referencedTable:
+                            $$ContactsTableReferences._debtsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$ContactsTableReferences(db, table, p0).debtsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.contactId == item.id),
+                        typedResults: items),
                   if (transactionsRefs)
                     await $_getPrefetchedData<Contact, $ContactsTable,
                             Transaction>(
@@ -5433,7 +6132,494 @@ typedef $$ContactsTableProcessedTableManager = ProcessedTableManager<
     $$ContactsTableUpdateCompanionBuilder,
     (Contact, $$ContactsTableReferences),
     Contact,
-    PrefetchHooks Function({bool transactionsRefs})>;
+    PrefetchHooks Function({bool debtsRefs, bool transactionsRefs})>;
+typedef $$DebtsTableCreateCompanionBuilder = DebtsCompanion Function({
+  Value<int> id,
+  Value<int?> contactId,
+  Value<String> direction,
+  Value<String?> description,
+  required double amount,
+  required String currencyCode,
+  required DateTime date,
+  Value<bool> isSettled,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+typedef $$DebtsTableUpdateCompanionBuilder = DebtsCompanion Function({
+  Value<int> id,
+  Value<int?> contactId,
+  Value<String> direction,
+  Value<String?> description,
+  Value<double> amount,
+  Value<String> currencyCode,
+  Value<DateTime> date,
+  Value<bool> isSettled,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+
+final class $$DebtsTableReferences
+    extends BaseReferences<_$AppDatabase, $DebtsTable, Debt> {
+  $$DebtsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ContactsTable _contactIdTable(_$AppDatabase db) => db.contacts
+      .createAlias($_aliasNameGenerator(db.debts.contactId, db.contacts.id));
+
+  $$ContactsTableProcessedTableManager? get contactId {
+    final $_column = $_itemColumn<int>('contact_id');
+    if ($_column == null) return null;
+    final manager = $$ContactsTableTableManager($_db, $_db.contacts)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_contactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $CurrenciesTable _currencyCodeTable(_$AppDatabase db) =>
+      db.currencies.createAlias(
+          $_aliasNameGenerator(db.debts.currencyCode, db.currencies.code));
+
+  $$CurrenciesTableProcessedTableManager get currencyCode {
+    final $_column = $_itemColumn<String>('currency_code')!;
+
+    final manager = $$CurrenciesTableTableManager($_db, $_db.currencies)
+        .filter((f) => f.code.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_currencyCodeTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
+      _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+          db.transactions,
+          aliasName: $_aliasNameGenerator(db.debts.id, db.transactions.debtId));
+
+  $$TransactionsTableProcessedTableManager get transactionsRefs {
+    final manager = $$TransactionsTableTableManager($_db, $_db.transactions)
+        .filter((f) => f.debtId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_transactionsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
+
+class $$DebtsTableFilterComposer extends Composer<_$AppDatabase, $DebtsTable> {
+  $$DebtsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get direction => $composableBuilder(
+      column: $table.direction, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get amount => $composableBuilder(
+      column: $table.amount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+      column: $table.date, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isSettled => $composableBuilder(
+      column: $table.isSettled, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  $$ContactsTableFilterComposer get contactId {
+    final $$ContactsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactId,
+        referencedTable: $db.contacts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ContactsTableFilterComposer(
+              $db: $db,
+              $table: $db.contacts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableFilterComposer get currencyCode {
+    final $$CurrenciesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.currencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableFilterComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  Expression<bool> transactionsRefs(
+      Expression<bool> Function($$TransactionsTableFilterComposer f) f) {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.transactions,
+        getReferencedColumn: (t) => t.debtId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$TransactionsTableFilterComposer(
+              $db: $db,
+              $table: $db.transactions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+}
+
+class $$DebtsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DebtsTable> {
+  $$DebtsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get direction => $composableBuilder(
+      column: $table.direction, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get amount => $composableBuilder(
+      column: $table.amount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+      column: $table.date, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isSettled => $composableBuilder(
+      column: $table.isSettled, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  $$ContactsTableOrderingComposer get contactId {
+    final $$ContactsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactId,
+        referencedTable: $db.contacts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ContactsTableOrderingComposer(
+              $db: $db,
+              $table: $db.contacts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableOrderingComposer get currencyCode {
+    final $$CurrenciesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.currencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableOrderingComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$DebtsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DebtsTable> {
+  $$DebtsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get direction =>
+      $composableBuilder(column: $table.direction, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => column);
+
+  GeneratedColumn<double> get amount =>
+      $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSettled =>
+      $composableBuilder(column: $table.isSettled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ContactsTableAnnotationComposer get contactId {
+    final $$ContactsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactId,
+        referencedTable: $db.contacts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ContactsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.contacts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableAnnotationComposer get currencyCode {
+    final $$CurrenciesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.currencyCode,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  Expression<T> transactionsRefs<T extends Object>(
+      Expression<T> Function($$TransactionsTableAnnotationComposer a) f) {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.transactions,
+        getReferencedColumn: (t) => t.debtId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$TransactionsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.transactions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+}
+
+class $$DebtsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $DebtsTable,
+    Debt,
+    $$DebtsTableFilterComposer,
+    $$DebtsTableOrderingComposer,
+    $$DebtsTableAnnotationComposer,
+    $$DebtsTableCreateCompanionBuilder,
+    $$DebtsTableUpdateCompanionBuilder,
+    (Debt, $$DebtsTableReferences),
+    Debt,
+    PrefetchHooks Function(
+        {bool contactId, bool currencyCode, bool transactionsRefs})> {
+  $$DebtsTableTableManager(_$AppDatabase db, $DebtsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DebtsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DebtsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DebtsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> contactId = const Value.absent(),
+            Value<String> direction = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            Value<double> amount = const Value.absent(),
+            Value<String> currencyCode = const Value.absent(),
+            Value<DateTime> date = const Value.absent(),
+            Value<bool> isSettled = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              DebtsCompanion(
+            id: id,
+            contactId: contactId,
+            direction: direction,
+            description: description,
+            amount: amount,
+            currencyCode: currencyCode,
+            date: date,
+            isSettled: isSettled,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> contactId = const Value.absent(),
+            Value<String> direction = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            required double amount,
+            required String currencyCode,
+            required DateTime date,
+            Value<bool> isSettled = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              DebtsCompanion.insert(
+            id: id,
+            contactId: contactId,
+            direction: direction,
+            description: description,
+            amount: amount,
+            currencyCode: currencyCode,
+            date: date,
+            isSettled: isSettled,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) =>
+                  (e.readTable(table), $$DebtsTableReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: (
+              {contactId = false,
+              currencyCode = false,
+              transactionsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (transactionsRefs) db.transactions],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (contactId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.contactId,
+                    referencedTable: $$DebtsTableReferences._contactIdTable(db),
+                    referencedColumn:
+                        $$DebtsTableReferences._contactIdTable(db).id,
+                  ) as T;
+                }
+                if (currencyCode) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.currencyCode,
+                    referencedTable:
+                        $$DebtsTableReferences._currencyCodeTable(db),
+                    referencedColumn:
+                        $$DebtsTableReferences._currencyCodeTable(db).code,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (transactionsRefs)
+                    await $_getPrefetchedData<Debt, $DebtsTable, Transaction>(
+                        currentTable: table,
+                        referencedTable:
+                            $$DebtsTableReferences._transactionsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$DebtsTableReferences(db, table, p0)
+                                .transactionsRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.debtId == item.id),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$DebtsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $DebtsTable,
+    Debt,
+    $$DebtsTableFilterComposer,
+    $$DebtsTableOrderingComposer,
+    $$DebtsTableAnnotationComposer,
+    $$DebtsTableCreateCompanionBuilder,
+    $$DebtsTableUpdateCompanionBuilder,
+    (Debt, $$DebtsTableReferences),
+    Debt,
+    PrefetchHooks Function(
+        {bool contactId, bool currencyCode, bool transactionsRefs})>;
 typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
     Function({
   Value<int> id,
@@ -5443,6 +6629,7 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   required String currencyCode,
   Value<String?> reference,
   Value<int?> contactId,
+  Value<int?> debtId,
   Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
@@ -5463,6 +6650,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<String> currencyCode,
   Value<String?> reference,
   Value<int?> contactId,
+  Value<int?> debtId,
   Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
@@ -5534,6 +6722,20 @@ final class $$TransactionsTableReferences
     final manager = $$ContactsTableTableManager($_db, $_db.contacts)
         .filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_contactIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $DebtsTable _debtIdTable(_$AppDatabase db) => db.debts
+      .createAlias($_aliasNameGenerator(db.transactions.debtId, db.debts.id));
+
+  $$DebtsTableProcessedTableManager? get debtId {
+    final $_column = $_itemColumn<int>('debt_id');
+    if ($_column == null) return null;
+    final manager = $$DebtsTableTableManager($_db, $_db.debts)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_debtIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: [item]));
@@ -5666,6 +6868,26 @@ class $$TransactionsTableFilterComposer
             $$ContactsTableFilterComposer(
               $db: $db,
               $table: $db.contacts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$DebtsTableFilterComposer get debtId {
+    final $$DebtsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.debtId,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableFilterComposer(
+              $db: $db,
+              $table: $db.debts,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5808,6 +7030,26 @@ class $$TransactionsTableOrderingComposer
             ));
     return composer;
   }
+
+  $$DebtsTableOrderingComposer get debtId {
+    final $$DebtsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.debtId,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableOrderingComposer(
+              $db: $db,
+              $table: $db.debts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TransactionsTableAnnotationComposer
@@ -5937,6 +7179,26 @@ class $$TransactionsTableAnnotationComposer
             ));
     return composer;
   }
+
+  $$DebtsTableAnnotationComposer get debtId {
+    final $$DebtsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.debtId,
+        referencedTable: $db.debts,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$DebtsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.debts,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TransactionsTableTableManager extends RootTableManager<
@@ -5951,7 +7213,11 @@ class $$TransactionsTableTableManager extends RootTableManager<
     (Transaction, $$TransactionsTableReferences),
     Transaction,
     PrefetchHooks Function(
-        {bool categoryId, bool accountId, bool currencyCode, bool contactId})> {
+        {bool categoryId,
+        bool accountId,
+        bool currencyCode,
+        bool contactId,
+        bool debtId})> {
   $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
       : super(TableManagerState(
           db: db,
@@ -5970,6 +7236,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String> currencyCode = const Value.absent(),
             Value<String?> reference = const Value.absent(),
             Value<int?> contactId = const Value.absent(),
+            Value<int?> debtId = const Value.absent(),
             Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
@@ -5989,6 +7256,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             currencyCode: currencyCode,
             reference: reference,
             contactId: contactId,
+            debtId: debtId,
             imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
@@ -6008,6 +7276,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             required String currencyCode,
             Value<String?> reference = const Value.absent(),
             Value<int?> contactId = const Value.absent(),
+            Value<int?> debtId = const Value.absent(),
             Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
@@ -6027,6 +7296,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             currencyCode: currencyCode,
             reference: reference,
             contactId: contactId,
+            debtId: debtId,
             imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
@@ -6048,7 +7318,8 @@ class $$TransactionsTableTableManager extends RootTableManager<
               {categoryId = false,
               accountId = false,
               currencyCode = false,
-              contactId = false}) {
+              contactId = false,
+              debtId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -6106,6 +7377,16 @@ class $$TransactionsTableTableManager extends RootTableManager<
                         $$TransactionsTableReferences._contactIdTable(db).id,
                   ) as T;
                 }
+                if (debtId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.debtId,
+                    referencedTable:
+                        $$TransactionsTableReferences._debtIdTable(db),
+                    referencedColumn:
+                        $$TransactionsTableReferences._debtIdTable(db).id,
+                  ) as T;
+                }
 
                 return state;
               },
@@ -6129,7 +7410,11 @@ typedef $$TransactionsTableProcessedTableManager = ProcessedTableManager<
     (Transaction, $$TransactionsTableReferences),
     Transaction,
     PrefetchHooks Function(
-        {bool categoryId, bool accountId, bool currencyCode, bool contactId})>;
+        {bool categoryId,
+        bool accountId,
+        bool currencyCode,
+        bool contactId,
+        bool debtId})>;
 typedef $$UserSettingsTableCreateCompanionBuilder = UserSettingsCompanion
     Function({
   Value<int> id,
@@ -6880,6 +8165,8 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$ContactsTableTableManager get contacts =>
       $$ContactsTableTableManager(_db, _db.contacts);
+  $$DebtsTableTableManager get debts =>
+      $$DebtsTableTableManager(_db, _db.debts);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$UserSettingsTableTableManager get userSettings =>

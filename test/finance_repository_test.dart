@@ -507,4 +507,102 @@ void main() {
     expect(settings.hasCompletedOnboarding, isTrue);
     expect(settings.profilePicturePath, '/tmp/pic.jpg');
   });
+
+  test('linked transactions reduce a debt and its open totals', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    await repo.addDebt(DebtsCompanion.insert(
+      direction: const drift.Value('debtor'),
+      amount: 100,
+      currencyCode: 'USD',
+      date: DateTime(2026, 1, 1),
+    ));
+    final debt = (await repo.getAllDebts()).single;
+    expect(await repo.getDebtRemaining(debt), closeTo(100, 0.001));
+
+    Future<void> pay(double amount) => repo.createTransaction(
+        TransactionsCompanion(
+          amount: drift.Value(-amount),
+          accountId: drift.Value(account.id),
+          currencyCode: const drift.Value('USD'),
+          date: drift.Value(DateTime(2026, 2, 1)),
+          debtId: drift.Value(debt.id),
+        ));
+
+    await pay(40);
+    expect(await repo.getDebtRemaining((await repo.getDebtById(debt.id))!),
+        closeTo(60, 0.001));
+    expect((await repo.getOpenDebtTotalsInBase()).owedToMe, closeTo(60, 0.001));
+
+    // Another expense in a different currency is converted to the debt's
+    // currency for the balance, and still counts in base totals.
+    await repo.addCurrency(CurrenciesCompanion.insert(
+      code: 'MXN',
+      name: 'Mexican Peso',
+      symbol: r'$',
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'MXN',
+      rate: 20.0,
+      date: DateTime(2026, 2, 1),
+    ));
+    await repo.createTransaction(TransactionsCompanion(
+      amount: const drift.Value(-200),
+      accountId: drift.Value(account.id),
+      currencyCode: const drift.Value('MXN'),
+      date: drift.Value(DateTime(2026, 2, 2)),
+      debtId: drift.Value(debt.id),
+    ));
+    // 200 MXN @ 20 = 10 USD paid toward a USD debt.
+    expect(await repo.getDebtRemaining((await repo.getDebtById(debt.id))!),
+        closeTo(50, 0.001));
+
+    // Full repayment auto-empties the balance and drops it from totals.
+    await pay(50);
+    expect(await repo.getDebtRemaining((await repo.getDebtById(debt.id))!),
+        closeTo(0, 0.001));
+    expect((await repo.getOpenDebtTotalsInBase()).owedToMe, closeTo(0, 0.001));
+  });
+
+  test('deleting a debt unlinks its payments', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    await repo.addDebt(DebtsCompanion.insert(
+      direction: const drift.Value('debtor'),
+      amount: 100,
+      currencyCode: 'USD',
+      date: DateTime(2026, 1, 1),
+    ));
+    final debt = (await repo.getAllDebts()).single;
+
+    await repo.createTransaction(TransactionsCompanion(
+      amount: const drift.Value(-30),
+      accountId: drift.Value(account.id),
+      currencyCode: const drift.Value('USD'),
+      date: drift.Value(DateTime(2026, 2, 1)),
+      debtId: drift.Value(debt.id),
+    ));
+
+    await repo.deleteDebt(debt.id);
+    final tx = (await repo.db.select(repo.db.transactions).get()).single;
+    expect(tx.debtId, isNull);
+  });
 }

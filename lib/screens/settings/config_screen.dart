@@ -9,6 +9,7 @@ import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
 import 'package:finance_mvp/screens/settings/profile_screen.dart';
 import 'package:finance_mvp/screens/revaluation/revaluation_screen.dart';
 import 'package:finance_mvp/screens/contacts/contacts_screen.dart';
+import 'package:finance_mvp/screens/debts/debts_screen.dart';
 import 'package:provider/provider.dart';
 
 class ConfigScreen extends StatelessWidget {
@@ -93,6 +94,17 @@ class ConfigScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ContactsScreen()),
+              );
+            },
+          ),
+          _SettingTile(
+            icon: Icons.handshake_outlined,
+            title: 'Debts & Debtors',
+            subtitle: 'Track loans you gave or received',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DebtsScreen()),
               );
             },
           ),

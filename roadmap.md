@@ -96,6 +96,18 @@ element. Checks the "dashboard usable" ask in one pass.
 
 ## 3. Phase 2 — Core features (requested)
 
+0. ✅ **Debts & Debtors** — new `Debts` table (`direction` = debtor/creditor,
+   amount, currency, contact FK, description, date, `isSettled`, timestamps;
+   v9 migration). Settings → **Debts & Debtors** shows base-currency totals of
+   what others owe me vs what I owe (live `convertAmount`), open + settled
+   groups, and add/edit (with contact picker), settle/reopen, delete per row.
+   Transactions can be linked as **payments** against a debt (`debtId` FK,
+   v10 migration): each linked expense reduces the debt's outstanding amount
+   (valued in the debt's currency, converted at today's rate when currencies
+   differ); fully paid debts auto-settle and drop out of totals; deleting a
+   debt unlinks its payments.
+   Deferred: partial payments/installments, per-contact debt summary in
+   analytics.
 1. **Export CSV / Excel.** (Requested.) CSV first (zero new deps — write to
    `getApplicationDocumentsDirectory`, share via `share_plus`); Excel/XLSX later
    (`excel` package). Exports: transactions (with `reference`, `contact`,
@@ -113,6 +125,11 @@ element. Checks the "dashboard usable" ask in one pass.
 4. **Goals & savings targets.** New `goals` table (name, target currency, target
    amount, deadline, icon/color) + real cards in place of the dashboard fakes.
    Could reuse the account/exchange plumbing already built.
+5. **Contact tags & avatars.** Add a `tag` column (+ optional photo path) to
+   `Contacts`, surface the Client/VIP/Vendor filter chips and avatar/photo tiles
+   from the reference design (`contact_widgets.dart`, `contact_picker_screen.dart`,
+   `contacts_screen.dart`), and support tag management in the contact form.
+   Skipped during the initial contact work — no classification existed yet.
 
 ## 4. Phase 3 — Recurring, analytics, data safety
 
@@ -139,4 +156,4 @@ element. Checks the "dashboard usable" ask in one pass.
   cards (`PLAN.md` section context).
 - Big-fix ledger from earlier sessions: migration guards + schema self-heal
   (unrecoverable DBs are rebuilt from current schema), base-currency
-  `baseCurrencyAmount` guard. All green: 38 tests.
+  `baseCurrencyAmount` guard. All green: 45 tests.

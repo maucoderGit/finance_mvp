@@ -462,6 +462,90 @@ class FinanceRepository {
         await (db.delete(db.contacts)..where((c) => c.id.equals(id))).go();
       });
 
+  // ── Debts ──
+
+  Future<List<Debt>> getAllDebts() => (db.select(db.debts)).get();
+
+  Future<Debt?> getDebtById(int id) {
+    return (db.select(db.debts)..where((d) => d.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  /// Transactions recorded as payments against this debt (newest first).
+  Future<List<Transaction>> getTransactionsForDebt(int debtId) {
+    final query = db.select(db.transactions)
+      ..where((t) => t.debtId.equals(debtId))
+      ..orderBy([(t) => drift.OrderingTerm.desc(t.date)]);
+    return query.get();
+  }
+
+  Future<void> addDebt(DebtsCompanion debt) => db.into(db.debts).insert(debt);
+
+  Future<void> updateDebt(Debt debt) => db.update(db.debts).replace(debt);
+
+  /// Deletes a debt and unlinks transactions linked as payments (FK guard).
+  Future<void> deleteDebt(int id) => db.transaction(() async {
+        await (db.update(db.transactions)
+              ..where((t) => t.debtId.equals(id)))
+            .write(const TransactionsCompanion(debtId: drift.Value(null)));
+        await (db.delete(db.debts)..where((d) => d.id.equals(id))).go();
+      });
+
+  /// Outstanding balance of a debt: original [Debt.amount] minus the total
+  /// value of transactions linked as payments, expressed in the debt's
+  /// currency. Payments are valued from each transaction's base-currency
+  /// amount (rate at transaction creation), then converted to the debt
+  /// currency at today's rate when they differ.
+  Future<double> getDebtRemaining(Debt debt) async {
+    final payments = await (db.select(db.transactions)
+          ..where((t) => t.debtId.equals(debt.id)))
+        .get();
+    final base = await getBaseCurrencyCode();
+
+    var paidInBase = 0.0;
+    for (final tx in payments) {
+      final inBase = tx.baseCurrencyAmount ??
+          (tx.currencyCode == base
+              ? tx.amount
+              : await convertAmount(
+                  amount: tx.amount, fromCode: tx.currencyCode,
+                  toCode: base));
+      paidInBase += inBase.abs();
+    }
+
+    final paidInDebtCurrency = debt.currencyCode == base
+        ? paidInBase
+        : await convertAmount(
+            amount: paidInBase, fromCode: base, toCode: debt.currencyCode);
+    return (debt.amount - paidInDebtCurrency).clamp(0.0, debt.amount);
+  }
+
+  /// Totals of unpaid debts in the base currency: [owedToMe] is what others
+  /// owe me, [owedByMe] what I owe others. Fully paid and manually settled
+  /// debts are excluded.
+  Future<({double owedToMe, double owedByMe})> getOpenDebtTotalsInBase() async {
+    final base = await getBaseCurrencyCode();
+    final debts =
+        await (db.select(db.debts)..where((d) => d.isSettled.equals(false)))
+            .get();
+    double owedToMe = 0, owedByMe = 0;
+    for (final debt in debts) {
+      final remaining = await getDebtRemaining(debt);
+      if (remaining <= 0) continue;
+      final inBase = await convertAmount(
+        amount: remaining,
+        fromCode: debt.currencyCode,
+        toCode: base,
+      );
+      if (debt.direction == 'creditor') {
+        owedByMe += inBase;
+      } else {
+        owedToMe += inBase;
+      }
+    }
+    return (owedToMe: owedToMe, owedByMe: owedByMe);
+  }
+
   // ── Currency Conversion ──
 
   Future<double> convertAmount({
