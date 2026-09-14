@@ -55,6 +55,14 @@ class Categories extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+class Contacts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get phone => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 class Transactions extends Table {
   IntColumn get id => integer().autoIncrement()();
   RealColumn get amount => real()();
@@ -63,7 +71,10 @@ class Transactions extends Table {
   IntColumn get accountId => integer().references(Accounts, #id)();
   TextColumn get currencyCode => text().references(Currencies, #code)();
   TextColumn get reference => text().nullable()();
-  TextColumn get contact => text().nullable()();
+
+  /// The person/vendor this transaction is with. Relational so a contact can
+  /// be tracked across many transactions (spending per contact, contacts list).
+  IntColumn get contactId => integer().nullable().references(Contacts, #id)();
   TextColumn get imagePath => text().nullable()();
   BoolColumn get isRecurrenceEnabled =>
       boolean().withDefault(const Constant(false))();
@@ -122,6 +133,7 @@ class NetWorthHistory extends Table {
     CurrencyRates,
     Accounts,
     Categories,
+    Contacts,
     Transactions,
     UserSettings,
     NetWorthHistory,
@@ -132,7 +144,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -194,6 +206,15 @@ class AppDatabase extends _$AppDatabase {
           if (from < 7) {
             await _addColumnIfMissing(
                 m, transactions, transactions.transferGroupId);
+          }
+          if (from < 8) {
+            await _createTableIfMissing(m, contacts);
+            await _addColumnIfMissing(
+                m, transactions, transactions.contactId);
+            // Contact moved from a free-text column to a relational FK.
+            if (await _hasColumns(m, 'transactions', ['contact'])) {
+              await m.dropColumn(transactions, 'contact');
+            }
           }
         },
         beforeOpen: (details) async {

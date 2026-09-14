@@ -427,6 +427,41 @@ class FinanceRepository {
     return (db.select(db.categories)).get();
   }
 
+  // ── Contacts ──
+
+  Future<List<Contact>> getAllContacts() {
+    return (db.select(db.contacts)).get();
+  }
+
+  Future<Contact?> getContactById(int id) {
+    return (db.select(db.contacts)..where((c) => c.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  /// Returns the existing contact with that exact name, or creates it. A
+  /// [phone] is only stored on creation.
+  Future<Contact> findOrCreateContact(String name, {String? phone}) async {
+    final trimmed = name.trim();
+    final existing = await (db.select(db.contacts)
+          ..where((c) => c.name.equals(trimmed)))
+        .getSingleOrNull();
+    if (existing != null) return existing;
+    return db.into(db.contacts).insertReturning(
+        ContactsCompanion.insert(name: trimmed, phone: drift.Value(phone)));
+  }
+
+  Future<void> updateContact(Contact contact) =>
+      db.update(db.contacts).replace(contact);
+
+  /// Unlinks live transactions before removing the contact row (FK guard).
+  Future<void> deleteContact(int id) => db.transaction(() async {
+        await (db.update(db.transactions)
+              ..where((t) => t.contactId.equals(id)))
+            .write(
+                const TransactionsCompanion(contactId: drift.Value(null)));
+        await (db.delete(db.contacts)..where((c) => c.id.equals(id))).go();
+      });
+
   // ── Currency Conversion ──
 
   Future<double> convertAmount({

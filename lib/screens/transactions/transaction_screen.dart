@@ -5,6 +5,8 @@ import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/screens/contacts/contact_picker_screen.dart';
+import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:finance_mvp/screens/settings/category_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/services/finance/fx_delta.dart';
@@ -38,6 +40,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
   bool _isRecurrenceEnabled = true;
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _rateController = TextEditingController();
+
+  /// The contact linked to this transaction; choosing/replacing it happens
+  /// from the full-screen [ContactPickerScreen].
+  db.Contact? _selectedContact;
   db.Account? _selectedAccount;
   Map? category;
   String? _imagePath;
@@ -256,6 +262,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
     setState(() {
       _selectedAccount = fromAccount;
     });
+
+    // Resolve the stored contact so the picker opens with it selected.
+    if (existing.contactId != null) {
+      final contact = await repo.getContactById(existing.contactId!);
+      if (contact != null && mounted) {
+        setState(() => _selectedContact = contact);
+      }
+    }
+
     await _loadConversionPreview();
   }
 
@@ -429,6 +444,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       categoryId: Value(category?['id']),
       currencyCode: Value(_selectedAccount!.currencyCode),
       reference: Value(_referenceController.text),
+      contactId: Value(_selectedContact?.id),
       isRecurrenceEnabled: Value(_isRecurrenceEnabled),
       date: Value(DateTime.now()),
       exchangeRateAtCreation: Value(rateAtCreation),
@@ -1395,25 +1411,76 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+Future<void> _openContactPicker() async {
+    final picked = await Navigator.of(context).push<db.Contact>(
+      MaterialPageRoute(builder: (_) => const ContactPickerScreen()),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedContact = picked);
+    }
+  }
+
   Widget _buildContactField() {
+    final contact = _selectedContact;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: context.colors.fieldsBackground,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.person_outline, color: context.colors.textLight),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Add contact (optional)',
-              style: TextStyle(fontSize: 18, color: context.colors.textLight),
-            ),
+      child: InkWell(
+        onTap: _openContactPicker,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              if (contact != null) ...[
+                ContactAvatar(name: contact.name, size: 36),
+                const SizedBox(width: 12),
+              ] else ...[
+                Icon(Icons.person_outline, color: context.colors.textLight),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: contact == null
+                    ? Text(
+                        'Select contact (optional)',
+                        style: TextStyle(color: context.colors.textLight),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            contact.name,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: context.colors.textDark,
+                            ),
+                          ),
+                          if (contact.phone?.trim().isNotEmpty == true)
+                            Text(
+                              contact.phone!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.colors.textLight,
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+              if (contact != null)
+                IconButton(
+                  tooltip: 'Remove contact',
+                  icon: Icon(Icons.close,
+                      size: 18, color: context.colors.textLight),
+                  onPressed: () => setState(() => _selectedContact = null),
+                )
+              else
+                Icon(Icons.chevron_right, color: context.colors.textLight),
+            ],
           ),
-          Icon(Icons.add_circle_outline, color: context.colors.textLight),
-        ],
+        ),
       ),
     );
   }

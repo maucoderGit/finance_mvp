@@ -8,6 +8,7 @@ import 'package:finance_mvp/screens/settings/currency_screen.dart';
 import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
 import 'package:finance_mvp/screens/settings/profile_screen.dart';
 import 'package:finance_mvp/screens/revaluation/revaluation_screen.dart';
+import 'package:finance_mvp/screens/contacts/contacts_screen.dart';
 import 'package:provider/provider.dart';
 
 class ConfigScreen extends StatelessWidget {
@@ -81,6 +82,17 @@ class ConfigScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const CurrencyScreen()),
+              );
+            },
+          ),
+          _SettingTile(
+            icon: Icons.contacts_outlined,
+            title: 'Contacts',
+            subtitle: 'View and manage all your contacts',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ContactsScreen()),
               );
             },
           ),

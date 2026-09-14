@@ -26,7 +26,7 @@ class _TransactionListViewState extends State<TransactionListView> {
               style: TextStyle(color: context.colors.textLight)));
     }
 
-    final symbolsFuture = context.read<FinanceRepository>().getAllCurrencies();
+    final repo = context.read<FinanceRepository>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,12 +41,23 @@ class _TransactionListViewState extends State<TransactionListView> {
             ),
         ),
         // The list of transactions (space-y-3)
-        FutureBuilder<List<db.Currency>>(
-          future: symbolsFuture,
+        FutureBuilder<
+            ({List<db.Currency> currencies, List<db.Contact> contacts})>(
+          future: () async {
+            final currencies = await repo.getAllCurrencies();
+            final contacts = await repo.getAllContacts();
+            return (currencies: currencies, contacts: contacts);
+          }(),
           builder: (context, snapshot) {
             final symbols = {
-              for (final c in snapshot.data ?? const <db.Currency>[])
+              for (final c in snapshot.data?.currencies ??
+                  const <db.Currency>[])
                 c.code: c.symbol,
+            };
+            final contactNames = {
+              for (final c in snapshot.data?.contacts ??
+                  const <db.Contact>[])
+                c.id: c.name,
             };
             return SingleChildScrollView(
               scrollDirection: Axis.vertical,
@@ -61,6 +72,9 @@ class _TransactionListViewState extends State<TransactionListView> {
                       return TransactionItem(
                         transaction: t,
                         symbol: symbols[t.currencyCode] ?? t.currencyCode,
+                        contactName: t.contactId == null
+                            ? null
+                            : contactNames[t.contactId],
                       );
                     },
                     separatorBuilder: (context, index) =>
@@ -77,9 +91,13 @@ class _TransactionListViewState extends State<TransactionListView> {
 class TransactionItem extends StatelessWidget {
   final db.Transaction transaction;
   final String symbol;
+  final String? contactName;
 
   const TransactionItem(
-      {super.key, required this.transaction, required this.symbol});
+      {super.key,
+      required this.transaction,
+      required this.symbol,
+      this.contactName});
 
   @override
   Widget build(BuildContext context) {
@@ -164,6 +182,14 @@ class TransactionItem extends StatelessWidget {
                         color: Theme.of(context).textTheme.bodySmall?.color,
                       ),
                     ),
+                    if (contactName?.trim().isNotEmpty == true)
+                      Text(
+                        contactName!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
                   ],
                 ),
               ],

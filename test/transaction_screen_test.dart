@@ -168,4 +168,78 @@ void main() {
 
     await db.close();
   });
+
+  testWidgets('contact picker saves a contact and prefills on edit',
+      (tester) async {
+    final (db, repo) = await pumpTransactionScreen(tester, currencyCodes: ['USD']);
+
+    await tapNumpad(tester, ['5', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+
+    // Open the picker and register a new contact from its quick-add.
+    await tester.tap(find.text('Select contact (optional)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'La Casa');
+    await tester.tap(find.text('Add contact'));
+    await tester.pumpAndSettle();
+
+    // Picker popped with the new contact; the row shows it. Save.
+    expect(find.text('La Casa'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    var transactions = await repo.db.select(repo.db.transactions).get();
+    expect(transactions, hasLength(1));
+    expect(transactions.single.contactId, isNotNull);
+    final contacts = await repo.db.select(repo.db.contacts).get();
+    expect(contacts.single.name, 'La Casa');
+    expect(contacts.single.id, transactions.single.contactId);
+
+    // Re-open for editing: the contact row is prefilled.
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push(MaterialPageRoute(
+        builder: (_) =>
+            TransactionScreen(existingTransaction: transactions.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    expect(find.text('La Casa'), findsOneWidget);
+
+    // Pick a different existing contact from the list.
+    await tester.tap(find.text('La Casa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('La Casa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    transactions = await repo.db.select(repo.db.transactions).get();
+    final allContacts = await repo.db.select(repo.db.contacts).get();
+    expect(
+      allContacts.firstWhere((c) => c.id == transactions.single.contactId).name,
+      'La Casa',
+    );
+
+    // Re-open once more: clearing via the row's x removes the contact.
+    navigator.push(MaterialPageRoute(
+        builder: (_) =>
+            TransactionScreen(existingTransaction: transactions.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byWidgetPredicate(
+        (w) => w is Icon && w.icon == Icons.close && w.size == 18));
+    await tester.pumpAndSettle();
+    expect(find.text('Select contact (optional)'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    transactions = await repo.db.select(repo.db.transactions).get();
+    expect(transactions.single.contactId, isNull);
+
+    await db.close();
+  });
 }
