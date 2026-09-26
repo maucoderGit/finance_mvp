@@ -90,7 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               const _UserGreeting(),
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-              const _RevaluationSummaryStrip(),
               StreamBuilder<MonthlySummary>(
                   stream: repo.watchMonthlySummary(_selectedDate),
                   builder: (context, snapshot) {
@@ -234,9 +233,9 @@ class _MonthlySummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _FxImpactCard(
-            amount: fxImpactText,
-            positive: fxImpactPositive,
+          _FxCard(
+            netImpact: fxImpactText,
+            netPositive: fxImpactPositive,
           ),
         ],
       ),
@@ -281,17 +280,22 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-/// Compact strip showing the month's Net FX Impact (sum of fxDelta):
-/// green for positive gap savings, red for negative replacement losses.
-class _FxImpactCard extends StatelessWidget {
-  final String amount;
-  final bool positive;
+/// Single card grouping both FX metrics: the tappable total unrealized
+/// gain/loss (top) and the month's Net FX Impact (bottom, sum of fxDelta).
+/// Green for gains/savings, red for losses.
+class _FxCard extends StatelessWidget {
+  final String netImpact;
+  final bool netPositive;
 
-  const _FxImpactCard({required this.amount, required this.positive});
+  const _FxCard({required this.netImpact, required this.netPositive});
 
   @override
   Widget build(BuildContext context) {
-    final color = positive ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    final summary = context.watch<RevaluationProvider>().summary;
+    final gain = summary?.totalUnrealizedGainLoss ?? 0.0;
+    final unrealizedColor = gain >= 0 ? _green : _red;
+    final netColor = netPositive ? _green : _red;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -303,6 +307,45 @@ class _FxImpactCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          InkWell(
+            onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
+            child: Row(
+              children: [
+                Icon(gain >= 0 ? Icons.trending_up : Icons.trending_down,
+                    color: unrealizedColor, size: 18),
+                const SizedBox(width: 6),
+                Text('UNREALIZED FX',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: context.colors.textLight,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5)),
+                const Spacer(),
+                Icon(Icons.chevron_right,
+                    color: context.colors.textLight, size: 16),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            summary == null
+                ? '—'
+                : '${gain >= 0 ? '+' : ''}${formatMoney(gain)} USD',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: unrealizedColor,
+            ),
+          ),
+          if (summary?.purchasingPowerChangePercent != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${summary!.nationalCurrencyCode} devalued '
+              '${summary.purchasingPowerChangePercent!.toStringAsFixed(1)}% in 12 months',
+              style: TextStyle(color: context.colors.textLight, fontSize: 12),
+            ),
+          ],
+          Divider(height: 24, color: context.colors.cardBorder),
           Text('NET FX IMPACT',
               style: TextStyle(
                   fontSize: 12,
@@ -310,14 +353,14 @@ class _FxImpactCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5)),
           const SizedBox(height: 4),
-          Text(amount,
+          Text(netImpact,
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: color)),
+                  color: netColor)),
           const SizedBox(height: 2),
           Text(
-            positive ? 'Gap Savings' : 'Replacement Loss',
+            netPositive ? 'Gap Savings' : 'Replacement Loss',
             style: TextStyle(color: context.colors.textLight, fontSize: 12),
           ),
         ],
@@ -326,78 +369,5 @@ class _FxImpactCard extends StatelessWidget {
   }
 }
 
-/// Compact, tappable strip showing total unrealized FX gain/loss.
-class _RevaluationSummaryStrip extends StatelessWidget {
-  const _RevaluationSummaryStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    final revaluationProvider = context.watch<RevaluationProvider>();
-    final summary = revaluationProvider.summary;
-
-    final isGain = summary?.totalUnrealizedGainLoss != null
-        ? summary!.totalUnrealizedGainLoss >= 0
-        : true;
-    final color = isGain ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
-    final icon = isGain ? Icons.trending_up : Icons.trending_down;
-    final formatted =
-        summary == null ? '—' : formatMoney(summary.totalUnrealizedGainLoss);
-
-    return InkWell(
-      onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.colors.primaryLight.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: context.colors.cardBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'UNREALIZED FX',
-                  style: TextStyle(
-                    color: context.colors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const Spacer(),
-                Icon(Icons.chevron_right,
-                    color: context.colors.primary, size: 16),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              summary == null
-                  ? formatted
-                  : '${isGain ? '+' : ''}$formatted USD',
-              style: TextStyle(
-                color: color,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-              ),
-            ),
-            if (summary?.purchasingPowerChangePercent != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '${summary!.nationalCurrencyCode} devalued '
-                '${summary.purchasingPowerChangePercent!.toStringAsFixed(1)}% in 12 months',
-                style: TextStyle(color: context.colors.textLight, fontSize: 12),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
+const _green = Color(0xFF2E7D32);
+const _red = Color(0xFFC62828);
