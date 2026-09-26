@@ -33,6 +33,67 @@ class FinanceRepository {
     return db.into(db.transactions).insert(transaction);
   }
 
+  /// Persist a transaction and its related debt (with the installment
+  /// schedule, if the payment is split) atomically, so a failure mid-save
+  /// can't leave the payment recorded but no debt behind. The new debt is
+  /// linked from the transaction via [Transactions.sourceDebtId].
+  Future<void> createTransactionWithDebt(
+    TransactionsCompanion transaction,
+    DebtsCompanion debt,
+    List<DebtInstallmentsCompanion> installments,
+  ) {
+    return db.transaction(() async {
+      final debtId = await db.into(db.debts).insert(debt);
+      await db.into(db.transactions).insert(
+          transaction.copyWith(sourceDebtId: drift.Value(debtId)));
+      for (final installment in installments) {
+        await db.into(db.debtInstallments).insert(
+            installment.copyWith(debtId: drift.Value(debtId)));
+      }
+    });
+  }
+
+  /// Update a transaction and, when it was the source of a debt, re-sync that
+  /// debt and its quota schedule with the edited values. The transaction row
+  /// is written with insertOrReplace (same as [updateTransaction]) so streams
+  /// watching it fire.
+  Future<void> updateTransactionWithDebt(
+    TransactionsCompanion transaction,
+    int debtId,
+    Debt debt,
+    List<DebtInstallmentsCompanion> installments,
+  ) {
+    return db.transaction(() async {
+      await db.into(db.transactions).insert(
+          transaction.copyWith(sourceDebtId: drift.Value(debtId)),
+          mode: drift.InsertMode.insertOrReplace);
+      await db.update(db.debts).replace(debt);
+      await (db.delete(db.debtInstallments)
+            ..where((t) => t.debtId.equals(debtId)))
+          .go();
+      for (final installment in installments) {
+        await db.into(db.debtInstallments).insert(
+            installment.copyWith(debtId: drift.Value(debtId)));
+      }
+    });
+  }
+
+  /// Insert a debt and its quota schedule in one transaction. Returns the new
+  /// debt id, wired into every installment row.
+  Future<int> createDebtWithInstallments(
+    DebtsCompanion debt,
+    List<DebtInstallmentsCompanion> installments,
+  ) {
+    return db.transaction(() async {
+      final debtId = await db.into(db.debts).insert(debt);
+      for (final installment in installments) {
+        await db.into(db.debtInstallments).insert(
+            installment.copyWith(debtId: drift.Value(debtId)));
+      }
+      return debtId;
+    });
+  }
+
   Future<void> updateTransaction(TransactionsCompanion transaction) {
     return db.into(db.transactions).insert(
           transaction,
@@ -483,11 +544,28 @@ class FinanceRepository {
 
   Future<void> updateDebt(Debt debt) => db.update(db.debts).replace(debt);
 
-  /// Deletes a debt and unlinks transactions linked as payments (FK guard).
+  /// The quota schedule of a split debt, in payment order.
+  Future<List<DebtInstallment>> getDebtInstallments(int debtId) {
+    final query = db.select(db.debtInstallments)
+      ..where((t) => t.debtId.equals(debtId))
+      ..orderBy([(t) => drift.OrderingTerm.asc(t.index)]);
+    return query.get();
+  }
+
+  /// Deletes a debt (and its installment schedule) and unlinks both the
+  /// transactions linked as payments and the one that sourced the debt, so no
+  /// FK reference is left dangling.
   Future<void> deleteDebt(int id) => db.transaction(() async {
+        await (db.delete(db.debtInstallments)
+              ..where((t) => t.debtId.equals(id)))
+            .go();
         await (db.update(db.transactions)
               ..where((t) => t.debtId.equals(id)))
             .write(const TransactionsCompanion(debtId: drift.Value(null)));
+        await (db.update(db.transactions)
+              ..where((t) => t.sourceDebtId.equals(id)))
+            .write(
+                const TransactionsCompanion(sourceDebtId: drift.Value(null)));
         await (db.delete(db.debts)..where((d) => d.id.equals(id))).go();
       });
 

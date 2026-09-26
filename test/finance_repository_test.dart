@@ -605,4 +605,97 @@ void main() {
     final tx = (await repo.db.select(repo.db.transactions).get()).single;
     expect(tx.debtId, isNull);
   });
+
+  test('editing a debt-sourced transaction re-syncs its quota schedule',
+      () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    await repo.createTransactionWithDebt(
+      TransactionsCompanion(
+        amount: const drift.Value(-300),
+        accountId: drift.Value(account.id),
+        currencyCode: const drift.Value('USD'),
+        date: drift.Value(DateTime(2026, 3, 1)),
+      ),
+      DebtsCompanion.insert(
+        direction: const drift.Value('creditor'),
+        amount: 300,
+        currencyCode: 'USD',
+        date: DateTime(2026, 3, 1),
+        dueDate: drift.Value(DateTime(2026, 4, 1)),
+      ),
+      [
+        DebtInstallmentsCompanion(
+          index: const drift.Value(0),
+          amount: const drift.Value(100),
+          dueDate: drift.Value(DateTime(2026, 4, 1)),
+        ),
+        DebtInstallmentsCompanion(
+          index: const drift.Value(1),
+          amount: const drift.Value(100),
+          dueDate: drift.Value(DateTime(2026, 5, 1)),
+        ),
+        DebtInstallmentsCompanion(
+          index: const drift.Value(2),
+          amount: const drift.Value(100),
+          dueDate: drift.Value(DateTime(2026, 6, 1)),
+        ),
+      ],
+    );
+    final tx = (await repo.db.select(repo.db.transactions).get()).single;
+    final debt = (await repo.getDebtById(tx.sourceDebtId!))!;
+    expect(await repo.getDebtInstallments(debt.id), hasLength(3));
+
+    // Edit: amount 300 -> 270, fewer installments, new schedule.
+    final rescheduled = [
+      DebtInstallmentsCompanion(
+        index: const drift.Value(0),
+        amount: const drift.Value(140),
+        dueDate: drift.Value(DateTime(2026, 4, 15)),
+      ),
+      DebtInstallmentsCompanion(
+        index: const drift.Value(1),
+        amount: const drift.Value(130),
+        dueDate: drift.Value(DateTime(2026, 5, 15)),
+      ),
+    ];
+    await repo.updateTransactionWithDebt(
+      TransactionsCompanion(
+        id: drift.Value(tx.id),
+        amount: const drift.Value(-270),
+        accountId: drift.Value(account.id),
+        currencyCode: const drift.Value('USD'),
+        date: drift.Value(DateTime(2026, 3, 1)),
+      ),
+      debt.id,
+      debt.copyWith(
+        amount: 270,
+        dueDate: drift.Value(DateTime(2026, 4, 15)),
+        frequency: const drift.Value('monthly'),
+      ),
+      rescheduled,
+    );
+
+    final updated = (await repo.getDebtById(debt.id))!;
+    expect(updated.amount, closeTo(270, 0.001));
+    final schedule = await repo.getDebtInstallments(debt.id);
+    expect(schedule, hasLength(2));
+    expect(schedule[0].amount, closeTo(140, 0.001));
+    expect(schedule[1].amount, closeTo(130, 0.001));
+    expect(schedule[1].dueDate, DateTime(2026, 5, 15));
+
+    // Deleting the debt also nulls the source link on the transaction.
+    await repo.deleteDebt(debt.id);
+    final orphan = (await repo.db.select(repo.db.transactions).get()).single;
+    expect(orphan.sourceDebtId, isNull);
+  });
 }

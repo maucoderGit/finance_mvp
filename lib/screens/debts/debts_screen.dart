@@ -22,6 +22,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
   List<db.Debt> _debts = const [];
   Map<int, String> _contactNames = const {};
   Map<int, double> _remaining = const {};
+  Map<int, List<db.DebtInstallment>> _installments = const {};
   Map<String, db.Currency> _currencies = const {};
   ({double owedToMe, double owedByMe})? _totals;
   String _baseSymbol = r'$';
@@ -42,12 +43,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
     // Balance each debt against its linked payments; auto-settle the fully
     // paid ones so the list reflects reality without manual bookkeeping.
     final remaining = <int, double>{};
+    final installments = <int, List<db.DebtInstallment>>{};
     for (final debt in debts) {
       final r = await repo.getDebtRemaining(debt);
       remaining[debt.id] = r;
       if (!debt.isSettled && r <= 0) {
         await repo.updateDebt(debt.copyWith(isSettled: true));
       }
+      final schedule = await repo.getDebtInstallments(debt.id);
+      if (schedule.isNotEmpty) installments[debt.id] = schedule;
     }
 
     if (!mounted) return;
@@ -55,6 +59,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
       _debts = debts;
       _contactNames = {for (final c in contacts) c.id: c.name};
       _remaining = remaining;
+      _installments = installments;
       _currencies = {for (final c in currencies) c.code: c};
       _totals = totals;
     });
@@ -335,10 +340,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final isCreditor = debt.direction == 'creditor';
     final title = contactName ?? debt.description ?? 'Debt';
     final remaining = _remaining[debt.id] ?? debt.amount;
+    final schedule = _installments[debt.id];
     final subtitle = <String>[
       if (isCreditor) 'I owe' else 'They owe me',
       if (contactName != null && debt.description != null)
         debt.description!,
+      if (schedule != null && schedule.length > 1)
+        '${schedule.length} cuotas',
+      if (debt.dueDate != null)
+        'Due ${DateFormat('MMM dd, yyyy').format(debt.dueDate!)}',
       if (!debt.isSettled)
         '${formatMoney(remaining, symbol: symbol)} of '
             '${formatMoney(debt.amount, symbol: symbol)}',

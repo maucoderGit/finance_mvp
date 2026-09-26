@@ -28,6 +28,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
   late String _direction =
       widget.existingDebt?.direction ?? (widget.isCreditor ? debtDirectionCreditor : debtDirectionDebtor);
   late bool _isSettled = widget.existingDebt?.isSettled ?? false;
+  DateTime? _dueDate;
   db.Contact? _contact;
   db.Currency? _currency;
 
@@ -38,6 +39,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     _descriptionController.text = existing?.description ?? '';
     if (existing != null) {
       _amountController.text = existing.amount.toStringAsFixed(2);
+      _dueDate = existing.dueDate;
     }
     _loadContext();
   }
@@ -116,6 +118,19 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     }
   }
 
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      initialDate: _dueDate ?? now,
+    );
+    if (picked != null && mounted) {
+      setState(() => _dueDate = picked);
+    }
+  }
+
   Future<void> _save() async {
     final repo = context.read<FinanceRepository>();
     final amount = double.tryParse(_amountController.text);
@@ -138,6 +153,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         contactId: drift.Value(contactId),
         amount: amount,
         currencyCode: _currency!.code,
+        dueDate: drift.Value(_dueDate),
         isSettled: _isSettled,
       ));
     } else {
@@ -148,6 +164,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         amount: amount,
         currencyCode: _currency!.code,
         date: DateTime.now(),
+        dueDate: drift.Value(_dueDate),
       ));
     }
     if (mounted) Navigator.of(context).pop(true);
@@ -270,6 +287,30 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                 ),
               ],
             ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Due date (optional)',
+                  style: TextStyle(color: context.colors.textLight)),
+              TextButton(
+                onPressed: _pickDueDate,
+                child: Text(
+                  _dueDate == null
+                      ? '+ Set date'
+                      : '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (_dueDate != null)
+                IconButton(
+                  tooltip: 'Clear due date',
+                  icon: Icon(Icons.close,
+                      size: 18, color: context.colors.textLight),
+                  onPressed: () => setState(() => _dueDate = null),
+                ),
+            ],
+          ),
           const SizedBox(height: 24),
           SizedBox(
             height: 48,

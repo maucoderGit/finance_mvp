@@ -242,4 +242,108 @@ void main() {
 
     await db.close();
   });
+
+  testWidgets(
+      'debt mode creates one debt and stores the quota schedule',
+      (tester) async {
+    final (db, repo) =
+        await pumpTransactionScreen(tester, currencyCodes: ['USD']);
+
+    await tapNumpad(tester, ['3', '0', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Expense'));
+    await tester.pumpAndSettle();
+
+    // Step 3 stays locked until the user explicitly enables debt mode.
+    expect(find.text('Continue to debt plan'), findsNothing);
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue to debt plan'));
+    await tester.pumpAndSettle();
+
+    // 3 monthly installments of $100 each.
+    await tester.tap(find.text('3x'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm and save with debt'));
+    await tester.pumpAndSettle();
+
+    final transactions = await repo.db.select(repo.db.transactions).get();
+    expect(transactions, hasLength(1));
+    expect(transactions.single.amount, closeTo(-300.0, 0.001));
+
+    // One debt holding the full amount, related to a 3-quota schedule.
+    final debts = await repo.db.select(repo.db.debts).get();
+    expect(debts, hasLength(1));
+    expect(debts.single.amount, closeTo(300.0, 0.001));
+    expect(debts.single.direction, 'creditor');
+    expect(debts.single.dueDate, isNotNull);
+
+    final installments = await repo.db
+        .select(repo.db.debtInstallments)
+        .get();
+    expect(installments, hasLength(3));
+    expect(installments.every((q) => q.debtId == debts.single.id), isTrue);
+    expect(installments.map((q) => q.amount).reduce((a, b) => a + b),
+        closeTo(300.0, 0.001));
+    // Monthly spacing: each due date a month after the previous.
+    final dueDates = installments.map((q) => q.dueDate).toList()..sort();
+    expect(dueDates[1].difference(dueDates[0]).inDays, inInclusiveRange(27, 32));
+
+    await db.close();
+  });
+
+  testWidgets(
+      'editing a debt-sourced transaction restores the plan and re-syncs it',
+      (tester) async {
+    final (db, repo) =
+        await pumpTransactionScreen(tester, currencyCodes: ['USD']);
+
+    await tapNumpad(tester, ['3', '0', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Expense'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue to debt plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3x'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm and save with debt'));
+    await tester.pumpAndSettle();
+
+    final transactions = await repo.db.select(repo.db.transactions).get();
+    final originalDebtId = transactions.single.sourceDebtId!;
+    expect((await repo.getDebtInstallments(originalDebtId)), hasLength(3));
+
+    // Re-open for editing: the debt plan is restored and unlockable.
+    tester.state<NavigatorState>(find.byType(Navigator)).push(MaterialPageRoute(
+        builder: (_) =>
+            TransactionScreen(existingTransaction: transactions.single)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue to debt plan'), findsOneWidget);
+    await tester.tap(find.text('Continue to debt plan'));
+    await tester.pumpAndSettle();
+
+    // Drop one quota: schedule re-syncs on save, debt stays the same row.
+    await tester.tap(find.byIcon(Icons.remove));
+    await tester.pumpAndSettle();
+    expect(find.text('2'), findsOneWidget);
+    await tester.tap(find.text('Confirm and save with debt'));
+    await tester.pumpAndSettle();
+
+    final txs = await repo.db.select(repo.db.transactions).get();
+    expect(txs.single.sourceDebtId, originalDebtId);
+    final schedule = await repo.getDebtInstallments(originalDebtId);
+    expect(schedule, hasLength(2));
+    expect(schedule.map((q) => q.amount).reduce((a, b) => a + b),
+        closeTo(300.0, 0.001));
+    final debt = (await repo.getDebtById(originalDebtId))!;
+    expect(debt.amount, closeTo(300.0, 0.001));
+
+    await db.close();
+  });
 }

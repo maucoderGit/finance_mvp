@@ -73,9 +73,27 @@ class Debts extends Table {
   RealColumn get amount => real()();
   TextColumn get currencyCode => text().references(Currencies, #code)();
   DateTimeColumn get date => dateTime()();
+
+  /// When the debt (or an installment of a split transaction) is due.
+  DateTimeColumn get dueDate => dateTime().nullable()();
   BoolColumn get isSettled => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// How the quota schedule is spaced (weekly/biweekly/monthly). Null for
+  /// manual debts created without an installment plan.
+  TextColumn get frequency => text().nullable()();
+}
+
+/// One installment ("cuota") of a debt split into a payment plan. The parent
+/// [Debts] row holds the total; these rows describe the schedule — the amount
+/// and due date of each quota, in order.
+class DebtInstallments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get debtId => integer().references(Debts, #id)();
+  IntColumn get index => integer()();
+  RealColumn get amount => real()();
+  DateTimeColumn get dueDate => dateTime()();
 }
 
 class Transactions extends Table {
@@ -94,6 +112,11 @@ class Transactions extends Table {
   /// When set, this transaction is a payment reducing the linked debt's
   /// outstanding amount.
   IntColumn get debtId => integer().nullable().references(Debts, #id)();
+
+  /// When set, this transaction *was the source* of the linked debt and its
+  /// quota schedule — debt mode was used at creation. Editing the transaction
+  /// re-writes that debt/installment schedule.
+  IntColumn get sourceDebtId => integer().nullable().references(Debts, #id)();
   TextColumn get imagePath => text().nullable()();
   BoolColumn get isRecurrenceEnabled =>
       boolean().withDefault(const Constant(false))();
@@ -154,6 +177,7 @@ class NetWorthHistory extends Table {
     Categories,
     Contacts,
     Debts,
+    DebtInstallments,
     Transactions,
     UserSettings,
     NetWorthHistory,
@@ -164,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -241,6 +265,16 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 10) {
             await _addColumnIfMissing(m, transactions, transactions.debtId);
+          }
+          if (from < 11) {
+            await _addColumnIfMissing(m, debts, debts.dueDate);
+          }
+          if (from < 12) {
+            await _createTableIfMissing(m, debtInstallments);
+          }
+          if (from < 13) {
+            await _addColumnIfMissing(m, debts, debts.frequency);
+            await _addColumnIfMissing(m, transactions, transactions.sourceDebtId);
           }
         },
         beforeOpen: (details) async {

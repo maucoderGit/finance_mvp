@@ -14,6 +14,7 @@ import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/numpad.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 enum TransactionType {
@@ -74,6 +75,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
   String? _previewNationalCode;
   String? _previewNationalSymbol;
   double? _previewNationalRate;
+
+  /// When true, step 3 (Debt/installments) is unlocked: saving also splits the
+  /// transaction into a debt (or one debt per installment) with a due date.
+  bool _debtEnabled = false;
+  int _installmentCount = 1;
+  String _dueFrequency = 'monthly';
+  DateTime? _dueDate;
+
+  /// The debt this transaction sourced (debt mode). Non-null while editing a
+  /// transaction that already created a debt/installment plan; clearing it on
+  /// save deletes that plan.
+  db.Debt? _sourceDebt;
 
   @override
   void dispose() {
@@ -294,6 +307,26 @@ class _TransactionScreenState extends State<TransactionScreen> {
       }
     }
 
+    // This transaction created the debt in debt mode: restore the debt plan
+    // so the user can see (and edit) the quota schedule in step 3.
+    if (existing.sourceDebtId != null) {
+      final source = await repo.getDebtById(existing.sourceDebtId!);
+      if (source != null && mounted) {
+        final schedule = await repo.getDebtInstallments(source.id);
+        if (!mounted) return;
+        setState(() {
+          _sourceDebt = source;
+          _debtEnabled = true;
+          _installmentCount =
+              schedule.isEmpty ? 1 : schedule.length;
+          _dueFrequency = source.frequency ?? 'monthly';
+          _dueDate = schedule.isNotEmpty
+              ? schedule.first.dueDate
+              : source.dueDate;
+        });
+      }
+    }
+
     await _loadConversionPreview();
   }
 
@@ -381,13 +414,43 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
 
     final repo = context.read<FinanceRepository>();
+    final existing = widget.existingTransaction;
+
+    // When the original save used debt mode, or this fresh one does, save the
+    // transaction together with the debt plan.
+    if (_debtEnabled) {
+      await _saveTransactionWithDebt();
+      return;
+    }
+
+    final companion = await _buildTransactionCompanion();
+    if (companion == null) return;
+
+    if (existing != null) {
+      await repo.updateTransaction(companion);
+      // The user turned debt mode off while editing a debt-sourced
+      // transaction: drop the plan created by the original save too.
+      if (existing.sourceDebtId != null) {
+        await repo.deleteDebt(existing.sourceDebtId!);
+      }
+    } else {
+      await repo.createTransaction(companion);
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  /// Validates the form and builds the transaction to persist, or returns null
+  /// (and toasts) when something is missing. Shared by plain and debit save.
+  Future<db.TransactionsCompanion?> _buildTransactionCompanion() async {
+    final repo = context.read<FinanceRepository>();
 
     if (_selectedAccount == null) {
       if (mounted) {
         showToast(context,
             message: 'Select an account first.', type: ToastType.error);
       }
-      return;
+      return null;
     }
 
     var amountValue = double.tryParse(_amount) ?? 0.0;
@@ -396,7 +459,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         showToast(context,
             message: 'Enter an amount.', type: ToastType.error);
       }
-      return;
+      return null;
     }
     if (_transactionType == TransactionType.expense) {
       amountValue = -amountValue;
@@ -460,7 +523,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
 
     final existing = widget.existingTransaction;
-    final companion = db.TransactionsCompanion(
+    return db.TransactionsCompanion(
       id: existing != null ? Value(existing.id) : const Value.absent(),
       amount: Value(amountValue),
       accountId: Value(_selectedAccount!.id),
@@ -469,6 +532,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       reference: Value(_referenceController.text),
       contactId: Value(_selectedContact?.id),
       debtId: Value(_selectedDebt?.id),
+      sourceDebtId: Value(_sourceDebt?.id),
       isRecurrenceEnabled: Value(_isRecurrenceEnabled),
       date: Value(DateTime.now()),
       exchangeRateAtCreation: Value(rateAtCreation),
@@ -476,14 +540,112 @@ class _TransactionScreenState extends State<TransactionScreen> {
       imagePath: Value(_imagePath),
       fxDelta: Value(fxDelta),
     );
+  }
 
-    if (existing != null) {
-      await repo.updateTransaction(companion);
-    } else {
-      await repo.createTransaction(companion);
+  /// Builds the debt row and its quota schedule for the current form state
+  /// (one debt + one [db.DebtInstallments] per installment, first due date at
+  /// [_intervalDate](0)). The last installment absorbs the rounding remainder.
+  ({String title, double amount, String direction, int? contactId,
+        String currency, DateTime firstDueDate, db.DebtsCompanion debt,
+        List<db.DebtInstallmentsCompanion> installments})
+      _buildDebtPlan() {
+    final ref = _referenceController.text.trim();
+    final catName = (category?['name'] as String?)?.trim();
+    final title = ref.isNotEmpty
+        ? ref
+        : (catName?.isNotEmpty == true ? catName! : 'Debt');
+    final total = double.tryParse(_amount) ?? 0.0;
+    final n = _installmentCount;
+    final now = DateTime.now();
+    final per = (total / n * 100).floor() / 100;
+    final direction =
+        _transactionType == TransactionType.expense ? 'creditor' : 'debtor';
+    final contactId = _selectedContact?.id;
+    final currency = _selectedAccount!.currencyCode;
+
+    final debt = db.DebtsCompanion.insert(
+      contactId: Value(contactId),
+      direction: Value(direction),
+      description: Value(title),
+      amount: total,
+      currencyCode: currency,
+      date: now,
+      dueDate: Value(_intervalDate(0)),
+      frequency: Value(_dueFrequency),
+    );
+
+    return (
+      title: title,
+      amount: total,
+      direction: direction,
+      contactId: contactId,
+      currency: currency,
+      firstDueDate: _intervalDate(0),
+      debt: debt,
+      installments: [
+        for (var i = 0; i < n; i++)
+          db.DebtInstallmentsCompanion(
+            index: Value(i),
+            amount: Value(i == n - 1 ? total - per * (n - 1) : per),
+            dueDate: Value(_intervalDate(i)),
+          ),
+      ],
+    );
+  }
+
+  /// Saves the transaction and, because debt mode is on, ensures ONE debt in
+  /// the account currency with the full amount exists and its quota schedule
+  /// (per-installment amount + due date) matches the form. For a fresh
+  /// transaction the debt (and schedule) is created and linked; for an edited
+  /// transaction that already sourced a debt, that debt and its schedule are
+  /// re-synced with the edits. Views streaming the transaction table get the
+  /// change through the database watchers.
+  Future<void> _saveTransactionWithDebt() async {
+    final repo = context.read<FinanceRepository>();
+    final companion = await _buildTransactionCompanion();
+    if (companion == null || _selectedAccount == null) return;
+
+    final plan = _buildDebtPlan();
+    final existing = widget.existingTransaction;
+
+    if (existing == null) {
+      await repo.createTransactionWithDebt(
+          companion, plan.debt, plan.installments);
+    } else if (existing.sourceDebtId != null) {
+      final source = _sourceDebt;
+      if (source != null) {
+        await repo.updateTransactionWithDebt(
+          companion,
+          existing.sourceDebtId!,
+          source.copyWith(
+            contactId: Value(plan.contactId),
+            direction: plan.direction,
+            description: Value(plan.title),
+            amount: plan.amount,
+            currencyCode: plan.currency,
+            dueDate: Value(plan.firstDueDate),
+            frequency: Value(_dueFrequency),
+            updatedAt: DateTime.now(),
+          ),
+          plan.installments,
+        );
+      }
     }
-
     if (mounted) Navigator.pop(context);
+  }
+
+  /// Due date of the [index]-th installment, spaced from the picked first due
+  /// date by the selected frequency (last one rolls over month end safely).
+  DateTime _intervalDate(int index) {
+    final d = _dueDate ?? DateTime.now();
+    switch (_dueFrequency) {
+      case 'weekly':
+        return d.add(Duration(days: 7 * index));
+      case 'biweekly':
+        return d.add(Duration(days: 14 * index));
+      default:
+        return DateTime(d.year, d.month + index, d.day);
+    }
   }
 
   /// Save an internal transfer/menudeo as two linked legs (source negative,
@@ -992,7 +1154,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                   // SizedBox(height: MediaQuery.of(context).size.height * 0.1,),
                                 ],
                               ))
-                            : Column(
+: _currentStep == 1
+                                ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 8),
@@ -1118,8 +1281,21 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                     const SizedBox(height: 16),
                                     _buildRecurrenceCard(),
                                   ],
+
+                                  // Debt/installments opt-in: unlocks step 3. Shown for new transaction
+                                  // and when editing one that already sourced a
+                                  // debt (so its quota plan can be re-edited or
+                                  // dropped).
+                                  if (_transactionType !=
+                                          TransactionType.transfer &&
+                                      (widget.existingTransaction == null ||
+                                          _sourceDebt != null)) ...[
+                                    const SizedBox(height: 20),
+                                    _buildDebtOptInCard(),
+                                  ],
                                 ],
-                              ),
+                              )
+                                : _buildDebtPlanStep(),
                       ),
                     ),
                     _buildStepControls(),
@@ -1138,87 +1314,135 @@ class _TransactionScreenState extends State<TransactionScreen> {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: context.colors.cardBackground,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Expanded(child: _buildStepSegment('Amount', 0)),
-          Expanded(child: _buildStepSegment('Details', 1)),
+          _buildStepSegment('Amount', 0),
+          _buildStepSegment('Details', 1),
+          _buildStepSegment('Debt', 2, locked: !_debtEnabled),
         ],
       ),
     );
   }
 
-  Widget _buildStepSegment(String label, int stepIndex) {
-    final isActive = _currentStep == stepIndex;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isActive ? context.colors.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          color: isActive ? Colors.white : context.colors.textLight,
+  Widget _buildStepSegment(String label, int stepIndex, {bool locked = false}) {
+    final isActive = _currentStep == stepIndex && !locked;
+    final isDone = !locked && _currentStep > stepIndex;
+
+    final Color bg = isActive
+        ? context.colors.primary
+        : isDone
+            ? context.colors.primary.withValues(alpha: 0.12)
+            : context.colors.fieldsBackground;
+    final Color fg = isActive
+        ? Colors.white
+        : isDone
+            ? context.colors.primary
+            : context.colors.textLight;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: locked ? null : () => setState(() => _currentStep = stepIndex),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isDone)
+                const Icon(Icons.check, size: 14)
+              else
+                Icon(locked ? Icons.lock_outline : Icons.circle,
+                    size: locked || isActive ? 12 : 10),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isActive || isDone
+                        ? FontWeight.bold
+                        : FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildStepControls() {
+    final String primaryLabel;
+    final VoidCallback onPrimary;
+
+    switch (_currentStep) {
+      case 0:
+        primaryLabel = 'Add details';
+        onPrimary = () => setState(() => _currentStep = 1);
+        break;
+      case 1:
+        if (_debtEnabled) {
+          primaryLabel = 'Continue to debt plan';
+          onPrimary = () => setState(() => _currentStep = 2);
+        } else {
+          primaryLabel = 'Save';
+          onPrimary = _saveTransaction;
+        }
+        break;
+      default:
+        primaryLabel = 'Confirm and save with debt';
+        onPrimary = _saveTransaction;
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () {
-                if (_currentStep < 1) {
-                  setState(() => _currentStep += 1);
-                } else {
-                  _saveTransaction();
-                }
-              },
+          ElevatedButton(
+            onPressed: onPrimary,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              primaryLabel,
+              style: const TextStyle(
+                fontSize: 18,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          if (_currentStep > 0) ...[
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () => setState(() => _currentStep -= 1),
               style: ElevatedButton.styleFrom(
-                backgroundColor: context.colors.primary,
+                backgroundColor: context.colors.cardBackground,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: Text(
-                _currentStep < 1 ? 'Add details' : 'Save',
-                style: const TextStyle(
+                'Return',
+                style: TextStyle(
                   fontSize: 18,
-                  color: Colors.white,
+                  color: context.colors.textDark,
                   fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          if (_currentStep > 0) ...[
-            const SizedBox(width: 10),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => setState(() => _currentStep -= 1),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.colors.cardBackground,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Return',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: context.colors.textDark,
-                    fontWeight: FontWeight.bold,
-                  ),
                 ),
               ),
             ),
@@ -1371,10 +1595,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
       (TransactionType.transfer, 'Transfer'),
     ];
     return Container(
-      height: 55,
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: context.colors.fieldsBackground, // Light grey background
-        borderRadius: BorderRadius.circular(12),
+        color: context.colors.fieldsBackground,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.colors.cardBorder, width: 1),
       ),
       child: Row(
@@ -1382,31 +1606,32 @@ class _TransactionScreenState extends State<TransactionScreen> {
           for (final (type, label) in options)
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _transactionType = type),
+                onTap: () => setState(() {
+                    _transactionType = type;
+                    if (type == TransactionType.transfer && _debtEnabled) {
+                      _debtEnabled = false;
+                      if (_currentStep > 1) _currentStep = 1;
+                    }
+                  }),
                 child: Container(
+                  height: 46,
                   alignment: Alignment.center,
-                  decoration: _transactionType == type
-                      ? BoxDecoration(
-                          color: context.colors.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        )
-                      : BoxDecoration(
-                          color: context.colors.fieldsBackground,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                  decoration: BoxDecoration(
+                    color: _transactionType == type
+                        ? context.colors.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Text(
                     label,
-                    style: _transactionType == type
-                        ? TextStyle(
-                            color: context.colors.fieldsBackground,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          )
-                        : TextStyle(
-                            color: context.colors.textDark,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _transactionType == type
+                          ? context.colors.fieldsBackground
+                          : context.colors.textDark,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
@@ -1757,7 +1982,382 @@ Future<void> _openContactPicker() async {
       ),
     );
   }
+
+  Widget _buildDebtOptInCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.colors.primaryLight.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _debtEnabled
+              ? context.colors.primary
+              : context.colors.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: _debtEnabled,
+            activeColor: context.colors.primary,
+            onChanged: (value) => setState(() {
+              _debtEnabled = value ?? false;
+              if (!_debtEnabled) {
+                // Dropping the plan while editing: the linked debt is cleared
+                // here and deleted on save.
+                _sourceDebt = null;
+                if (_currentStep > 1) _currentStep = 1;
+              }
+            }),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Generate debt and installments',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: context.colors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Split this payment into installments with a due date',
+                  style: TextStyle(
+                      fontSize: 12, color: context.colors.textLight),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDebtPlanStep() {
+    final total = double.tryParse(_amount) ?? 0.0;
+    final per = total / _installmentCount;
+    final code = _selectedAccount?.currencyCode ?? 'USD';
+    final cat = category?['name'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.colors.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: context.colors.cardBorder.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_transactionType == TransactionType.expense ? 'Expense' : 'Income'}'
+                ' · ${_selectedAccount?.name ?? 'Account'}'
+                '${cat != null ? ' · $cat' : ''}',
+                style:
+                    TextStyle(fontSize: 12, color: context.colors.textLight),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${formatMoney(total)} $code',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: context.colors.textDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text('Frequency',
+            style: TextStyle(
+                color: context.colors.textLight, fontSize: 16)),
+        const SizedBox(height: 8),
+        _buildFrequencySelector(),
+        const SizedBox(height: 20),
+        Text('Installments',
+            style: TextStyle(
+                color: context.colors.textLight, fontSize: 16)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.colors.cardBackground,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: context.colors.cardBorder.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildInstallmentButton(Icons.remove, () {
+                    if (_installmentCount > 1) {
+                      setState(() => _installmentCount--);
+                    }
+                  }),
+                  Column(
+                    children: [
+                      Text(
+                        '$_installmentCount',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: context.colors.textDark,
+                        ),
+                      ),
+                      Text(_periodLabel,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: context.colors.textLight)),
+                    ],
+                  ),
+                  _buildInstallmentButton(Icons.add, () {
+                    if (_installmentCount < 36) {
+                      setState(() => _installmentCount++);
+                    }
+                  }),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  for (final n in const [1, 3, 6, 12, 24])
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: _buildInstallmentChip(n),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.colors.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: context.colors.cardBorder.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Per $_periodLabel',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: context.colors.textLight)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${formatMoney(per)} $code',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: context.colors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '0% interest',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: context.colors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1),
+              ),
+              GestureDetector(
+                onTap: _pickDueDate,
+                child: Row(
+                  children: [
+                    Icon(Icons.event, size: 18,
+                        color: context.colors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'First due date',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.colors.textLight,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      DateFormat('MMM dd, yyyy')
+                          .format(_dueDate ?? DateTime.now()),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: context.colors.textDark,
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, size: 18,
+                        color: context.colors.textLight),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _installmentCount == 1
+              ? 'Saving creates one debt with a due date for this payment.'
+              : 'Saving creates one debt of ${formatMoney(total)} $code, '
+                  'split into $_installmentCount installments of ~'
+                  '${formatMoney(per)} $code each, '
+                  'due every $_periodLabel (last due '
+                  '${DateFormat('MMM dd, yyyy').format(_intervalDate(_installmentCount - 1))}).',
+          style: TextStyle(fontSize: 12, color: context.colors.textLight),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFrequencySelector() {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: context.colors.fieldsBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.colors.cardBorder, width: 1),
+      ),
+      child: Row(
+        children: [
+          for (final (value, label) in _frequencies)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _dueFrequency = value),
+                child: Container(
+                  alignment: Alignment.center,
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: _dueFrequency == value
+                        ? context.colors.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: _dueFrequency == value
+                          ? context.colors.fieldsBackground
+                          : context.colors.textDark,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstallmentButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: context.colors.fieldsBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.cardBorder, width: 1),
+        ),
+        child: Icon(icon, size: 20, color: context.colors.textDark),
+      ),
+    );
+  }
+
+  Widget _buildInstallmentChip(int n) {
+    final selected = _installmentCount == n;
+    return GestureDetector(
+      onTap: () => setState(() => _installmentCount = n),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected
+              ? context.colors.primary
+              : context.colors.fieldsBackground,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? context.colors.primary
+                : context.colors.cardBorder.withValues(alpha: 0.6),
+          ),
+        ),
+        child: Text(
+          '${n}x',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color:
+                selected ? context.colors.fieldsBackground : context.colors.textDark,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      initialDate: _dueDate ?? now,
+    );
+    if (picked != null && mounted) {
+      setState(() => _dueDate = picked);
+    }
+  }
+
+  String get _periodLabel => switch (_dueFrequency) {
+        'weekly' => 'week',
+        'biweekly' => 'biweek',
+        _ => 'month',
+      };
 }
+
+const _frequencies = <(String, String)>[
+  ('weekly', 'Weekly'),
+  ('biweekly', 'Biweekly'),
+  ('monthly', 'Monthly'),
+];
 
 /// Bottom sheet listing open (unpaid) debts to link a transaction as a
 /// payment against one of them.
