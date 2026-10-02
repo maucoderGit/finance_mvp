@@ -224,12 +224,43 @@ void main() {
       hasCompletedOnboarding: drift.Value(true),
     ));
 
+    // Contacts, debts and their quota schedule are wiped too — a "delete
+    // everything" that leaves the ledger behind is a data-loss bug in the
+    // other direction.
+    final contact = await repo.findOrCreateContact('Ana', phone: '555');
+    final debtId = await repo.createDebtWithInstallments(
+      DebtsCompanion.insert(
+        contactId: drift.Value(contact.id),
+        amount: 100,
+        currencyCode: 'MXN',
+        date: DateTime(2026, 1, 1),
+      ),
+      [
+        DebtInstallmentsCompanion.insert(
+          debtId: 0,
+          index: 0,
+          amount: 50,
+          dueDate: DateTime(2026, 2, 1),
+        ),
+        DebtInstallmentsCompanion.insert(
+          debtId: 0,
+          index: 1,
+          amount: 50,
+          dueDate: DateTime(2026, 3, 1),
+        ),
+      ],
+    );
+    expect(await repo.getDebtInstallments(debtId), hasLength(2));
+
     await repo.wipeAllData();
 
     expect(await repo.getAllAccounts(), isEmpty);
     expect((await repo.watchTransactions().first)
         .where((t) => t.accountId > 0), isEmpty);
     expect(await repo.getRatesForCurrency('MXN'), isEmpty);
+    expect(await repo.getAllContacts(), isEmpty);
+    expect(await repo.getAllDebts(), isEmpty);
+    expect(await repo.getDebtInstallments(debtId), isEmpty);
 
     final currencies = await repo.getAllCurrencies();
     final codes = currencies.map((c) => c.code).toSet();
@@ -573,8 +604,156 @@ void main() {
     expect((await repo.getOpenDebtTotalsInBase()).owedToMe, closeTo(0, 0.001));
   });
 
-  test('deleting a debt unlinks its payments', () async {
+  test('debt remaining always lands on the currency minor-unit grid', () async {
     await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+    await repo.addCurrency(CurrenciesCompanion.insert(
+      code: 'MXN',
+      name: 'Mexican Peso',
+      symbol: r'$',
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'MXN',
+      rate: 3.7,
+      date: DateTime(2026, 1, 1),
+    ));
+
+    await repo.addDebt(DebtsCompanion.insert(
+      amount: 100,
+      currencyCode: 'USD',
+      date: DateTime(2026, 1, 1),
+    ));
+    final debt = (await repo.getAllDebts()).single;
+
+    // Two instalments that are exactly 100 USD apart at 3.7 (40 + 330 = 370),
+    // but each stores its own raw division, so the paid total sums to
+    // 99.99999999999999. The comparison that decides "is this settled?" runs
+    // on that number, so it has to be on the currency's grid or a fully paid
+    // debt never closes.
+    Future<void> pay(double amount) => repo.createTransaction(
+          TransactionsCompanion.insert(
+            amount: -amount,
+            accountId: account.id,
+            currencyCode: 'MXN',
+            date: DateTime(2026, 2, 1),
+            baseCurrencyAmount: drift.Value(amount / 3.7),
+            debtId: drift.Value(debt.id),
+          ),
+        );
+
+    await pay(40);
+    await pay(330);
+
+    final remaining =
+        await repo.getDebtRemaining((await repo.getDebtById(debt.id))!);
+    // On the cent grid: multiplying by 100 leaves no fractional part.
+    expect(remaining * 100, closeTo(remaining * 100, 1e-9));
+    expect((await repo.getOpenDebtTotalsInBase()).owedToMe,
+        closeTo(remaining, 1e-9));
+    // Fully paid, so closed rather than left owing a ten-millionth of a cent.
+    expect(remaining, 0);
+    expect((await repo.getDebtById(debt.id))!.isSettled, isTrue);
+  });
+
+  test('conversions snap to the target currency minor unit', () async {
+    await repo.addCurrency(CurrenciesCompanion.insert(
+      code: 'JPY',
+      name: 'Japanese Yen',
+      symbol: r'¥',
+      decimalDigits: const drift.Value(0),
+    ));
+    await repo.addCurrency(CurrenciesCompanion.insert(
+      code: 'MXN',
+      name: 'Mexican Peso',
+      symbol: r'$',
+      decimalDigits: const drift.Value(3),
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'JPY',
+      rate: 100.0,
+      date: DateTime(2026, 1, 1),
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'MXN',
+      rate: 20.0,
+      date: DateTime(2026, 1, 1),
+    ));
+
+    // USD is the base: 10 USD buys exactly 1000 JPY, which has no minor unit
+    // below the yen.
+    expect(
+        await repo.convertAmount(
+            amount: 10, fromCode: 'USD', toCode: 'JPY'),
+        1000);
+    // Three-digit money keeps its third decimal; two-digit money would have
+    // thrown it away.
+    expect(
+        await repo.convertAmount(
+            amount: 10, fromCode: 'USD', toCode: 'MXN'),
+        200);
+    expect(
+        await repo.convertAmount(
+            amount: 1, fromCode: 'USD', toCode: 'MXN'),
+        20);
+    expect(
+        await repo.convertAmount(
+            amount: 0.123, fromCode: 'USD', toCode: 'MXN'),
+        2.46);
+  });
+
+  test('recording the final payment settles the debt without opening a screen',
+      () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    await repo.addDebt(DebtsCompanion.insert(
+      amount: 100,
+      currencyCode: 'USD',
+      date: DateTime(2026, 1, 1),
+    ));
+    final debt = (await repo.getAllDebts()).single;
+    expect(debt.isSettled, isFalse);
+
+    Future<int> pay(double amount) async {
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: -amount,
+        accountId: account.id,
+        currencyCode: 'USD',
+        date: DateTime(2026, 2, 1),
+        debtId: drift.Value(debt.id),
+      ));
+      return (await repo.getTransactionsForDebt(debt.id)).single.id;
+    }
+
+    final paymentId = await pay(100);
+    expect((await repo.getDebtById(debt.id))!.isSettled, isTrue);
+    expect((await repo.getOpenDebtTotalsInBase()).owedToMe, closeTo(0, 0.001));
+
+    // Removing that payment must reopen it, not leave a settled debt with
+    // nothing behind it.
+    await repo.deleteTransaction(paymentId);
+    expect((await repo.getDebtById(debt.id))!.isSettled, isFalse);
+    expect(
+        (await repo.getOpenDebtTotalsInBase()).owedToMe, closeTo(100, 0.001));
+  });
+
+  test('deleting a debt unlinks its payments', () async {    await repo.createAccountWithInitialTransaction(
       AccountsCompanion.insert(
         name: 'Cash',
         currencyCode: 'USD',

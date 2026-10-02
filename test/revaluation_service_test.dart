@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/finance/net_worth_tracker.dart';
 import 'package:finance_mvp/services/finance/revaluation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -144,5 +145,62 @@ void main() {
     expect(history, hasLength(1));
     expect(history.first.baseAmount, closeTo(160, 0.001));
     expect(history.first.nationalAmount, closeTo(6400, 0.001));
+  });
+
+  test('ensureTodaySnapshot records once, then keeps the existing row',
+      () async {
+    final tracker = NetWorthTracker(repo, service);
+    final usdAccount = await createAccount('Cash', 'USD');
+    await repo.createTransaction(TransactionsCompanion.insert(
+      amount: 60,
+      accountId: usdAccount,
+      currencyCode: 'USD',
+      date: DateTime.now(),
+    ));
+
+    await tracker.ensureTodaySnapshot();
+    await tracker.ensureTodaySnapshot();
+
+    final history = await service.getNetWorthHistory();
+    expect(history, hasLength(1));
+    expect(history.first.baseAmount, closeTo(60, 0.001));
+
+    // A later balance is not written over today's already-recorded snapshot.
+    await repo.createTransaction(TransactionsCompanion.insert(
+      amount: 40,
+      accountId: usdAccount,
+      currencyCode: 'USD',
+      date: DateTime.now(),
+    ));
+    await tracker.ensureTodaySnapshot();
+    expect((await service.getNetWorthHistory()).single.baseAmount,
+        closeTo(60, 0.001));
+  });
+
+  test('ensureTodaySnapshot backfills when the newest snapshot is stale',
+      () async {
+    final tracker = NetWorthTracker(repo, service);
+    final usdAccount = await createAccount('Cash', 'USD');
+    await repo.createTransaction(TransactionsCompanion.insert(
+      amount: 100,
+      accountId: usdAccount,
+      currencyCode: 'USD',
+      date: DateTime.now(),
+    ));
+
+    // A day the app stayed closed: only an older snapshot was recorded.
+    await repo.db.into(repo.db.netWorthHistory).insert(
+          NetWorthHistoryCompanion.insert(
+            date: DateTime.now().subtract(const Duration(days: 3)),
+            totalInBaseCurrency: 999,
+            totalInNationalCurrency: 999,
+          ),
+        );
+
+    await tracker.ensureTodaySnapshot();
+
+    final history = await service.getNetWorthHistory();
+    expect(history, hasLength(2));
+    expect(history.last.baseAmount, closeTo(100, 0.001));
   });
 }

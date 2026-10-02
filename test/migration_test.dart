@@ -88,7 +88,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 13);
+    expect(version, 14);
 
     final accounts = await db.customSelect('SELECT * FROM accounts').get();
     expect(accounts, hasLength(1));
@@ -140,7 +140,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 13);
+    expect(version, 14);
 
     final settings = await db
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -178,7 +178,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 13);
+    expect(version, 14);
 
     // Rebuilt from the current schema: now has currency_code + the UNIQUE index.
     final cols = await db
@@ -241,7 +241,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 13);
+    expect(version, 14);
 
     // The rebuilt DB matches drift: timestamps present, no legacy `type`.
     final accountsCols = await db

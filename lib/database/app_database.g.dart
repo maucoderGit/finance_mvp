@@ -2810,12 +2810,49 @@ class $TransactionsTable extends Transactions
   late final GeneratedColumn<String> recurrenceType = GeneratedColumn<String>(
       'recurrence_type', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _recurrenceIntervalMeta =
+      const VerificationMeta('recurrenceInterval');
+  @override
+  late final GeneratedColumn<int> recurrenceInterval = GeneratedColumn<int>(
+      'recurrence_interval', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(1));
   static const VerificationMeta _recurrenceEndsMeta =
       const VerificationMeta('recurrenceEnds');
   @override
   late final GeneratedColumn<String> recurrenceEnds = GeneratedColumn<String>(
       'recurrence_ends', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _recurrenceEndDateMeta =
+      const VerificationMeta('recurrenceEndDate');
+  @override
+  late final GeneratedColumn<DateTime> recurrenceEndDate =
+      GeneratedColumn<DateTime>('recurrence_end_date', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _recurrenceTotalCountMeta =
+      const VerificationMeta('recurrenceTotalCount');
+  @override
+  late final GeneratedColumn<int> recurrenceTotalCount = GeneratedColumn<int>(
+      'recurrence_total_count', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _recurrenceGeneratedCountMeta =
+      const VerificationMeta('recurrenceGeneratedCount');
+  @override
+  late final GeneratedColumn<int> recurrenceGeneratedCount =
+      GeneratedColumn<int>('recurrence_generated_count', aliasedName, false,
+          type: DriftSqlType.int,
+          requiredDuringInsert: false,
+          defaultValue: const Constant(0));
+  static const VerificationMeta _recurrenceParentIdMeta =
+      const VerificationMeta('recurrenceParentId');
+  @override
+  late final GeneratedColumn<int> recurrenceParentId = GeneratedColumn<int>(
+      'recurrence_parent_id', aliasedName, true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES transactions (id)'));
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
   late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
@@ -2867,7 +2904,12 @@ class $TransactionsTable extends Transactions
         imagePath,
         isRecurrenceEnabled,
         recurrenceType,
+        recurrenceInterval,
         recurrenceEnds,
+        recurrenceEndDate,
+        recurrenceTotalCount,
+        recurrenceGeneratedCount,
+        recurrenceParentId,
         date,
         updatedAt,
         exchangeRateAtCreation,
@@ -2948,11 +2990,42 @@ class $TransactionsTable extends Transactions
           recurrenceType.isAcceptableOrUnknown(
               data['recurrence_type']!, _recurrenceTypeMeta));
     }
+    if (data.containsKey('recurrence_interval')) {
+      context.handle(
+          _recurrenceIntervalMeta,
+          recurrenceInterval.isAcceptableOrUnknown(
+              data['recurrence_interval']!, _recurrenceIntervalMeta));
+    }
     if (data.containsKey('recurrence_ends')) {
       context.handle(
           _recurrenceEndsMeta,
           recurrenceEnds.isAcceptableOrUnknown(
               data['recurrence_ends']!, _recurrenceEndsMeta));
+    }
+    if (data.containsKey('recurrence_end_date')) {
+      context.handle(
+          _recurrenceEndDateMeta,
+          recurrenceEndDate.isAcceptableOrUnknown(
+              data['recurrence_end_date']!, _recurrenceEndDateMeta));
+    }
+    if (data.containsKey('recurrence_total_count')) {
+      context.handle(
+          _recurrenceTotalCountMeta,
+          recurrenceTotalCount.isAcceptableOrUnknown(
+              data['recurrence_total_count']!, _recurrenceTotalCountMeta));
+    }
+    if (data.containsKey('recurrence_generated_count')) {
+      context.handle(
+          _recurrenceGeneratedCountMeta,
+          recurrenceGeneratedCount.isAcceptableOrUnknown(
+              data['recurrence_generated_count']!,
+              _recurrenceGeneratedCountMeta));
+    }
+    if (data.containsKey('recurrence_parent_id')) {
+      context.handle(
+          _recurrenceParentIdMeta,
+          recurrenceParentId.isAcceptableOrUnknown(
+              data['recurrence_parent_id']!, _recurrenceParentIdMeta));
     }
     if (data.containsKey('date')) {
       context.handle(
@@ -3019,8 +3092,19 @@ class $TransactionsTable extends Transactions
           DriftSqlType.bool, data['${effectivePrefix}is_recurrence_enabled'])!,
       recurrenceType: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}recurrence_type']),
+      recurrenceInterval: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}recurrence_interval'])!,
       recurrenceEnds: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}recurrence_ends']),
+      recurrenceEndDate: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}recurrence_end_date']),
+      recurrenceTotalCount: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}recurrence_total_count']),
+      recurrenceGeneratedCount: attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}recurrence_generated_count'])!,
+      recurrenceParentId: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}recurrence_parent_id']),
       date: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}date'])!,
       updatedAt: attachedDatabase.typeMapping
@@ -3064,9 +3148,41 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// re-writes that debt/installment schedule.
   final int? sourceDebtId;
   final String? imagePath;
+
+  /// Recurrence. When [isRecurrenceEnabled] is set, this row is the *template*
+  /// of a repeating transaction: its [date] is the first occurrence and the
+  /// anchor for every later one. Occurrences after the first are materialised
+  /// as ordinary transactions carrying [recurrenceParentId] back to this row.
+  /// The template is never duplicated into the ledger, so [amount] is counted
+  /// exactly once while the series runs.
   final bool isRecurrenceEnabled;
+
+  /// One of `daily`, `weekly`, `monthly`, `yearly`.
   final String? recurrenceType;
+
+  /// Occurs every [recurrenceInterval] [recurrenceType]s, so 2 + `monthly` is
+  /// "every two months". Always at least 1.
+  final int recurrenceInterval;
+
+  /// One of `never`, `date`, `count`: how the series stops.
   final String? recurrenceEnds;
+
+  /// Stop generating once an occurrence would fall after this date. Only read
+  /// when [recurrenceEnds] is `date`.
+  final DateTime? recurrenceEndDate;
+
+  /// Total occurrences the series runs for, including the template's own first
+  /// one. Only read when [recurrenceEnds] is `count`.
+  final int? recurrenceTotalCount;
+
+  /// How many occurrences after the template have been materialised. Drives
+  /// the `count` end condition.
+  final int recurrenceGeneratedCount;
+
+  /// Set on materialised occurrences to the template's id. Null on the
+  /// template and on ordinary transactions, which is how the engine tells the
+  /// two apart and never re-generates from an occurrence.
+  final int? recurrenceParentId;
   final DateTime date;
   final DateTime updatedAt;
   final double? exchangeRateAtCreation;
@@ -3089,7 +3205,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       this.imagePath,
       required this.isRecurrenceEnabled,
       this.recurrenceType,
+      required this.recurrenceInterval,
       this.recurrenceEnds,
+      this.recurrenceEndDate,
+      this.recurrenceTotalCount,
+      required this.recurrenceGeneratedCount,
+      this.recurrenceParentId,
       required this.date,
       required this.updatedAt,
       this.exchangeRateAtCreation,
@@ -3125,8 +3246,19 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || recurrenceType != null) {
       map['recurrence_type'] = Variable<String>(recurrenceType);
     }
+    map['recurrence_interval'] = Variable<int>(recurrenceInterval);
     if (!nullToAbsent || recurrenceEnds != null) {
       map['recurrence_ends'] = Variable<String>(recurrenceEnds);
+    }
+    if (!nullToAbsent || recurrenceEndDate != null) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate);
+    }
+    if (!nullToAbsent || recurrenceTotalCount != null) {
+      map['recurrence_total_count'] = Variable<int>(recurrenceTotalCount);
+    }
+    map['recurrence_generated_count'] = Variable<int>(recurrenceGeneratedCount);
+    if (!nullToAbsent || recurrenceParentId != null) {
+      map['recurrence_parent_id'] = Variable<int>(recurrenceParentId);
     }
     map['date'] = Variable<DateTime>(date);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -3173,9 +3305,20 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurrenceType: recurrenceType == null && nullToAbsent
           ? const Value.absent()
           : Value(recurrenceType),
+      recurrenceInterval: Value(recurrenceInterval),
       recurrenceEnds: recurrenceEnds == null && nullToAbsent
           ? const Value.absent()
           : Value(recurrenceEnds),
+      recurrenceEndDate: recurrenceEndDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceEndDate),
+      recurrenceTotalCount: recurrenceTotalCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceTotalCount),
+      recurrenceGeneratedCount: Value(recurrenceGeneratedCount),
+      recurrenceParentId: recurrenceParentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceParentId),
       date: Value(date),
       updatedAt: Value(updatedAt),
       exchangeRateAtCreation: exchangeRateAtCreation == null && nullToAbsent
@@ -3210,7 +3353,15 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       isRecurrenceEnabled:
           serializer.fromJson<bool>(json['isRecurrenceEnabled']),
       recurrenceType: serializer.fromJson<String?>(json['recurrenceType']),
+      recurrenceInterval: serializer.fromJson<int>(json['recurrenceInterval']),
       recurrenceEnds: serializer.fromJson<String?>(json['recurrenceEnds']),
+      recurrenceEndDate:
+          serializer.fromJson<DateTime?>(json['recurrenceEndDate']),
+      recurrenceTotalCount:
+          serializer.fromJson<int?>(json['recurrenceTotalCount']),
+      recurrenceGeneratedCount:
+          serializer.fromJson<int>(json['recurrenceGeneratedCount']),
+      recurrenceParentId: serializer.fromJson<int?>(json['recurrenceParentId']),
       date: serializer.fromJson<DateTime>(json['date']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       exchangeRateAtCreation:
@@ -3237,7 +3388,13 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'imagePath': serializer.toJson<String?>(imagePath),
       'isRecurrenceEnabled': serializer.toJson<bool>(isRecurrenceEnabled),
       'recurrenceType': serializer.toJson<String?>(recurrenceType),
+      'recurrenceInterval': serializer.toJson<int>(recurrenceInterval),
       'recurrenceEnds': serializer.toJson<String?>(recurrenceEnds),
+      'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
+      'recurrenceTotalCount': serializer.toJson<int?>(recurrenceTotalCount),
+      'recurrenceGeneratedCount':
+          serializer.toJson<int>(recurrenceGeneratedCount),
+      'recurrenceParentId': serializer.toJson<int?>(recurrenceParentId),
       'date': serializer.toJson<DateTime>(date),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'exchangeRateAtCreation':
@@ -3261,7 +3418,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           Value<String?> imagePath = const Value.absent(),
           bool? isRecurrenceEnabled,
           Value<String?> recurrenceType = const Value.absent(),
+          int? recurrenceInterval,
           Value<String?> recurrenceEnds = const Value.absent(),
+          Value<DateTime?> recurrenceEndDate = const Value.absent(),
+          Value<int?> recurrenceTotalCount = const Value.absent(),
+          int? recurrenceGeneratedCount,
+          Value<int?> recurrenceParentId = const Value.absent(),
           DateTime? date,
           DateTime? updatedAt,
           Value<double?> exchangeRateAtCreation = const Value.absent(),
@@ -3283,8 +3445,20 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
         recurrenceType:
             recurrenceType.present ? recurrenceType.value : this.recurrenceType,
+        recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
         recurrenceEnds:
             recurrenceEnds.present ? recurrenceEnds.value : this.recurrenceEnds,
+        recurrenceEndDate: recurrenceEndDate.present
+            ? recurrenceEndDate.value
+            : this.recurrenceEndDate,
+        recurrenceTotalCount: recurrenceTotalCount.present
+            ? recurrenceTotalCount.value
+            : this.recurrenceTotalCount,
+        recurrenceGeneratedCount:
+            recurrenceGeneratedCount ?? this.recurrenceGeneratedCount,
+        recurrenceParentId: recurrenceParentId.present
+            ? recurrenceParentId.value
+            : this.recurrenceParentId,
         date: date ?? this.date,
         updatedAt: updatedAt ?? this.updatedAt,
         exchangeRateAtCreation: exchangeRateAtCreation.present
@@ -3321,9 +3495,24 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurrenceType: data.recurrenceType.present
           ? data.recurrenceType.value
           : this.recurrenceType,
+      recurrenceInterval: data.recurrenceInterval.present
+          ? data.recurrenceInterval.value
+          : this.recurrenceInterval,
       recurrenceEnds: data.recurrenceEnds.present
           ? data.recurrenceEnds.value
           : this.recurrenceEnds,
+      recurrenceEndDate: data.recurrenceEndDate.present
+          ? data.recurrenceEndDate.value
+          : this.recurrenceEndDate,
+      recurrenceTotalCount: data.recurrenceTotalCount.present
+          ? data.recurrenceTotalCount.value
+          : this.recurrenceTotalCount,
+      recurrenceGeneratedCount: data.recurrenceGeneratedCount.present
+          ? data.recurrenceGeneratedCount.value
+          : this.recurrenceGeneratedCount,
+      recurrenceParentId: data.recurrenceParentId.present
+          ? data.recurrenceParentId.value
+          : this.recurrenceParentId,
       date: data.date.present ? data.date.value : this.date,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       exchangeRateAtCreation: data.exchangeRateAtCreation.present
@@ -3354,7 +3543,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
+          ..write('recurrenceInterval: $recurrenceInterval, ')
           ..write('recurrenceEnds: $recurrenceEnds, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
+          ..write('recurrenceTotalCount: $recurrenceTotalCount, ')
+          ..write('recurrenceGeneratedCount: $recurrenceGeneratedCount, ')
+          ..write('recurrenceParentId: $recurrenceParentId, ')
           ..write('date: $date, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('exchangeRateAtCreation: $exchangeRateAtCreation, ')
@@ -3366,26 +3560,32 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      amount,
-      categoryId,
-      accountId,
-      currencyCode,
-      reference,
-      contactId,
-      debtId,
-      sourceDebtId,
-      imagePath,
-      isRecurrenceEnabled,
-      recurrenceType,
-      recurrenceEnds,
-      date,
-      updatedAt,
-      exchangeRateAtCreation,
-      baseCurrencyAmount,
-      fxDelta,
-      transferGroupId);
+  int get hashCode => Object.hashAll([
+        id,
+        amount,
+        categoryId,
+        accountId,
+        currencyCode,
+        reference,
+        contactId,
+        debtId,
+        sourceDebtId,
+        imagePath,
+        isRecurrenceEnabled,
+        recurrenceType,
+        recurrenceInterval,
+        recurrenceEnds,
+        recurrenceEndDate,
+        recurrenceTotalCount,
+        recurrenceGeneratedCount,
+        recurrenceParentId,
+        date,
+        updatedAt,
+        exchangeRateAtCreation,
+        baseCurrencyAmount,
+        fxDelta,
+        transferGroupId
+      ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3402,7 +3602,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.imagePath == this.imagePath &&
           other.isRecurrenceEnabled == this.isRecurrenceEnabled &&
           other.recurrenceType == this.recurrenceType &&
+          other.recurrenceInterval == this.recurrenceInterval &&
           other.recurrenceEnds == this.recurrenceEnds &&
+          other.recurrenceEndDate == this.recurrenceEndDate &&
+          other.recurrenceTotalCount == this.recurrenceTotalCount &&
+          other.recurrenceGeneratedCount == this.recurrenceGeneratedCount &&
+          other.recurrenceParentId == this.recurrenceParentId &&
           other.date == this.date &&
           other.updatedAt == this.updatedAt &&
           other.exchangeRateAtCreation == this.exchangeRateAtCreation &&
@@ -3424,7 +3629,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> imagePath;
   final Value<bool> isRecurrenceEnabled;
   final Value<String?> recurrenceType;
+  final Value<int> recurrenceInterval;
   final Value<String?> recurrenceEnds;
+  final Value<DateTime?> recurrenceEndDate;
+  final Value<int?> recurrenceTotalCount;
+  final Value<int> recurrenceGeneratedCount;
+  final Value<int?> recurrenceParentId;
   final Value<DateTime> date;
   final Value<DateTime> updatedAt;
   final Value<double?> exchangeRateAtCreation;
@@ -3444,7 +3654,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
+    this.recurrenceInterval = const Value.absent(),
     this.recurrenceEnds = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
+    this.recurrenceTotalCount = const Value.absent(),
+    this.recurrenceGeneratedCount = const Value.absent(),
+    this.recurrenceParentId = const Value.absent(),
     this.date = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.exchangeRateAtCreation = const Value.absent(),
@@ -3465,7 +3680,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.imagePath = const Value.absent(),
     this.isRecurrenceEnabled = const Value.absent(),
     this.recurrenceType = const Value.absent(),
+    this.recurrenceInterval = const Value.absent(),
     this.recurrenceEnds = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
+    this.recurrenceTotalCount = const Value.absent(),
+    this.recurrenceGeneratedCount = const Value.absent(),
+    this.recurrenceParentId = const Value.absent(),
     required DateTime date,
     this.updatedAt = const Value.absent(),
     this.exchangeRateAtCreation = const Value.absent(),
@@ -3489,7 +3709,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? imagePath,
     Expression<bool>? isRecurrenceEnabled,
     Expression<String>? recurrenceType,
+    Expression<int>? recurrenceInterval,
     Expression<String>? recurrenceEnds,
+    Expression<DateTime>? recurrenceEndDate,
+    Expression<int>? recurrenceTotalCount,
+    Expression<int>? recurrenceGeneratedCount,
+    Expression<int>? recurrenceParentId,
     Expression<DateTime>? date,
     Expression<DateTime>? updatedAt,
     Expression<double>? exchangeRateAtCreation,
@@ -3511,7 +3736,15 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (isRecurrenceEnabled != null)
         'is_recurrence_enabled': isRecurrenceEnabled,
       if (recurrenceType != null) 'recurrence_type': recurrenceType,
+      if (recurrenceInterval != null) 'recurrence_interval': recurrenceInterval,
       if (recurrenceEnds != null) 'recurrence_ends': recurrenceEnds,
+      if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
+      if (recurrenceTotalCount != null)
+        'recurrence_total_count': recurrenceTotalCount,
+      if (recurrenceGeneratedCount != null)
+        'recurrence_generated_count': recurrenceGeneratedCount,
+      if (recurrenceParentId != null)
+        'recurrence_parent_id': recurrenceParentId,
       if (date != null) 'date': date,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (exchangeRateAtCreation != null)
@@ -3536,7 +3769,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<String?>? imagePath,
       Value<bool>? isRecurrenceEnabled,
       Value<String?>? recurrenceType,
+      Value<int>? recurrenceInterval,
       Value<String?>? recurrenceEnds,
+      Value<DateTime?>? recurrenceEndDate,
+      Value<int?>? recurrenceTotalCount,
+      Value<int>? recurrenceGeneratedCount,
+      Value<int?>? recurrenceParentId,
       Value<DateTime>? date,
       Value<DateTime>? updatedAt,
       Value<double?>? exchangeRateAtCreation,
@@ -3556,7 +3794,13 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       imagePath: imagePath ?? this.imagePath,
       isRecurrenceEnabled: isRecurrenceEnabled ?? this.isRecurrenceEnabled,
       recurrenceType: recurrenceType ?? this.recurrenceType,
+      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
       recurrenceEnds: recurrenceEnds ?? this.recurrenceEnds,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      recurrenceTotalCount: recurrenceTotalCount ?? this.recurrenceTotalCount,
+      recurrenceGeneratedCount:
+          recurrenceGeneratedCount ?? this.recurrenceGeneratedCount,
+      recurrenceParentId: recurrenceParentId ?? this.recurrenceParentId,
       date: date ?? this.date,
       updatedAt: updatedAt ?? this.updatedAt,
       exchangeRateAtCreation:
@@ -3606,8 +3850,24 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (recurrenceType.present) {
       map['recurrence_type'] = Variable<String>(recurrenceType.value);
     }
+    if (recurrenceInterval.present) {
+      map['recurrence_interval'] = Variable<int>(recurrenceInterval.value);
+    }
     if (recurrenceEnds.present) {
       map['recurrence_ends'] = Variable<String>(recurrenceEnds.value);
+    }
+    if (recurrenceEndDate.present) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate.value);
+    }
+    if (recurrenceTotalCount.present) {
+      map['recurrence_total_count'] = Variable<int>(recurrenceTotalCount.value);
+    }
+    if (recurrenceGeneratedCount.present) {
+      map['recurrence_generated_count'] =
+          Variable<int>(recurrenceGeneratedCount.value);
+    }
+    if (recurrenceParentId.present) {
+      map['recurrence_parent_id'] = Variable<int>(recurrenceParentId.value);
     }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
@@ -3646,7 +3906,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('imagePath: $imagePath, ')
           ..write('isRecurrenceEnabled: $isRecurrenceEnabled, ')
           ..write('recurrenceType: $recurrenceType, ')
+          ..write('recurrenceInterval: $recurrenceInterval, ')
           ..write('recurrenceEnds: $recurrenceEnds, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
+          ..write('recurrenceTotalCount: $recurrenceTotalCount, ')
+          ..write('recurrenceGeneratedCount: $recurrenceGeneratedCount, ')
+          ..write('recurrenceParentId: $recurrenceParentId, ')
           ..write('date: $date, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('exchangeRateAtCreation: $exchangeRateAtCreation, ')
@@ -7376,7 +7641,12 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
+  Value<int> recurrenceInterval,
   Value<String?> recurrenceEnds,
+  Value<DateTime?> recurrenceEndDate,
+  Value<int?> recurrenceTotalCount,
+  Value<int> recurrenceGeneratedCount,
+  Value<int?> recurrenceParentId,
   required DateTime date,
   Value<DateTime> updatedAt,
   Value<double?> exchangeRateAtCreation,
@@ -7398,7 +7668,12 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<String?> imagePath,
   Value<bool> isRecurrenceEnabled,
   Value<String?> recurrenceType,
+  Value<int> recurrenceInterval,
   Value<String?> recurrenceEnds,
+  Value<DateTime?> recurrenceEndDate,
+  Value<int?> recurrenceTotalCount,
+  Value<int> recurrenceGeneratedCount,
+  Value<int?> recurrenceParentId,
   Value<DateTime> date,
   Value<DateTime> updatedAt,
   Value<double?> exchangeRateAtCreation,
@@ -7499,6 +7774,21 @@ final class $$TransactionsTableReferences
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: [item]));
   }
+
+  static $TransactionsTable _recurrenceParentIdTable(_$AppDatabase db) =>
+      db.transactions.createAlias($_aliasNameGenerator(
+          db.transactions.recurrenceParentId, db.transactions.id));
+
+  $$TransactionsTableProcessedTableManager? get recurrenceParentId {
+    final $_column = $_itemColumn<int>('recurrence_parent_id');
+    if ($_column == null) return null;
+    final manager = $$TransactionsTableTableManager($_db, $_db.transactions)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_recurrenceParentIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
 }
 
 class $$TransactionsTableFilterComposer
@@ -7530,8 +7820,24 @@ class $$TransactionsTableFilterComposer
       column: $table.recurrenceType,
       builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<int> get recurrenceInterval => $composableBuilder(
+      column: $table.recurrenceInterval,
+      builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get recurrenceEnds => $composableBuilder(
       column: $table.recurrenceEnds,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get recurrenceEndDate => $composableBuilder(
+      column: $table.recurrenceEndDate,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get recurrenceTotalCount => $composableBuilder(
+      column: $table.recurrenceTotalCount,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get recurrenceGeneratedCount => $composableBuilder(
+      column: $table.recurrenceGeneratedCount,
       builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get date => $composableBuilder(
@@ -7674,6 +7980,26 @@ class $$TransactionsTableFilterComposer
             ));
     return composer;
   }
+
+  $$TransactionsTableFilterComposer get recurrenceParentId {
+    final $$TransactionsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.recurrenceParentId,
+        referencedTable: $db.transactions,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$TransactionsTableFilterComposer(
+              $db: $db,
+              $table: $db.transactions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TransactionsTableOrderingComposer
@@ -7705,8 +8031,24 @@ class $$TransactionsTableOrderingComposer
       column: $table.recurrenceType,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get recurrenceInterval => $composableBuilder(
+      column: $table.recurrenceInterval,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get recurrenceEnds => $composableBuilder(
       column: $table.recurrenceEnds,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get recurrenceEndDate => $composableBuilder(
+      column: $table.recurrenceEndDate,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get recurrenceTotalCount => $composableBuilder(
+      column: $table.recurrenceTotalCount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get recurrenceGeneratedCount => $composableBuilder(
+      column: $table.recurrenceGeneratedCount,
       builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<DateTime> get date => $composableBuilder(
@@ -7849,6 +8191,26 @@ class $$TransactionsTableOrderingComposer
             ));
     return composer;
   }
+
+  $$TransactionsTableOrderingComposer get recurrenceParentId {
+    final $$TransactionsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.recurrenceParentId,
+        referencedTable: $db.transactions,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$TransactionsTableOrderingComposer(
+              $db: $db,
+              $table: $db.transactions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TransactionsTableAnnotationComposer
@@ -7878,8 +8240,20 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get recurrenceType => $composableBuilder(
       column: $table.recurrenceType, builder: (column) => column);
 
+  GeneratedColumn<int> get recurrenceInterval => $composableBuilder(
+      column: $table.recurrenceInterval, builder: (column) => column);
+
   GeneratedColumn<String> get recurrenceEnds => $composableBuilder(
       column: $table.recurrenceEnds, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get recurrenceEndDate => $composableBuilder(
+      column: $table.recurrenceEndDate, builder: (column) => column);
+
+  GeneratedColumn<int> get recurrenceTotalCount => $composableBuilder(
+      column: $table.recurrenceTotalCount, builder: (column) => column);
+
+  GeneratedColumn<int> get recurrenceGeneratedCount => $composableBuilder(
+      column: $table.recurrenceGeneratedCount, builder: (column) => column);
 
   GeneratedColumn<DateTime> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
@@ -8018,6 +8392,26 @@ class $$TransactionsTableAnnotationComposer
             ));
     return composer;
   }
+
+  $$TransactionsTableAnnotationComposer get recurrenceParentId {
+    final $$TransactionsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.recurrenceParentId,
+        referencedTable: $db.transactions,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$TransactionsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.transactions,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TransactionsTableTableManager extends RootTableManager<
@@ -8037,7 +8431,8 @@ class $$TransactionsTableTableManager extends RootTableManager<
         bool currencyCode,
         bool contactId,
         bool debtId,
-        bool sourceDebtId})> {
+        bool sourceDebtId,
+        bool recurrenceParentId})> {
   $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
       : super(TableManagerState(
           db: db,
@@ -8061,7 +8456,12 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
+            Value<int> recurrenceInterval = const Value.absent(),
             Value<String?> recurrenceEnds = const Value.absent(),
+            Value<DateTime?> recurrenceEndDate = const Value.absent(),
+            Value<int?> recurrenceTotalCount = const Value.absent(),
+            Value<int> recurrenceGeneratedCount = const Value.absent(),
+            Value<int?> recurrenceParentId = const Value.absent(),
             Value<DateTime> date = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
             Value<double?> exchangeRateAtCreation = const Value.absent(),
@@ -8082,7 +8482,12 @@ class $$TransactionsTableTableManager extends RootTableManager<
             imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
+            recurrenceInterval: recurrenceInterval,
             recurrenceEnds: recurrenceEnds,
+            recurrenceEndDate: recurrenceEndDate,
+            recurrenceTotalCount: recurrenceTotalCount,
+            recurrenceGeneratedCount: recurrenceGeneratedCount,
+            recurrenceParentId: recurrenceParentId,
             date: date,
             updatedAt: updatedAt,
             exchangeRateAtCreation: exchangeRateAtCreation,
@@ -8103,7 +8508,12 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> imagePath = const Value.absent(),
             Value<bool> isRecurrenceEnabled = const Value.absent(),
             Value<String?> recurrenceType = const Value.absent(),
+            Value<int> recurrenceInterval = const Value.absent(),
             Value<String?> recurrenceEnds = const Value.absent(),
+            Value<DateTime?> recurrenceEndDate = const Value.absent(),
+            Value<int?> recurrenceTotalCount = const Value.absent(),
+            Value<int> recurrenceGeneratedCount = const Value.absent(),
+            Value<int?> recurrenceParentId = const Value.absent(),
             required DateTime date,
             Value<DateTime> updatedAt = const Value.absent(),
             Value<double?> exchangeRateAtCreation = const Value.absent(),
@@ -8124,7 +8534,12 @@ class $$TransactionsTableTableManager extends RootTableManager<
             imagePath: imagePath,
             isRecurrenceEnabled: isRecurrenceEnabled,
             recurrenceType: recurrenceType,
+            recurrenceInterval: recurrenceInterval,
             recurrenceEnds: recurrenceEnds,
+            recurrenceEndDate: recurrenceEndDate,
+            recurrenceTotalCount: recurrenceTotalCount,
+            recurrenceGeneratedCount: recurrenceGeneratedCount,
+            recurrenceParentId: recurrenceParentId,
             date: date,
             updatedAt: updatedAt,
             exchangeRateAtCreation: exchangeRateAtCreation,
@@ -8144,7 +8559,8 @@ class $$TransactionsTableTableManager extends RootTableManager<
               currencyCode = false,
               contactId = false,
               debtId = false,
-              sourceDebtId = false}) {
+              sourceDebtId = false,
+              recurrenceParentId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -8222,6 +8638,17 @@ class $$TransactionsTableTableManager extends RootTableManager<
                         $$TransactionsTableReferences._sourceDebtIdTable(db).id,
                   ) as T;
                 }
+                if (recurrenceParentId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.recurrenceParentId,
+                    referencedTable: $$TransactionsTableReferences
+                        ._recurrenceParentIdTable(db),
+                    referencedColumn: $$TransactionsTableReferences
+                        ._recurrenceParentIdTable(db)
+                        .id,
+                  ) as T;
+                }
 
                 return state;
               },
@@ -8250,7 +8677,8 @@ typedef $$TransactionsTableProcessedTableManager = ProcessedTableManager<
         bool currencyCode,
         bool contactId,
         bool debtId,
-        bool sourceDebtId})>;
+        bool sourceDebtId,
+        bool recurrenceParentId})>;
 typedef $$UserSettingsTableCreateCompanionBuilder = UserSettingsCompanion
     Function({
   Value<int> id,

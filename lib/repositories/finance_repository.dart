@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
+import 'package:finance_mvp/services/finance/recurrence.dart';
 
 class MonthlySummary {
   final double income;
@@ -23,14 +25,17 @@ class FinanceRepository {
 
   FinanceRepository(this.db);
 
+  Map<String, int>? _decimalDigitsCache;
+
   // ── Transactions ──
 
   Stream<List<Transaction>> watchTransactions() {
     return (db.select(db.transactions)).watch();
   }
 
-  Future<void> createTransaction(TransactionsCompanion transaction) {
-    return db.into(db.transactions).insert(transaction);
+  Future<void> createTransaction(TransactionsCompanion transaction) async {
+    await db.into(db.transactions).insert(transaction);
+    await _syncDebtSettlement(transaction.debtId.value);
   }
 
   /// Persist a transaction and its related debt (with the installment
@@ -75,6 +80,8 @@ class FinanceRepository {
         await db.into(db.debtInstallments).insert(
             installment.copyWith(debtId: drift.Value(debtId)));
       }
+      // This transaction may itself be a payment against another debt.
+      await _syncDebtSettlement(transaction.debtId.value);
     });
   }
 
@@ -94,11 +101,12 @@ class FinanceRepository {
     });
   }
 
-  Future<void> updateTransaction(TransactionsCompanion transaction) {
-    return db.into(db.transactions).insert(
+  Future<void> updateTransaction(TransactionsCompanion transaction) async {
+    await db.into(db.transactions).insert(
           transaction,
           mode: drift.InsertMode.insertOrReplace,
         );
+    await _syncDebtSettlement(transaction.debtId.value);
   }
 
   /// Delete a single income/expense, or both legs of a transfer (identified by
@@ -116,6 +124,8 @@ class FinanceRepository {
     } else {
       await (db.delete(db.transactions)..where((t) => t.id.equals(id))).go();
     }
+    // Removing the last payment reopens a debt that had auto-settled.
+    await _syncDebtSettlement(existing.debtId);
   }
 
   /// Insert the two linked legs of an internal transfer/menudeo atomically:
@@ -474,7 +484,21 @@ class FinanceRepository {
     return (await getCurrency(code))?.symbol ?? r'$';
   }
 
+  /// Minor-unit scale of [currencyCode] — how many decimal places money in it
+  /// is actually divisible to. Drives [quantizeTo] at the money boundaries;
+  /// not a display setting. Cached because conversions read it per call.
+  Future<int> getDecimalDigits(String currencyCode) async {
+    _decimalDigitsCache ??= {
+      for (final c in await getAllCurrencies()) c.code: c.decimalDigits,
+    };
+    return _decimalDigitsCache![currencyCode] ?? 2;
+  }
+
+  /// Forget the cached scales after a currency is added or edited.
+  void invalidateCurrencyScales() => _decimalDigitsCache = null;
+
   Future<void> addCurrency(CurrenciesCompanion currency) {
+    invalidateCurrencyScales();
     return db.into(db.currencies).insert(currency);
   }
 
@@ -595,7 +619,25 @@ class FinanceRepository {
         ? paidInBase
         : await convertAmount(
             amount: paidInBase, fromCode: base, toCode: debt.currencyCode);
-    return (debt.amount - paidInDebtCurrency).clamp(0.0, debt.amount);
+    // Snapped to the debt currency's minor unit: this value is compared
+    // against zero to decide whether the debt is settled, so a converted
+    // remainder like 1.4e-14 must not survive as "still owed".
+    return quantizeTo(debt.amount - paidInDebtCurrency,
+        await getDecimalDigits(debt.currencyCode))
+        .clamp(0.0, debt.amount);
+  }
+
+  /// Keep a debt's `isSettled` in step with what has actually been paid:
+  /// settles at zero, reopens once a payment is removed. Called from the
+  /// transaction write/delete paths, so the flag is correct the moment a
+  /// payment is recorded rather than the next time the debts list is opened.
+  Future<void> _syncDebtSettlement(int? debtId) async {
+    if (debtId == null) return;
+    final debt = await getDebtById(debtId);
+    if (debt == null) return;
+    final settled = await getDebtRemaining(debt) <= 0;
+    if (debt.isSettled == settled) return;
+    await updateDebt(debt.copyWith(isSettled: settled));
   }
 
   /// Totals of unpaid debts in the base currency: [owedToMe] is what others
@@ -624,8 +666,111 @@ class FinanceRepository {
     return (owedToMe: owedToMe, owedByMe: owedByMe);
   }
 
+  // ── Recurring Transactions ──
+
+  /// Materialise every occurrence of every enabled recurrence that has come
+  /// due on or before [now], and return how many transactions were created.
+  ///
+  /// Safe to call as often as you like: it counts from
+  /// [Transactions.recurrenceGeneratedCount], so a second run on the same day
+  /// creates nothing.
+  Future<int> materializeDueRecurrences({DateTime? now}) async {
+    final today = DateTime(now?.year ?? DateTime.now().year,
+        now?.month ?? DateTime.now().month, now?.day ?? DateTime.now().day);
+
+    // Templates only: a generated occurrence has recurrenceParentId set, and
+    // recurrence disabled, so it can never act as its own series.
+    final templates = await (db.select(db.transactions)
+          ..where((t) =>
+              t.isRecurrenceEnabled.equals(true) &
+              t.recurrenceParentId.isNull()))
+        .get();
+
+    var created = 0;
+    for (final t in templates) {
+      final rule = _ruleOf(t);
+      if (rule == null) continue;
+
+      var index = t.recurrenceGeneratedCount + 1;
+      var made = 0;
+      while (made < maxOccurrencesPerRun) {
+        final due = rule.occurrence(index);
+        if (due == null || due.isAfter(today)) break;
+        await db.into(db.transactions).insert(_occurrenceOf(t, due));
+        made++;
+        index++;
+      }
+
+      if (made > 0) {
+        created += made;
+        await (db.update(db.transactions)
+              ..where((row) => row.id.equals(t.id)))
+            .write(TransactionsCompanion(
+                recurrenceGeneratedCount: drift.Value(t.recurrenceGeneratedCount + made)));
+      }
+    }
+    return created;
+  }
+
+  /// Ceiling on occurrences generated per series per run. A daily recurrence
+  /// untouched for a year would otherwise dump 365 rows into the ledger the
+  /// first time the app opens; the rest catch up on later opens.
+  static const maxOccurrencesPerRun = 12;
+
+  /// The rule described by a stored transaction, or null when it isn't a
+  /// usable series (no recognised type).
+  static Recurrence? _ruleOf(Transaction t) {
+    final type = RecurrenceType.tryParse(t.recurrenceType);
+    if (type == null) return null;
+    return Recurrence(
+      type: type,
+      anchor: DateTime(t.date.year, t.date.month, t.date.day),
+      interval: t.recurrenceInterval,
+      end: RecurrenceEnd.tryParse(t.recurrenceEnds),
+      endDate: t.recurrenceEndDate,
+      totalCount: t.recurrenceTotalCount,
+    );
+  }
+
+  /// A generated occurrence: the template's money and description, stamped with
+  /// its own date and pointed back at the template.
+  ///
+  /// The captured FX fields are deliberately left null so balance reads
+  /// re-derive them at the rate for *this* date — reusing the rate the template
+  /// was saved at would value a two-year-old rent payment at today's rate.
+  ///
+  /// Debt and source-debt links are not carried over either: an occurrence the
+  /// user never confirmed shouldn't quietly move a debt balance.
+  TransactionsCompanion _occurrenceOf(Transaction t, DateTime date) {
+    return TransactionsCompanion.insert(
+      amount: t.amount,
+      categoryId: drift.Value(t.categoryId),
+      accountId: t.accountId,
+      currencyCode: t.currencyCode,
+      reference: drift.Value(t.reference),
+      contactId: drift.Value(t.contactId),
+      imagePath: drift.Value(t.imagePath),
+      isRecurrenceEnabled: const drift.Value(false),
+      recurrenceParentId: drift.Value(t.id),
+      date: date,
+    );
+  }
+
+  /// The next due date for a recurrence template, for display. Null when the
+  /// series is over.
+  Future<DateTime?> getNextOccurrence(Transaction template, {DateTime? from}) async {
+    final rule = _ruleOf(template);
+    if (rule == null) return null;
+    return rule.nextOccurrenceOnOrAfter(from ?? DateTime.now());
+  }
+
   // ── Currency Conversion ──
 
+  /// Convert [amount] between two currencies at the latest stored rate.
+  ///
+  /// The result is quantized to the *target* currency's minor unit, so a value
+  /// that no longer exists in the target's scale (0.001 USD) never becomes a
+  /// stored balance or a debt payment.
   Future<double> convertAmount({
     required double amount,
     required String fromCode,
@@ -637,12 +782,12 @@ class FinanceRepository {
 
     if (toCode == baseCurrencyCode) {
       final rate = await getLatestRate(fromCode);
-      return rate != null ? amount / rate.rate : amount;
+      return _quantizeIn(rate != null ? amount / rate.rate : amount, toCode);
     }
 
     if (fromCode == baseCurrencyCode) {
       final rate = await getLatestRate(toCode);
-      return rate != null ? amount * rate.rate : amount;
+      return _quantizeIn(rate != null ? amount * rate.rate : amount, toCode);
     }
 
     final amountInBase = await convertAmount(
@@ -650,6 +795,11 @@ class FinanceRepository {
     return await convertAmount(
         amount: amountInBase, fromCode: baseCurrencyCode, toCode: toCode);
   }
+
+  /// Round [value] to [code]'s minor unit. Every converted amount goes through
+  /// here so float residue never leaves this class.
+  Future<double> _quantizeIn(double value, String code) async =>
+      quantizeTo(value, await getDecimalDigits(code));
 
   // ── Balance Calculation (optimized with SQL aggregation) ──
 
@@ -696,8 +846,9 @@ class FinanceRepository {
     if (fromCode == nationalCode || toCode == nationalCode) {
       final marketRate = await getMarketRateWithFallback(DateTime.now());
       if (marketRate != null && marketRate > 0) {
-        if (fromCode == nationalCode) return amount / marketRate;
-        return amount * marketRate;
+        return _quantizeIn(
+            fromCode == nationalCode ? amount / marketRate : amount * marketRate,
+            toCode);
       }
     }
 
@@ -726,7 +877,9 @@ class FinanceRepository {
   // ── Monthly Summary ──
 
   /// Convert a transaction to the base currency, preferring the rate captured
-  /// at creation time (falls back to the latest stored rate).
+  /// at creation time (falls back to the latest stored rate). Quantized to the
+  /// base currency's minor unit so the monthly summary doesn't accumulate
+  /// per-row conversion residue.
   Future<double> toBaseAmount(Transaction transaction) async {
     final baseCode = await getBaseCurrencyCode();
     if (transaction.currencyCode == baseCode) return transaction.amount;

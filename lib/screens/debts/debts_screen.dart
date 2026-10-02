@@ -40,16 +40,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final currencies = await repo.getAllCurrencies();
     final totals = await repo.getOpenDebtTotalsInBase();
 
-    // Balance each debt against its linked payments; auto-settle the fully
-    // paid ones so the list reflects reality without manual bookkeeping.
+    // Balance each debt against its linked payments. `isSettled` is kept
+    // current by the repository on every payment write/delete, so this only
+    // reads — no bookkeeping writes from a build/load path.
     final remaining = <int, double>{};
     final installments = <int, List<db.DebtInstallment>>{};
     for (final debt in debts) {
-      final r = await repo.getDebtRemaining(debt);
-      remaining[debt.id] = r;
-      if (!debt.isSettled && r <= 0) {
-        await repo.updateDebt(debt.copyWith(isSettled: true));
-      }
+      remaining[debt.id] = await repo.getDebtRemaining(debt);
       final schedule = await repo.getDebtInstallments(debt.id);
       if (schedule.isNotEmpty) installments[debt.id] = schedule;
     }

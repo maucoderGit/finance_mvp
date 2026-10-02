@@ -127,67 +127,89 @@ class _TransactionPageState extends State<TransactionPage> {
     final repo = context.watch<FinanceRepository>();
     final range = _period.range(_anchor);
 
+    // Contact and category names, so search can match them. Same lookup-map
+    // approach the list view uses to render its rows.
     return Scaffold(
-      body: StreamBuilder<List<db.Transaction>>(
-        stream: repo.watchTransactions(),
-        builder: (context, snapshot) {
-          final inPeriod = (snapshot.data ?? []).where((t) {
-            if (range == null) return true;
-            return !t.date.isBefore(range.start) && t.date.isBefore(range.end);
-          }).toList();
-          final shown = inPeriod.where((t) {
-            if (_selectedToggle == 'In' && t.amount <= 0) return false;
-            if (_selectedToggle == 'Out' && t.amount >= 0) return false;
-            if (_query.isNotEmpty) {
-              final haystack =
-                  '${t.reference ?? ''} ${t.currencyCode} ${t.amount.abs()}';
-              if (!haystack.toLowerCase().contains(_query)) return false;
-            }
-            return true;
-          }).toList()
-            ..sort((a, b) => b.date.compareTo(a.date));
-
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Body has no AppBar, so pad past the status bar like home does.
-                SizedBox(height: MediaQuery.paddingOf(context).top + 12),
-                _buildHeader(context),
-                const SizedBox(height: 16),
-                FutureBuilder<({double total, String baseSymbol})>(
-                  future: _netTotalInBase(repo, shown),
-                  builder: (context, snapshot) {
-                    final total = snapshot.data?.total ?? 0.0;
-                    final baseSymbol = snapshot.data?.baseSymbol ?? r'$';
-                    return TransactionCard(
-                      title: '${switch (_selectedToggle) {
-                        'In' => 'Money in',
-                        'Out' => 'Money out',
-                        _ => 'Net movement',
-                      }} · ${shown.length}',
-                      displayAmount: formatMoney(total, symbol: baseSymbol),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildPeriodControls(),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: TransactionListView(
-                    transactions: shown,
-                    emptyMessage: _query.isNotEmpty
-                        ? 'No matches for "${_searchController.text.trim()}"'
-                        : 'No transactions in ${_period.title(_anchor).toLowerCase()}',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _buildToggleSection(),
-              ],
-            ),
+      body: FutureBuilder<
+          ({Map<int, String> contacts, Map<int, String> categories})>(
+        future: () async {
+          final contacts = await repo.getAllContacts();
+          final categories = await repo.getAllCategories();
+          return (
+            contacts: {for (final c in contacts) c.id: c.name},
+            categories: {for (final c in categories) c.id: c.name},
           );
-        },
+        }(),
+        builder: (context, lookups) => StreamBuilder<List<db.Transaction>>(
+          stream: repo.watchTransactions(),
+          builder: (context, snapshot) {
+            final inPeriod = (snapshot.data ?? []).where((t) {
+              if (range == null) return true;
+              return !t.date.isBefore(range.start) &&
+                  t.date.isBefore(range.end);
+            }).toList();
+            final shown = inPeriod.where((t) {
+              if (_selectedToggle == 'In' && t.amount <= 0) return false;
+              if (_selectedToggle == 'Out' && t.amount >= 0) return false;
+              if (_query.isNotEmpty) {
+                final haystack = [
+                  t.reference ?? '',
+                  t.contactId == null ? '' : lookups.data?.contacts[t.contactId],
+                  t.categoryId == null
+                      ? ''
+                      : lookups.data?.categories[t.categoryId],
+                  t.currencyCode,
+                  t.amount.abs(),
+                ].join(' ');
+                if (!haystack.toLowerCase().contains(_query)) return false;
+              }
+              return true;
+            }).toList()
+              ..sort((a, b) => b.date.compareTo(a.date));
+
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Body has no AppBar, so pad past the status bar like home does.
+                  SizedBox(height: MediaQuery.paddingOf(context).top + 12),
+                  _buildHeader(context),
+                  const SizedBox(height: 16),
+                  FutureBuilder<({double total, String baseSymbol})>(
+                    future: _netTotalInBase(repo, shown),
+                    builder: (context, snapshot) {
+                      final total = snapshot.data?.total ?? 0.0;
+                      final baseSymbol = snapshot.data?.baseSymbol ?? r'$';
+                      return TransactionCard(
+                        title: '${switch (_selectedToggle) {
+                          'In' => 'Money in',
+                          'Out' => 'Money out',
+                          _ => 'Net movement',
+                        }} · ${shown.length}',
+                        displayAmount:
+                            formatMoney(total, symbol: baseSymbol),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPeriodControls(),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: TransactionListView(
+                      transactions: shown,
+                      emptyMessage: _query.isNotEmpty
+                          ? 'No matches for "${_searchController.text.trim()}"'
+                          : 'No transactions in ${_period.title(_anchor).toLowerCase()}',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildToggleSection(),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,13 +1,14 @@
-import 'dart:async';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/revaluation_service.dart';
 
-/// Records daily net worth snapshots and periodically syncs rates.
+/// Records the daily net worth snapshot.
+///
+/// The app has no background execution, so this runs once per app open rather
+/// than on a timer: [ensureTodaySnapshot] is idempotent and compares calendar
+/// days, so a day the app stayed closed is backfilled on the next open.
 class NetWorthTracker {
   final FinanceRepository _repository;
   final RevaluationService _revaluationService;
-
-  Timer? _dailyTimer;
 
   NetWorthTracker(this._repository, this._revaluationService);
 
@@ -32,24 +33,5 @@ class NetWorthTracker {
 
     await _revaluationService.recordDailyNetWorth(
         nationalCurrencyCode: nationalCurrencyCode);
-  }
-
-  /// Schedule a daily net worth snapshot shortly after midnight.
-  void startDailyScheduler({String? nationalCurrencyCode}) {
-    _dailyTimer?.cancel();
-
-    final now = DateTime.now();
-    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
-    final untilMidnight = nextMidnight.difference(now);
-
-    _dailyTimer = Timer(untilMidnight, () async {
-      await ensureTodaySnapshot(nationalCurrencyCode: nationalCurrencyCode);
-      startDailyScheduler(nationalCurrencyCode: nationalCurrencyCode);
-    });
-  }
-
-  void cancel() {
-    _dailyTimer?.cancel();
-    _dailyTimer = null;
   }
 }

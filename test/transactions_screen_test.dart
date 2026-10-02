@@ -16,14 +16,17 @@ bool _inside(DateTime date, ({DateTime start, DateTime end}) r) =>
 
 /// Mounts the page over an in-memory DB holding [seed], and unmounts + closes
 /// it again so drift's stream-cleanup timers fire before teardown's
-/// pending-timer check (same dance as root_screen_test).
+/// pending-timer check (same dance as root_screen_test). [setup] runs against
+/// the repository before the widget mounts, for rows the seed references.
 Future<void> pumpPage(
   WidgetTester tester, {
   required List<TransactionsCompanion> seed,
   required Future<void> Function(WidgetTester) body,
+  Future<void> Function(FinanceRepository repo)? setup,
 }) async {
   final db = AppDatabase(executor: NativeDatabase.memory());
   final repo = FinanceRepository(db);
+  await setup?.call(repo);
   for (final t in seed) {
     await repo.createTransaction(t);
   }
@@ -154,6 +157,36 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(TextField), findsNothing);
         expect(find.text('Transactions'), findsOneWidget);
+      },
+    );
+  });
+
+  testWidgets('search matches the contact and category behind a row',
+      (tester) async {
+    // Category id 1 is the seeded "Services" row.
+    await pumpPage(
+      tester,
+      setup: (repo) async {
+        await repo.findOrCreateContact('Ana Ruiz');
+      },
+      seed: [
+        _tx(10, 'Invoice 1').copyWith(contactId: const Value(1)),
+        _tx(20, 'Invoice 2').copyWith(categoryId: const Value(1)),
+        _tx(30, 'Invoice 3'),
+      ],
+      body: (tester) async {
+        await tester.tap(find.byIcon(Icons.search));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField), 'ana ruiz');
+        await tester.pumpAndSettle();
+        expect(find.text('Invoice 1'), findsOneWidget);
+        expect(find.text('Invoice 2'), findsNothing);
+
+        await tester.enterText(find.byType(TextField), 'services');
+        await tester.pumpAndSettle();
+        expect(find.text('Invoice 2'), findsOneWidget);
+        expect(find.text('Invoice 1'), findsNothing);
       },
     );
   });

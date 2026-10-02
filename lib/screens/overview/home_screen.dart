@@ -6,6 +6,7 @@ import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/services/finance/net_worth_tracker.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
+import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/services/finance/revaluation_service.dart';
 import 'package:finance_mvp/widgets/month_filter_widget.dart';
 import 'package:finance_mvp/widgets/appbar.dart';
@@ -67,7 +68,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // Ensure a net worth snapshot exists for today (in both currencies).
     final nationalCode = await currencyProvider.getNationalCurrencyCode();
     await tracker.ensureTodaySnapshot(nationalCurrencyCode: nationalCode);
-    tracker.cancel();
+
+    // Add any recurring transaction that has come due since the last open.
+    // Idempotent, so running before or after the rate sync doesn't matter.
+    final generated = await repo.materializeDueRecurrences();
+    if (generated > 0 && mounted) {
+      showToast(
+        context,
+        message:
+            '$generated recurring ${generated == 1 ? 'transaction' : 'transactions'} added',
+      );
+    }
 
     // Refresh revaluation analytics.
     await revaluationProvider.refresh();

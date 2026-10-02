@@ -118,10 +118,45 @@ class Transactions extends Table {
   /// re-writes that debt/installment schedule.
   IntColumn get sourceDebtId => integer().nullable().references(Debts, #id)();
   TextColumn get imagePath => text().nullable()();
+
+  /// Recurrence. When [isRecurrenceEnabled] is set, this row is the *template*
+  /// of a repeating transaction: its [date] is the first occurrence and the
+  /// anchor for every later one. Occurrences after the first are materialised
+  /// as ordinary transactions carrying [recurrenceParentId] back to this row.
+  /// The template is never duplicated into the ledger, so [amount] is counted
+  /// exactly once while the series runs.
   BoolColumn get isRecurrenceEnabled =>
       boolean().withDefault(const Constant(false))();
+
+  /// One of `daily`, `weekly`, `monthly`, `yearly`.
   TextColumn get recurrenceType => text().nullable()();
+
+  /// Occurs every [recurrenceInterval] [recurrenceType]s, so 2 + `monthly` is
+  /// "every two months". Always at least 1.
+  IntColumn get recurrenceInterval =>
+      integer().withDefault(const Constant(1))();
+
+  /// One of `never`, `date`, `count`: how the series stops.
   TextColumn get recurrenceEnds => text().nullable()();
+
+  /// Stop generating once an occurrence would fall after this date. Only read
+  /// when [recurrenceEnds] is `date`.
+  DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
+
+  /// Total occurrences the series runs for, including the template's own first
+  /// one. Only read when [recurrenceEnds] is `count`.
+  IntColumn get recurrenceTotalCount => integer().nullable()();
+
+  /// How many occurrences after the template have been materialised. Drives
+  /// the `count` end condition.
+  IntColumn get recurrenceGeneratedCount =>
+      integer().withDefault(const Constant(0))();
+
+  /// Set on materialised occurrences to the template's id. Null on the
+  /// template and on ordinary transactions, which is how the engine tells the
+  /// two apart and never re-generates from an occurrence.
+  IntColumn get recurrenceParentId =>
+      integer().nullable().references(Transactions, #id)();
   DateTimeColumn get date => dateTime()();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   RealColumn get exchangeRateAtCreation => real().nullable()();
@@ -188,7 +223,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -275,6 +310,21 @@ class AppDatabase extends _$AppDatabase {
           if (from < 13) {
             await _addColumnIfMissing(m, debts, debts.frequency);
             await _addColumnIfMissing(m, transactions, transactions.sourceDebtId);
+          }
+          if (from < 14) {
+            // Purely additive. Legacy rows that were flagged recurring always
+            // have a null recurrenceType, which the engine already skips, so
+            // there's nothing to clean up and no reason to touch old data.
+            await _addColumnIfMissing(
+                m, transactions, transactions.recurrenceInterval);
+            await _addColumnIfMissing(
+                m, transactions, transactions.recurrenceEndDate);
+            await _addColumnIfMissing(
+                m, transactions, transactions.recurrenceTotalCount);
+            await _addColumnIfMissing(
+                m, transactions, transactions.recurrenceGeneratedCount);
+            await _addColumnIfMissing(
+                m, transactions, transactions.recurrenceParentId);
           }
         },
         beforeOpen: (details) async {
@@ -366,11 +416,16 @@ class AppDatabase extends _$AppDatabase {
   /// categories and an un-onboarded settings row (fresh-install state).
   Future<void> resetAllData() async {
     await transaction(() async {
-      // Children first so foreign keys never dangle regardless of enforcement.
+      // Every table, children first so foreign keys never dangle regardless of
+      // enforcement. Anything added to @DriftDatabase must be listed here or
+      // "Clear all data" silently keeps it.
+      await delete(debtInstallments).go();
+      await delete(transactions).go();
+      await delete(debts).go();
+      await delete(contacts).go();
       await delete(netWorthHistory).go();
       await delete(marketRates).go();
       await delete(currencyRates).go();
-      await delete(transactions).go();
       await delete(accounts).go();
       await delete(categories).go();
       await delete(userSettings).go();

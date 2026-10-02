@@ -10,6 +10,7 @@ import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:finance_mvp/screens/settings/category_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/services/finance/fx_delta.dart';
+import 'package:finance_mvp/services/finance/recurrence.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/numpad.dart';
@@ -38,7 +39,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
   int _currentStep = 0;
   TransactionType _transactionType = TransactionType.income;
 
-  bool _isRecurrenceEnabled = true;
+  /// Off by default: a transaction is not a bill until the user says so.
+  bool _isRecurrenceEnabled = false;
+  RecurrenceType _recurrenceType = RecurrenceType.monthly;
+  int _recurrenceInterval = 1;
+  RecurrenceEnd _recurrenceEnd = RecurrenceEnd.never;
+  DateTime? _recurrenceEndDate;
+  int _recurrenceTotalCount = 12;
+
+  /// The day this transaction is booked, and for a recurring one the anchor
+  /// every later occurrence is derived from. Movable only while recurrence is
+  /// on, so editing an ordinary transaction can't refile it into another month.
+  DateTime _date = DateTime.now();
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _rateController = TextEditingController();
 
@@ -136,6 +148,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
             existing.exchangeRateAtCreation!.toStringAsFixed(2);
       }
       _isRecurrenceEnabled = existing.isRecurrenceEnabled;
+      _recurrenceType =
+          RecurrenceType.tryParse(existing.recurrenceType) ??
+              RecurrenceType.monthly;
+      _recurrenceInterval = existing.recurrenceInterval;
+      _recurrenceEnd = RecurrenceEnd.tryParse(existing.recurrenceEnds);
+      _recurrenceEndDate = existing.recurrenceEndDate;
+      _recurrenceTotalCount = existing.recurrenceTotalCount ?? 12;
+      _date = existing.date;
       _transactionType = existing.transferGroupId != null
           ? TransactionType.transfer
           : existing.amount >= 0
@@ -492,12 +512,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     // Compute the transaction value in the base currency at creation time.
     // Base accounts are already in base units; only non-base accounts convert
-    // by the captured rate.
+    // by the captured rate. Snapped to the base currency's minor unit so the
+    // stored value is a real amount of money, not a division artefact.
     double? baseAmount;
     if (isBaseAccount) {
       baseAmount = amountValue;
     } else if (rateAtCreation != null && rateAtCreation != 0) {
-      baseAmount = amountValue / rateAtCreation;
+      baseAmount =
+          quantizeTo(amountValue / rateAtCreation, await repo.getDecimalDigits(baseCode));
     }
 
     // FX arbitrage differential (USDT-lived) logged on national-currency
@@ -534,7 +556,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
       debtId: Value(_selectedDebt?.id),
       sourceDebtId: Value(_sourceDebt?.id),
       isRecurrenceEnabled: Value(_isRecurrenceEnabled),
-      date: Value(DateTime.now()),
+      recurrenceType:
+          Value(_isRecurrenceEnabled ? _recurrenceType.id : null),
+      recurrenceInterval: Value(_recurrenceInterval),
+      recurrenceEnds: Value(_isRecurrenceEnabled ? _recurrenceEnd.id : null),
+      recurrenceEndDate:
+          Value(_isRecurrenceEnabled && _recurrenceEnd == RecurrenceEnd.onDate
+              ? _recurrenceEndDate
+              : null),
+      recurrenceTotalCount: Value(
+          _isRecurrenceEnabled && _recurrenceEnd == RecurrenceEnd.afterCount
+              ? _recurrenceTotalCount
+              : null),
+      date: Value(_date),
       exchangeRateAtCreation: Value(rateAtCreation),
       baseCurrencyAmount: Value(baseAmount),
       imagePath: Value(_imagePath),
@@ -544,11 +578,20 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   /// Builds the debt row and its quota schedule for the current form state
   /// (one debt + one [db.DebtInstallments] per installment, first due date at
-  /// [_intervalDate](0)). The last installment absorbs the rounding remainder.
-  ({String title, double amount, String direction, int? contactId,
-        String currency, DateTime firstDueDate, db.DebtsCompanion debt,
-        List<db.DebtInstallmentsCompanion> installments})
-      _buildDebtPlan() {
+  /// [_intervalDate](0)). Each installment is snapped to the account currency's
+  /// minor unit; the last one absorbs the remainder so the schedule always sums
+  /// back to [total].
+  Future<
+      ({
+        String title,
+        double amount,
+        String direction,
+        int? contactId,
+        String currency,
+        DateTime firstDueDate,
+        db.DebtsCompanion debt,
+        List<db.DebtInstallmentsCompanion> installments
+      })> _buildDebtPlan() async {
     final ref = _referenceController.text.trim();
     final catName = (category?['name'] as String?)?.trim();
     final title = ref.isNotEmpty
@@ -557,11 +600,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final total = double.tryParse(_amount) ?? 0.0;
     final n = _installmentCount;
     final now = DateTime.now();
-    final per = (total / n * 100).floor() / 100;
     final direction =
         _transactionType == TransactionType.expense ? 'creditor' : 'debtor';
     final contactId = _selectedContact?.id;
     final currency = _selectedAccount!.currencyCode;
+    final digits =
+        await context.read<FinanceRepository>().getDecimalDigits(currency);
+    final per = quantizeTo(total / n, digits);
 
     final debt = db.DebtsCompanion.insert(
       contactId: Value(contactId),
@@ -605,7 +650,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final companion = await _buildTransactionCompanion();
     if (companion == null || _selectedAccount == null) return;
 
-    final plan = _buildDebtPlan();
+    final plan = await _buildDebtPlan();
     final existing = widget.existingTransaction;
 
     if (existing == null) {
@@ -1857,132 +1902,151 @@ Future<void> _openContactPicker() async {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color:
-            context.colors.cardBackground, // Very light background for the card
+        color: context.colors.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.colors.cardBorder, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Enable Recurrence Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
                   const Text(
-                    'Enable Recurrence',
+                    'Recurring',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.calendar_today,
+                  Icon(Icons.autorenew,
                       size: 18, color: context.colors.textLight),
                 ],
               ),
               Switch(
                 value: _isRecurrenceEnabled,
                 onChanged: (bool value) {
-                  setState(() {
-                    _isRecurrenceEnabled = value;
-                  });
+                  setState(() => _isRecurrenceEnabled = value);
                 },
-                activeThumbColor:
-                    context.colors.primary, // Dark green switch color
+                activeThumbColor: context.colors.primary,
               ),
             ],
           ),
 
-          const SizedBox(height: 16),
-
-          // Repeat/Ends Row
-          Wrap(
-            // Changed Row to Wrap
-            spacing: 12.0, // Horizontal space between chips
-            runSpacing: 12.0, // Vertical space between lines of chips
-            children: [
-              // Repeat Chip
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _isRecurrenceEnabled
-                      ? context.colors.cardBorder
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min, // Use min to wrap content
-                  children: [
-                    Text(
-                      'Repeat: Monthly',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: _isRecurrenceEnabled
-                            ? context.colors.textDark
-                            : context.colors.textLight,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.grid_view,
-                      size: 16,
-                      color: _isRecurrenceEnabled
-                          ? context.colors.textDark
-                          : context.colors.textLight,
-                    ),
-                  ],
-                ),
-              ),
-
-              // Ends Chip
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _isRecurrenceEnabled
-                      ? context.colors.cardBorder
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min, // Use min to wrap content
-                  children: [
-                    Text(
-                      'Ends: Until I cancel',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: _isRecurrenceEnabled
-                            ? context.colors.textDark
-                            : context.colors.textLight,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.close,
-                      size: 16,
-                      color: _isRecurrenceEnabled
-                          ? context.colors.textDark
-                          : context.colors.textLight,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Description Text
-          Text(
-            'Applies to subscriptions, budgets, or saving goals',
-            style: TextStyle(color: context.colors.textLight, fontSize: 14),
-          ),
+          // Off means off: no dead chips pretending to be settings.
+          if (_isRecurrenceEnabled) ...[
+            const SizedBox(height: 4),
+            Text(
+              'This transaction repeats. Later occurrences are added to your '
+              'ledger automatically when you open the app.',
+              style: TextStyle(color: context.colors.textLight, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            _RecurrenceRow(
+              icon: Icons.event,
+              label: 'First due',
+              value: DateFormat.yMMMd().format(_date),
+              onTap: _pickFirstDue,
+            ),
+            _RecurrenceRow(
+              icon: Icons.repeat,
+              label: 'Repeats',
+              value: _repeatsLabel,
+              onTap: _pickRepeats,
+            ),
+            _RecurrenceRow(
+              icon: Icons.event_busy,
+              label: 'Ends',
+              value: _endsLabel,
+              onTap: _pickEnds,
+            ),
+            const SizedBox(height: 4),
+            _NextDueHint(rule: _currentRule),
+          ],
         ],
       ),
     );
   }
 
+  /// The rule as currently configured. Anchored on [_date], the day this
+  /// transaction is booked.
+  Recurrence get _currentRule => Recurrence(
+        type: _recurrenceType,
+        anchor: DateTime(_date.year, _date.month, _date.day),
+        interval: _recurrenceInterval,
+        end: _recurrenceEnd,
+        endDate: _recurrenceEndDate,
+        totalCount: _recurrenceTotalCount,
+      );
+
+  String get _repeatsLabel => switch (_recurrenceType) {
+        RecurrenceType.daily => _recurrenceInterval == 1
+            ? 'Every day'
+            : 'Every $_recurrenceInterval days',
+        RecurrenceType.weekly => _recurrenceInterval == 1
+            ? 'Every week'
+            : 'Every $_recurrenceInterval weeks',
+        RecurrenceType.monthly => _recurrenceInterval == 1
+            ? 'Every month'
+            : 'Every $_recurrenceInterval months',
+        RecurrenceType.yearly => _recurrenceInterval == 1
+            ? 'Every year'
+            : 'Every $_recurrenceInterval years',
+      };
+
+  String get _endsLabel => switch (_recurrenceEnd) {
+        RecurrenceEnd.never => 'Never',
+        RecurrenceEnd.onDate => _recurrenceEndDate == null
+            ? 'Pick a date'
+            : DateFormat.yMMMd().format(_recurrenceEndDate!),
+        RecurrenceEnd.afterCount =>
+          'After $_recurrenceTotalCount ${_recurrenceTotalCount == 1 ? 'time' : 'times'}',
+      };
+
+  Future<void> _pickFirstDue() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() => _date = picked);
+  }
+
+  Future<void> _pickRepeats() async {
+    final result = await showModalBottomSheet<({RecurrenceType type, int interval})>(
+      context: context,
+      isDismissible: true,
+      builder: (_) => _RepeatsSheet(
+        type: _recurrenceType,
+        interval: _recurrenceInterval,
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      _recurrenceType = result.type;
+      _recurrenceInterval = result.interval;
+    });
+  }
+
+  Future<void> _pickEnds() async {
+    final result = await showModalBottomSheet<_RecurrenceEndChoice>(
+      context: context,
+      isDismissible: true,
+      builder: (_) => _EndsSheet(
+        end: _recurrenceEnd,
+        endDate: _recurrenceEndDate,
+        totalCount: _recurrenceTotalCount,
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      _recurrenceEnd = result.end;
+      if (result.endDate != null) _recurrenceEndDate = result.endDate;
+      if (result.totalCount != null) _recurrenceTotalCount = result.totalCount!;
+    });
+  }
   Widget _buildDebtOptInCard() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2495,5 +2559,342 @@ class _DebtPickerSheetState extends State<_DebtPickerSheet> {
         );
       },
     );
+  }
+}
+
+/// A tappable label/value row inside the recurrence card. Deliberately looks
+/// like the other pickers in this flow (chevron on the right) so it doesn't
+/// read as a dead chip.
+class _RecurrenceRow extends StatelessWidget {
+  const _RecurrenceRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: context.colors.primary),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(fontSize: 15)),
+            const Spacer(),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: context.colors.primary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: context.colors.textLight),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Next: 28 Feb 2026", or a note that the series has already finished.
+class _NextDueHint extends StatelessWidget {
+  const _NextDueHint({required this.rule});
+
+  final Recurrence rule;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final next = rule.nextOccurrenceOnOrAfter(today);
+    return Text(
+      next == null
+          ? 'This series has already finished.'
+          : 'Next: ${DateFormat.yMMMd().format(next)}',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: next == null ? context.colors.textLight : context.colors.primary,
+      ),
+    );
+  }
+}
+
+/// Stepper shared by the two sheets: `- value +` clamped to [min]..[max].
+class _CountStepper extends StatelessWidget {
+  const _CountStepper({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.max = 365,
+  });
+
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 15)),
+        Row(
+          children: [
+            _StepButton(
+              icon: Icons.remove,
+              enabled: value > 1,
+              onTap: () => onChanged(value - 1),
+            ),
+            SizedBox(
+              width: 56,
+              child: Text(
+                '$value',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+            _StepButton(
+              icon: Icons.add,
+              enabled: value < max,
+              onTap: () => onChanged(value + 1),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: enabled
+              ? context.colors.primaryLight.withValues(alpha: 0.25)
+              : context.colors.fieldsBackground,
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? context.colors.primary : context.colors.textLight,
+        ),
+      ),
+    );
+  }
+}
+
+/// Picks how often the transaction repeats.
+class _RepeatsSheet extends StatefulWidget {
+  const _RepeatsSheet({required this.type, required this.interval});
+
+  final RecurrenceType type;
+  final int interval;
+
+  @override
+  State<_RepeatsSheet> createState() => _RepeatsSheetState();
+}
+
+class _RepeatsSheetState extends State<_RepeatsSheet> {
+  late RecurrenceType _type = widget.type;
+  late int _interval = widget.interval;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Repeat',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final t in RecurrenceType.values)
+                  ChoiceChip(
+                    label: Text(t.label),
+                    selected: _type == t,
+                    onSelected: (_) => setState(() => _type = t),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _CountStepper(
+              label: 'Every',
+              value: _interval,
+              max: _type == RecurrenceType.daily ? 365 : 60,
+              onChanged: (v) => setState(() => _interval = v),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, (type: _type, interval: _interval)),
+                child: const Text('Done'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What the `_pickEnds` sheet hands back.
+class _RecurrenceEndChoice {
+  const _RecurrenceEndChoice({required this.end, this.endDate, this.totalCount});
+
+  final RecurrenceEnd end;
+  final DateTime? endDate;
+  final int? totalCount;
+}
+
+/// Picks when the series stops.
+class _EndsSheet extends StatefulWidget {
+  const _EndsSheet({
+    required this.end,
+    required this.endDate,
+    required this.totalCount,
+  });
+
+  final RecurrenceEnd end;
+  final DateTime? endDate;
+  final int totalCount;
+
+  @override
+  State<_EndsSheet> createState() => _EndsSheetState();
+}
+
+class _EndsSheetState extends State<_EndsSheet> {
+  late RecurrenceEnd _end = widget.end;
+  late DateTime? _endDate = widget.endDate;
+  late int _count = widget.totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ends',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            RadioGroup<RecurrenceEnd>(
+              groupValue: _end,
+              onChanged: (v) => setState(() => _end = v!),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final e in RecurrenceEnd.values)
+                    RadioListTile<RecurrenceEnd>(
+                      value: e,
+                      activeColor: context.colors.primary,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(e.label,
+                          style: TextStyle(color: context.colors.textDark)),
+                      subtitle: Text(
+                        switch (e) {
+                          RecurrenceEnd.never =>
+                            'Keep going until you turn it off',
+                          RecurrenceEnd.onDate => 'Stop after this day',
+                          RecurrenceEnd.afterCount =>
+                            'Stop after a set number of bills',
+                        },
+                        style: TextStyle(color: context.colors.textLight),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (_end == RecurrenceEnd.onDate)
+              TextButton.icon(
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _endDate == null
+                      ? 'Pick end date'
+                      : DateFormat.yMMMd().format(_endDate!),
+                ),
+                onPressed: _pickDate,
+              ),
+            if (_end == RecurrenceEnd.afterCount) ...[
+              const SizedBox(height: 8),
+              _CountStepper(
+                label: 'Occurrences',
+                value: _count,
+                onChanged: (v) => setState(() => _count = v),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _RecurrenceEndChoice(
+                    end: _end,
+                    // Default to a year out rather than leaving it unset, which
+                    // would read as "never" while the radio says "on a date".
+                    endDate: _end == RecurrenceEnd.onDate
+                        ? (_endDate ??
+                            DateTime.now().add(const Duration(days: 365)))
+                        : null,
+                    totalCount: _end == RecurrenceEnd.afterCount ? _count : null,
+                  ),
+                ),
+                child: const Text('Done'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _endDate = picked);
   }
 }

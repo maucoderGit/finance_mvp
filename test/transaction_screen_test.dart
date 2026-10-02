@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
@@ -12,6 +13,11 @@ import 'test_db.dart';
 Future<(AppDatabase, FinanceRepository)> pumpTransactionScreen(
   WidgetTester tester, {
   required List<String> currencyCodes,
+
+  /// Seeds rows in the screen's own database and returns the one to edit.
+  /// Keeps everything in a single DB, so drift never sees two open at once.
+  Future<Transaction?> Function(FinanceRepository repo)? existingFrom,
+  Future<void> Function(FinanceRepository repo)? setup,
 }) async {
   tester.view.physicalSize = const Size(1000, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -20,6 +26,7 @@ Future<(AppDatabase, FinanceRepository)> pumpTransactionScreen(
 
   final db = AppDatabase(executor: NativeDatabase.memory());
   final repo = FinanceRepository(db);
+  await setup?.call(repo);
 
   for (final code in currencyCodes) {
     await repo.createAccountWithInitialTransaction(
@@ -44,8 +51,10 @@ Future<(AppDatabase, FinanceRepository)> pumpTransactionScreen(
     ),
   );
 
+  final existing = await existingFrom?.call(repo);
   navigatorKey.currentState!.push(
-    MaterialPageRoute(builder: (_) => const TransactionScreen()),
+    MaterialPageRoute(
+        builder: (_) => TransactionScreen(existingTransaction: existing)),
   );
   await tester.pumpAndSettle();
 
@@ -289,6 +298,155 @@ void main() {
     // Monthly spacing: each due date a month after the previous.
     final dueDates = installments.map((q) => q.dueDate).toList()..sort();
     expect(dueDates[1].difference(dueDates[0]).inDays, inInclusiveRange(27, 32));
+
+    await db.close();
+  });
+
+  testWidgets('the recurrence card defaults to off and stores nothing when off',
+      (tester) async {
+    final (db, repo) =
+        await pumpTransactionScreen(tester, currencyCodes: ['USD']);
+
+    await tapNumpad(tester, ['2', '0', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final saved = (await repo.db.select(repo.db.transactions).get())
+        .singleWhere((t) => t.amount == 200);
+    // A plain transaction must not carry phantom recurrence settings.
+    expect(saved.isRecurrenceEnabled, isFalse);
+    expect(saved.recurrenceType, isNull);
+    expect(saved.recurrenceEnds, isNull);
+
+    await db.close();
+  });
+
+  testWidgets('turning recurrence on stores the type, interval and end rule',
+      (tester) async {
+    final (db, repo) =
+        await pumpTransactionScreen(tester, currencyCodes: ['USD']);
+
+    await tapNumpad(tester, ['5', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+
+    // The card starts off, so the settings rows are absent until it's on.
+    expect(find.text('Repeats'), findsNothing);
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('Repeats'), findsOneWidget);
+    expect(find.text('Ends'), findsOneWidget);
+    expect(find.text('Every month'), findsOneWidget);
+    expect(find.text('Never'), findsOneWidget);
+    // The anchor is the transaction's own date, so the next due date is shown.
+    expect(find.textContaining('Next:'), findsOneWidget);
+
+    // Bump the interval to 2.
+    await tester.tap(find.text('Repeats'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Done'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // End after 5 occurrences.
+    await tester.tap(find.text('Ends'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('After a number of times'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.remove).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Every 2 months'), findsOneWidget);
+    expect(find.text('After 11 times'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final saved = (await repo.db.select(repo.db.transactions).get())
+        .singleWhere((t) => t.amount == 50);
+    expect(saved.isRecurrenceEnabled, isTrue);
+    expect(saved.recurrenceType, 'monthly');
+    expect(saved.recurrenceInterval, 2);
+    expect(saved.recurrenceEnds, 'count');
+    expect(saved.recurrenceTotalCount, isNotNull);
+    expect(saved.recurrenceEndDate, isNull);
+
+    await db.close();
+  });
+
+  testWidgets('editing a recurring transaction restores its rule',
+      (tester) async {
+    final (db, repo) = await pumpTransactionScreen(
+      tester,
+      currencyCodes: ['USD'],
+      existingFrom: (repo) async {
+        await repo.createTransaction(TransactionsCompanion.insert(
+          amount: -50,
+          accountId: (await repo.getAllAccounts()).first.id,
+          currencyCode: 'USD',
+          isRecurrenceEnabled: const Value(true),
+          recurrenceType: const Value('weekly'),
+          recurrenceInterval: const Value(3),
+          recurrenceEnds: const Value('count'),
+          recurrenceTotalCount: const Value(7),
+          date: DateTime(2026, 3, 4),
+        ));
+        return (await repo.db.select(repo.db.transactions).get()).single;
+      },
+    );
+
+    // The card lives in the details step, so step into it.
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+
+    // The card comes back with the stored rule, not the defaults.
+    expect(find.text('Every 3 weeks'), findsOneWidget);
+    expect(find.text('After 7 times'), findsOneWidget);
+
+    await db.close();
+  });
+
+  testWidgets('the quota split uses the currency minor unit, not a hardcoded 2',
+      (tester) async {
+    final (db, repo) = await pumpTransactionScreen(
+      tester,
+      currencyCodes: ['BTC'],
+      setup: (repo) => repo.addCurrency(CurrenciesCompanion.insert(
+            code: 'BTC',
+            name: 'Bitcoin',
+            symbol: '₿',
+            decimalDigits: const Value(8),
+          )),
+    );
+
+    await tapNumpad(tester, ['1', '0', '0']);
+    await tester.tap(find.text('Add details'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Expense'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue to debt plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3x'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm and save with debt'));
+    await tester.pumpAndSettle();
+
+    // 100 over 3 is 33.33…, which a 2-decimal split would truncate to 33.33
+    // and lose a third of a satoshi per quota.
+    final installments = await repo.db.select(repo.db.debtInstallments).get();
+    expect(installments, hasLength(3));
+    expect(installments.first.amount, closeTo(33.33333333, 1e-8));
+    // The last quota absorbs the remainder, so the schedule still sums to 100.
+    expect(installments.map((q) => q.amount).reduce((a, b) => a + b),
+        closeTo(100.0, 1e-8));
 
     await db.close();
   });
