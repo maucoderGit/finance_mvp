@@ -88,7 +88,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 14);
+    expect(version, 15);
 
     final accounts = await db.customSelect('SELECT * FROM accounts').get();
     expect(accounts, hasLength(1));
@@ -140,7 +140,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 14);
+    expect(version, 15);
 
     final settings = await db
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -178,7 +178,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 14);
+    expect(version, 15);
 
     // Rebuilt from the current schema: now has currency_code + the UNIQUE index.
     final cols = await db
@@ -186,6 +186,55 @@ void main() {
         .map((r) => r.read<String>('name'))
         .get();
     expect(cols, containsAll(['currency_code', 'date', 'rate', 'created_at']));
+
+    await db.close();
+    await dir.delete(recursive: true);
+  });
+
+  test('a v14 DB gains the goals table with its foreign keys intact', () async {
+    final dir = await Directory.systemTemp.createTemp('dp_migration');
+    final file = File(p.join(dir.path, 'db.sqlite'));
+
+    // v14 is the version that shipped before goals existed, so this is what an
+    // upgrading install actually holds: full data, no goals table. Building it
+    // from a real v15 file and rewinding is the only way to get genuine v14
+    // contents without hand-writing every pre-v15 migration's output.
+    final seed = AppDatabase(executor: NativeDatabase(file));
+    final base = (await seed.select(seed.currencies).get()).first;
+    await seed.into(seed.accounts).insert(AccountsCompanion.insert(
+          name: 'Checking',
+          currencyCode: base.code,
+          icon: 'bank',
+          iconColor: 1,
+        ));
+    await seed.close();
+
+    final raw = sqlite.sqlite3.open(file.path);
+    raw.execute('DROP TABLE goals');
+    raw.execute('PRAGMA user_version = 14');
+    raw.dispose();
+
+    final db = AppDatabase(executor: NativeDatabase(file));
+
+    expect(
+      () async {
+        await db.customSelect('SELECT 1').get();
+      },
+      returnsNormally,
+    );
+
+    // The pre-existing account survived the upgrade.
+    expect(await db.select(db.accounts).get(), hasLength(1));
+
+    // And the goals table is usable, foreign keys and all.
+    final goal = await db.into(db.goals).insertReturning(GoalsCompanion.insert(
+          accountId: 1,
+          name: 'Emergency fund',
+          targetAmount: 1000,
+          currencyCode: 'USD',
+        ));
+    expect(goal.id, isNotNull);
+    expect(await db.select(db.goals).get(), hasLength(1));
 
     await db.close();
     await dir.delete(recursive: true);
@@ -241,7 +290,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .map((r) => r.read<int>('user_version'))
         .getSingle();
-    expect(version, 14);
+    expect(version, 15);
 
     // The rebuilt DB matches drift: timestamps present, no legacy `type`.
     final accountsCols = await db

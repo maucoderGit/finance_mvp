@@ -1,7 +1,9 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/screens/goals/goals_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/widgets/cash_flow_chart.dart';
+import 'package:finance_mvp/widgets/goal_progress_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +17,11 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _showIncome = false;
   CashFlowBucket _bucket = CashFlowBucket.month;
+
+  /// Held rather than rebuilt per `build()`: a fresh stream makes the
+  /// `StreamBuilder` unsubscribe and resubscribe on every repaint, and each
+  /// cancel schedules cleanup work in drift.
+  late final Stream<List<GoalProgress>> _goals;
 
   /// Every figure here is denominated in the base currency, so it is read once
   /// rather than per widget. [FutureBuilder] on the balance still re-queries on
@@ -31,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _goals = context.read<FinanceRepository>().watchGoalsWithProgress();
     _loadBase();
   }
 
@@ -117,6 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     primaryColor,
                     textColor,
                   ),
+                  _buildGoalsSection(context, textColor),
                 ],
               ),
             ),
@@ -203,6 +212,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The top few goals, progress only. Projections live on the goals screen —
+  /// they're per-goal async queries and the dashboard has no rate to hand them,
+  /// and a card that guessed "no date" here would be stating something false.
+  Widget _buildGoalsSection(BuildContext context, Color textColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Goals',
+              style: TextStyle(
+                  color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const GoalsScreen(),
+              )),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        StreamBuilder<List<GoalProgress>>(
+          stream: _goals,
+          builder: (context, snapshot) {
+            final goals = snapshot.data ?? const <GoalProgress>[];
+            if (goals.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'No goals yet. Open Goals to start saving toward something.',
+                  style: TextStyle(color: context.colors.textLight),
+                ),
+              );
+            }
+            return Column(
+              children: [
+                for (final goal in goals.take(3))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GoalProgressCard(
+                        goal: goal, showProjection: false),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 

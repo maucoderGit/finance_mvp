@@ -21,7 +21,7 @@ void main() {
   late FinanceRepository repo;
 
   setUp(() async {
-    db = AppDatabase(executor: NativeDatabase.memory());
+    db = AppDatabase(executor: testConnection(NativeDatabase.memory()));
     repo = FinanceRepository(db);
     await repo.createAccountWithInitialTransaction(
       AccountsCompanion.insert(
@@ -112,6 +112,36 @@ void main() {
     expect(find.text('Emergency Fund'), findsNothing);
     expect(find.text('Vacation to Italy'), findsNothing);
     expect(find.byIcon(Icons.notifications_none), findsNothing);
+  });
+
+  testWidgets('real goals show on the dashboard with derived progress',
+      (tester) async {
+    final goal = await repo.createGoalWithAccount(
+      name: 'Emergency Fund',
+      targetAmount: 200,
+      currencyCode: 'USD',
+      accountName: 'Emergency Fund',
+    );
+    // Fund the pot: this is what makes progress non-zero, and the dashboard
+    // never wrote a progress number itself.
+    await repo.createTransaction(TransactionsCompanion.insert(
+      amount: 50,
+      accountId: goal.accountId,
+      currencyCode: 'USD',
+      date: DateTime.now(),
+    ));
+
+    await mount(tester);
+
+    expect(find.text('Goals'), findsOneWidget);
+    expect(find.text('Emergency Fund'), findsOneWidget);
+    expect(find.text('25%'), findsOneWidget);
+    expect(find.text('${formatMoney(50, currencyCode: 'USD')} of '
+        '${formatMoney(200, currencyCode: 'USD')}'), findsOneWidget);
+    // The dashboard has no monthly rate to project from, so it must not invent
+    // a date or a "can't project" verdict.
+    expect(find.textContaining('On track for'), findsNothing);
+    expect(find.textContaining('Not saving enough'), findsNothing);
   });
 
   testWidgets('a ledger with no transactions still draws a flat zero line',

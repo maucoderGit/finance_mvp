@@ -56,6 +56,30 @@ class CashFlowPoint {
   });
 }
 
+/// A goal and its live progress. [current] is the backing account's balance
+/// converted into the goal's currency; [progress] is [current] over the target
+/// and is deliberately left unclamped so a caller can render an over-funded
+/// goal as "128%" instead of quietly pinning it at 100%.
+class GoalProgress {
+  final Goal goal;
+  final Account account;
+
+  /// Saved so far, in [Goal.currencyCode].
+  final double current;
+
+  /// Fraction of the target reached. 0.5 is halfway; can exceed 1.
+  final double progress;
+
+  const GoalProgress({
+    required this.goal,
+    required this.account,
+    required this.current,
+    required this.progress,
+  });
+
+  bool get isReached => progress >= 1;
+}
+
 class FinanceRepository {
   final AppDatabase db;
 
@@ -798,6 +822,194 @@ class FinanceRepository {
     final rule = _ruleOf(template);
     if (rule == null) return null;
     return rule.nextOccurrenceOnOrAfter(from ?? DateTime.now());
+  }
+
+  // ── Goals ──
+
+  /// Goals with live progress, in one stream.
+  ///
+  /// Reads `transactions` in the same query, so transferring into a goal's pot
+  /// re-emits the list — the pot filling up is the update. That matters
+  /// because there is no stored progress to poll instead. One query rather
+  /// than a `getAccountBalance` per goal, which would be an N+1 on every
+  /// transaction write.
+  Stream<List<GoalProgress>> watchGoalsWithProgress() {
+    final query = db.select(db.goals).join([
+      drift.innerJoin(db.accounts, db.accounts.id.equalsExp(db.goals.accountId)),
+      drift.leftOuterJoin(db.transactions,
+          db.transactions.accountId.equalsExp(db.goals.accountId)),
+    ]);
+    return query.watch().asyncMap(_foldGoalRows);
+  }
+
+  Future<List<GoalProgress>> _foldGoalRows(
+      List<drift.TypedResult> rows) async {
+    final balanceByAccount = <int, double>{};
+    final goals = <int, Goal>{};
+    final accounts = <int, Account>{};
+
+    for (final row in rows) {
+      final goal = row.readTable(db.goals);
+      final account = row.readTable(db.accounts);
+      goals[goal.id] = goal;
+      accounts[account.id] = account;
+      // Left outer join: a goal whose account has no transactions yet still
+      // produces one row with a null transaction.
+      final amount = row.readTableOrNull(db.transactions)?.amount;
+      if (amount != null) {
+        balanceByAccount[account.id] =
+            (balanceByAccount[account.id] ?? 0.0) + amount;
+      }
+    }
+
+    final out = <GoalProgress>[];
+    for (final goal in goals.values) {
+      final account = accounts[goal.accountId]!;
+      final balance = balanceByAccount[account.id] ?? 0.0;
+      final current = await convertAmount(
+          amount: balance,
+          fromCode: account.currencyCode,
+          toCode: goal.currencyCode);
+      out.add(GoalProgress(
+        goal: goal,
+        account: account,
+        current: current,
+        progress: goal.targetAmount == 0 ? 0.0 : current / goal.targetAmount,
+      ));
+    }
+
+    // Soonest deadline first; goals without one sort last rather than first,
+    // since an absent deadline means "no particular rush", not "urgent".
+    out.sort((a, b) {
+      final da = a.goal.deadline;
+      final db = b.goal.deadline;
+      if (da == null && db == null) return a.goal.name.compareTo(b.goal.name);
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da.compareTo(db);
+    });
+    return out;
+  }
+
+  Future<Account?> getAccountById(int id) {
+    return (db.select(db.accounts)..where((a) => a.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  /// Creates the goal together with the account holding its money, so a
+  /// failure part-way can't leave an account with no goal pointing at it or a
+  /// goal pointing at nothing.
+  ///
+  /// Fields are named rather than taken as a [GoalsCompanion] because
+  /// `accountId` is the one value this method decides — the caller has no
+  /// account to name yet on the create path.
+  ///
+  /// Pass [accountId] to adopt an account that already exists; otherwise a new
+  /// savings account named [accountName] is opened at zero, in [currencyCode].
+  Future<Goal> createGoalWithAccount({
+    required String name,
+    required double targetAmount,
+    required String currencyCode,
+    required String accountName,
+    String icon = 'flag',
+    int iconColor = 0xFF1E8E3E,
+    DateTime? deadline,
+    int? accountId,
+  }) {
+    return db.transaction(() async {
+      Account? account;
+      if (accountId != null) {
+        account = await getAccountById(accountId);
+        if (account == null) {
+          throw StateError('Cannot back a goal with missing account $accountId');
+        }
+      } else {
+        account = await db.into(db.accounts).insertReturning(
+              AccountsCompanion.insert(
+                name: accountName,
+                currencyCode: currencyCode,
+                icon: 'savings',
+                iconColor: 0xFFFF9800,
+              ),
+            );
+      }
+      return db.into(db.goals).insertReturning(GoalsCompanion.insert(
+        accountId: account.id,
+        name: name,
+        targetAmount: targetAmount,
+        currencyCode: currencyCode,
+        icon: drift.Value(icon),
+        iconColor: drift.Value(iconColor),
+        deadline: drift.Value(deadline),
+      ));
+    });
+  }
+
+  Future<Goal?> getGoalById(int id) {
+    return (db.select(db.goals)..where((g) => g.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  Future<void> updateGoal(Goal goal) => db.update(db.goals).replace(goal);
+
+  /// Removes the goal only. The backing account and its transactions stay —
+  /// that's real money, and the account is the user's, not the goal's. (An
+  /// account cannot be deleted in the app today, so this can't orphan one; if
+  /// account deletion is ever added it must cascade here.)
+  Future<void> deleteGoal(int id) {
+    return (db.delete(db.goals)..where((g) => g.id.equals(id))).go();
+  }
+
+  /// Average net surplus per month over the last [months] *completed* months,
+  /// or null when there isn't a positive rate to project from.
+  ///
+  /// Completed months only: the current bucket is still filling up, and
+  /// averaging a partial month in understates the rate.
+  ///
+  /// Transfers are excluded from cash flow — moving your own money isn't income
+  /// — so someone who saves by transferring out of checking shows no surplus
+  /// here, even as their pots visibly grow. This measures "can I afford this out
+  /// of new money?", not "when will this pot be full?".
+  Future<double?> averageMonthlySurplus({int months = 3}) async {
+    final series = await watchCashFlow(bucket: CashFlowBucket.month).first;
+    final closed =
+        series.length > 1 ? series.sublist(0, series.length - 1) : series;
+    final window =
+        closed.length > months ? closed.sublist(closed.length - months) : closed;
+    if (window.isEmpty) return null;
+
+    final surplus =
+        window.fold<double>(0.0, (sum, p) => sum + (p.income - p.expenses));
+    final rate = surplus / window.length;
+    return rate > 0 ? rate : null;
+  }
+
+  /// Month the goal looks likely to be reached, or null when there's nothing
+  /// to say.
+  ///
+  /// Pass [monthlyRate] from [averageMonthlySurplus] when projecting several
+  /// goals at once — the rate is the same for all of them, so a list shouldn't
+  /// re-query the series per row.
+  ///
+  /// Returns null rather than a guess when the rate is zero or negative. A
+  /// projected date nothing backs is the same class of lie as the fake goal
+  /// cards this replaced.
+  Future<DateTime?> projectGoalCompletion(
+    GoalProgress goal, {
+    double? monthlyRate,
+  }) async {
+    if (goal.isReached) return DateTime.now();
+
+    final rate = monthlyRate ?? await averageMonthlySurplus();
+    if (rate == null) return null;
+
+    final monthsNeeded =
+        ((goal.goal.targetAmount - goal.current) / rate).ceil();
+    // Beyond half a century the number is arithmetic, not a projection.
+    if (monthsNeeded > 600) return null;
+
+    final now = DateTime.now();
+    return DateTime(now.year, now.month + monthsNeeded, now.day);
   }
 
   // ── Currency Conversion ──

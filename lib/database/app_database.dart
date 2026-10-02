@@ -204,6 +204,42 @@ class NetWorthHistory extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// A savings target backed by a real account, so the money behind it is
+/// ordinary ledger money reachable by the existing transfer flow.
+///
+/// Progress is deliberately NOT stored: there is no `savedAmount` column,
+/// because a second copy of the balance is a number that can drift out of sync
+/// with [Accounts] and turn the dashboard into a liar. Progress is always the
+/// backing account's balance, read live.
+///
+/// [accountId] is not unique. One account per goal is how the app uses it
+/// today, not a rule the schema enforces — that leaves room for goals sharing
+/// a pot later without another migration.
+class Goals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// Where the money for this goal lives. A goal with no account has nothing
+  /// to report, so this is required rather than nullable.
+  IntColumn get accountId => integer().references(Accounts, #id)();
+  TextColumn get name => text()();
+  RealColumn get targetAmount => real()();
+
+  /// Currency [targetAmount] is denominated in. Usually the backing account's,
+  /// but allowed to differ so a goal can be "targeted" in the base currency
+  /// while the pot holds something else — progress then genuinely moves with
+  /// the rate, which is correct rather than something to smooth away.
+  TextColumn get currencyCode => text().references(Currencies, #code)();
+
+  /// Optional "by when". Only a hint for the projection: reaching it is never
+  /// enforced, and an absent deadline hides the projected date rather than
+  /// showing a false one.
+  DateTimeColumn get deadline => dateTime().nullable()();
+  TextColumn get icon => text().withDefault(const Constant('flag'))();
+  IntColumn get iconColor => integer().withDefault(const Constant(0xFF1E8E3E))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 @DriftDatabase(
   tables: [
     Currencies,
@@ -217,13 +253,14 @@ class NetWorthHistory extends Table {
     UserSettings,
     NetWorthHistory,
     MarketRates,
+    Goals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -326,6 +363,11 @@ class AppDatabase extends _$AppDatabase {
             await _addColumnIfMissing(
                 m, transactions, transactions.recurrenceParentId);
           }
+          if (from < 15) {
+            // Purely additive — a brand new table, so there is no existing data
+            // to rewrite and nothing to clean up.
+            await _createTableIfMissing(m, goals);
+          }
         },
         beforeOpen: (details) async {
           // Last line of defense: a DB from a much older app version (or one
@@ -426,6 +468,7 @@ class AppDatabase extends _$AppDatabase {
       await delete(netWorthHistory).go();
       await delete(marketRates).go();
       await delete(currencyRates).go();
+      await delete(goals).go();
       await delete(accounts).go();
       await delete(categories).go();
       await delete(userSettings).go();

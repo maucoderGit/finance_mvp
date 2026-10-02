@@ -945,4 +945,268 @@ void main() {
     expect(years.last.date, DateTime(2026, 1, 1));
     expect(years.last.expenses, 55);
   });
+
+  // ── Goals ──
+
+  group('goals', () {
+    test('creating a goal opens the savings account holding its money', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Emergency fund',
+        targetAmount: 1000,
+        currencyCode: 'USD',
+        accountName: 'Emergency fund',
+      );
+
+      final account = await repo.getAccountById(goal.accountId);
+      expect(account, isNotNull);
+      expect(account!.name, 'Emergency fund');
+      expect(account.icon, 'savings');
+      // A fresh pot is genuinely empty — no phantom starting balance.
+      expect((await repo.watchGoalsWithProgress().first).single.current, 0);
+
+      final stored = await repo.getGoalById(goal.id);
+      expect(stored!.name, 'Emergency fund');
+      expect(stored.targetAmount, 1000);
+    });
+
+    test('a goal can adopt an existing account instead of opening one', () async {
+      final base = (await repo.getAllCurrencies()).firstWhere((c) => c.code == 'USD');
+      final account = await db.into(db.accounts).insertReturning(
+          AccountsCompanion.insert(
+            name: 'Shared pot',
+            currencyCode: base.code,
+            icon: 'savings',
+            iconColor: 1,
+          ));
+
+      await repo.createGoalWithAccount(
+        name: 'Trip',
+        targetAmount: 500,
+        currencyCode: 'USD',
+        accountName: 'ignored',
+        accountId: account.id,
+      );
+
+      // No second account was created.
+      expect(await repo.getAllAccounts(), hasLength(1));
+    });
+
+    test('progress is the backing account balance, not a stored number',
+        () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Laptop',
+        targetAmount: 1000,
+        currencyCode: 'USD',
+        accountName: 'Laptop',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 250,
+        categoryId: drift.Value(category.id),
+        accountId: account!.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+
+      final progress =
+          (await repo.watchGoalsWithProgress().first).single;
+      expect(progress.current, 250);
+      expect(progress.progress, closeTo(0.25, 1e-9));
+      expect(progress.isReached, isFalse);
+    });
+
+    test('a transfer into the pot re-emits progress live', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Holiday',
+        targetAmount: 1000,
+        currencyCode: 'USD',
+        accountName: 'Holiday',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+
+      final seen = <double>[];
+      final sub = repo.watchGoalsWithProgress().listen((rows) {
+        seen.add(rows.single.current);
+      });
+      // Let the first (empty) emission land.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 400,
+        categoryId: drift.Value(category.id),
+        accountId: account!.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await sub.cancel();
+
+      // Funding a goal must move progress without editing the goal itself.
+      expect(seen.first, 0);
+      expect(seen.last, 400);
+    });
+
+    test('overfunded progress exceeds 100% rather than clamping', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Bike',
+        targetAmount: 100,
+        currencyCode: 'USD',
+        accountName: 'Bike',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 250,
+        categoryId: drift.Value(category.id),
+        accountId: account!.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+
+      final progress = (await repo.watchGoalsWithProgress().first).single;
+      // The card clamps the bar, but the number stays honest.
+      expect(progress.progress, 2.5);
+      expect(progress.isReached, isTrue);
+    });
+
+    test('a cross-currency pot converts into the goal currency', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Foreign pot',
+        targetAmount: 100,
+        currencyCode: 'USD',
+        accountName: 'Foreign pot',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+
+      // Hold money in a currency worth twice as much, then let the rate land.
+      final pot = account!;
+      await repo.updateAccount(AccountsCompanion(
+        id: drift.Value(pot.id),
+        currencyCode: const drift.Value('VES'),
+      ));
+      await db.into(db.currencyRates).insert(CurrencyRatesCompanion.insert(
+            currencyCode: 'VES',
+            rate: 2.0,
+            date: DateTime.now(),
+          ));
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 50,
+        categoryId: drift.Value(category.id),
+        accountId: pot.id,
+        currencyCode: 'VES',
+        date: DateTime.now(),
+      ));
+
+      final progress = (await repo.watchGoalsWithProgress().first).single;
+      // 50 VES at 2.0 per USD is 25 USD against a 100 USD target.
+      expect(progress.current, 25);
+      expect(progress.progress, closeTo(0.25, 1e-9));
+    });
+
+    test('no projection without a positive surplus, and a date with one',
+        () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Rainy day',
+        targetAmount: 1200,
+        currencyCode: 'USD',
+        accountName: 'Rainy day',
+      );
+      final progress = (await repo.watchGoalsWithProgress().first).single;
+
+      // Nothing in the ledger means no rate, so no date to promise.
+      expect(await repo.projectGoalCompletion(progress), isNull);
+
+      final category = (await repo.getAllCategories()).first;
+      final now = DateTime.now();
+      // Two closed months at +600/mo, 300 out of pocket.
+      for (final month in [now.subtract(const Duration(days: 75)),
+        now.subtract(const Duration(days: 45))]) {
+        await repo.createTransaction(TransactionsCompanion.insert(
+          amount: 600,
+          categoryId: drift.Value(category.id),
+          accountId: (await repo.getAccountById(goal.accountId))!.id,
+          currencyCode: 'USD',
+          date: month,
+        ));
+      }
+
+      // The window is 3 closed months and the divide is by months in the
+      // window, not months with activity — a quiet month really does drag the
+      // rate down.
+      final rate = await repo.averageMonthlySurplus();
+      expect(rate, 400);
+      final projected = await repo.projectGoalCompletion(progress,
+          monthlyRate: rate);
+      expect(projected, isNotNull);
+      // 1200 to go at 400/mo is 3 months out.
+      expect(projected!.month, DateTime(now.year, now.month + 3, now.day).month);
+    });
+
+    test('a reached goal is due now, not in the future', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Done',
+        targetAmount: 50,
+        currencyCode: 'USD',
+        accountName: 'Done',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 50,
+        categoryId: drift.Value(category.id),
+        accountId: account!.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+
+      final progress = (await repo.watchGoalsWithProgress().first).single;
+      final projected = await repo.projectGoalCompletion(progress);
+      final now = DateTime.now();
+      expect(projected!.year, now.year);
+      expect(projected.month, now.month);
+    });
+
+    test('deleting a goal leaves its account and money alone', () async {
+      final goal = await repo.createGoalWithAccount(
+        name: 'Temp',
+        targetAmount: 100,
+        currencyCode: 'USD',
+        accountName: 'Temp',
+      );
+      final account = await repo.getAccountById(goal.accountId);
+      final category = (await repo.getAllCategories()).first;
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 30,
+        categoryId: drift.Value(category.id),
+        accountId: account!.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+
+      await repo.deleteGoal(goal.id);
+
+      expect(await repo.getGoalById(goal.id), isNull);
+      expect(await repo.getAllAccounts(), hasLength(1));
+      expect(await db.select(db.transactions).get(), hasLength(1));
+    });
+
+    test('wiping data clears goals before their accounts', () async {
+      await repo.createGoalWithAccount(
+        name: 'Doomed',
+        targetAmount: 100,
+        currencyCode: 'USD',
+        accountName: 'Doomed',
+      );
+      expect(await db.select(db.goals).get(), hasLength(1));
+
+      await db.resetAllData();
+
+      expect(await db.select(db.goals).get(), isEmpty);
+      expect(await db.select(db.accounts).get(), isEmpty);
+    });
+  });
 }

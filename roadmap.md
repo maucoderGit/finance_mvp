@@ -164,7 +164,18 @@ element. Checks the "dashboard usable" ask in one pass.
   cards (`PLAN.md` section context).
 - Big-fix ledger from earlier sessions: migration guards + schema self-heal
   (unrecoverable DBs are rebuilt from current schema), base-currency
-  `baseCurrencyAmount` guard. All green: **102 tests**, `flutter analyze` clean.
+  `baseCurrencyAmount` guard. All green: **118 tests**, `flutter analyze` clean.
+- Goals landed (schema v15). Progress is derived from the backing account's
+  ledger, never stored, so a goal cannot disagree with the balance. Cards clamp
+  the bar at 100% but print the true percentage.
+- Goal projection reads monthly net cash flow, which excludes transfers — a user
+  who funds pots by transferring shows no projection. Deliberate: it answers
+  "can I afford this out of new money?", not "when is the pot full?". Revisit
+  only if goal contributions become a first-class transaction category.
+- `test/test_db.dart:testConnection` wraps executors with drift's
+  `closeStreamsSynchronously`. Needed for widget tests: drift otherwise leaves a
+  `Timer.run` pending when a `StreamBuilder` unmounts, tripping flutter_test's
+  timer invariant.
 - Two charts now carry near-identical fl_chart scaffolding
   (`widgets/net_worth_line_chart.dart`, `widgets/purchasing_power_chart.dart`,
   `widgets/cash_flow_chart.dart`) — worth folding into one shared chart widget
