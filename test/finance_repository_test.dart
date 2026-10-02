@@ -877,4 +877,72 @@ void main() {
     final orphan = (await repo.db.select(repo.db.transactions).get()).single;
     expect(orphan.sourceDebtId, isNull);
   });
+
+  test('cash flow buckets by calendar unit, empties included', () async {
+    await repo.createAccountWithInitialTransaction(
+      AccountsCompanion.insert(
+        name: 'Cash',
+        currencyCode: 'USD',
+        icon: 'payments',
+        iconColor: 0xFF4CAF50,
+      ),
+      0,
+    );
+    final account = (await repo.getAllAccounts()).first;
+
+    // A Wednesday, so week bucketing has a mid-week moment to floor away from.
+    final now = DateTime(2026, 3, 11, 15, 30);
+
+    Future<void> post(double amount, DateTime date, {String? transferGroupId}) =>
+        repo.createTransaction(TransactionsCompanion.insert(
+          amount: amount,
+          accountId: account.id,
+          currencyCode: 'USD',
+          date: date,
+          transferGroupId: drift.Value(transferGroupId),
+        ));
+
+    await post(-40, DateTime(2026, 3, 11, 9)); // today, out
+    await post(200, DateTime(2026, 3, 11, 18)); // today, in
+    await post(-15, DateTime(2026, 3, 9, 12)); // same week, out
+    // A transfer leg is not spending, whatever its sign.
+    await post(-999, DateTime(2026, 3, 11, 20), transferGroupId: 'g1');
+    // Older than every window below: 12 weeks back reaches 22 Dec 2025.
+    await post(-50, DateTime(2025, 12, 20, 12));
+
+    final days =
+        await repo.watchCashFlow(bucket: CashFlowBucket.day, now: now).first;
+    expect(days, hasLength(30));
+    expect(days.first.date, DateTime(2026, 2, 10));
+    expect(days.last.date, DateTime(2026, 3, 11));
+    expect(days.last.expenses, 40);
+    expect(days.last.income, 200);
+    expect(days[days.length - 3].expenses, 15); // 10 Mar, two days back
+    // A day with nothing in it is still a point, at zero — skipping it would
+    // draw a line straight across it.
+    expect(days[days.length - 4].expenses, 0);
+    expect(days.fold<double>(0, (s, p) => s + p.expenses), 55);
+
+    final weeks =
+        await repo.watchCashFlow(bucket: CashFlowBucket.week, now: now).first;
+    expect(weeks, hasLength(12));
+    // Weeks start Monday: 11 Mar 2026 is a Wednesday, so this one began 9 Mar.
+    expect(weeks.last.date, DateTime(2026, 3, 9));
+    expect(weeks.last.expenses, 55);
+    expect(weeks[weeks.length - 2].expenses, 0);
+
+    final months =
+        await repo.watchCashFlow(bucket: CashFlowBucket.month, now: now).first;
+    expect(months, hasLength(12));
+    expect(months.first.date, DateTime(2025, 4, 1));
+    expect(months.last.date, DateTime(2026, 3, 1));
+    expect(months.last.expenses, 55);
+
+    final years =
+        await repo.watchCashFlow(bucket: CashFlowBucket.year, now: now).first;
+    expect(years, hasLength(5));
+    expect(years.first.date, DateTime(2022, 1, 1));
+    expect(years.last.date, DateTime(2026, 1, 1));
+    expect(years.last.expenses, 55);
+  });
 }

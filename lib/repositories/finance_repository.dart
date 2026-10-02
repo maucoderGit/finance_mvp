@@ -20,6 +20,42 @@ class MonthlySummary {
   });
 }
 
+/// Granularity of the cash-flow series. Buckets are calendar units, not
+/// rolling windows: weeks start on Monday, months on the 1st, so a bucket
+/// boundary never shifts under the data.
+enum CashFlowBucket {
+  day('D', 'Last 30 days', 30),
+  week('W', 'Last 12 weeks', 12),
+  month('M', 'Last 12 months', 12),
+  year('Y', 'Last 5 years', 5);
+
+  const CashFlowBucket(this.shortLabel, this.windowLabel, this.points);
+
+  /// Text of the D/W/M/Y selector this bucket belongs to.
+  final String shortLabel;
+
+  /// Phrase describing the span the series covers, for the chart's subtitle.
+  final String windowLabel;
+
+  /// How many buckets the series holds. More than enough to draw a line
+  /// without crowding the axis, few enough that one is a readable column.
+  final int points;
+}
+
+/// One bucket of the cash flow, in the base currency. Both legs are kept
+/// non-negative so a caller can plot either without re-deriving signs.
+class CashFlowPoint {
+  final DateTime date;
+  final double income;
+  final double expenses;
+
+  const CashFlowPoint({
+    required this.date,
+    required this.income,
+    required this.expenses,
+  });
+}
+
 class FinanceRepository {
   final AppDatabase db;
 
@@ -923,5 +959,74 @@ class FinanceRepository {
           expenses: totalExpenses,
           fxImpact: totalFxImpact);
     }).asStream();
+  }
+
+  /// Money in and out of the base currency, one point per [bucket], oldest
+  /// first and always [CashFlowBucket.points] long — a bucket with no
+  /// transactions is a zero, not a gap, so a line shows the quiet days instead
+  /// of quietly skipping them.
+  ///
+  /// Transfers are excluded for the same reason [watchMonthlySummary] excludes
+  /// them: moving money between your own accounts is neither income nor
+  /// expense, and both legs would otherwise land as income and spending.
+  Stream<List<CashFlowPoint>> watchCashFlow({
+    required CashFlowBucket bucket,
+    DateTime? now,
+  }) {
+    final clock = now ?? DateTime.now();
+    final today = DateTime(clock.year, clock.month, clock.day);
+
+    final starts = <DateTime>[
+      for (var back = bucket.points - 1; back >= 0; back--)
+        _bucketStart(today, bucket, back),
+    ];
+    final end = DateTime(today.year, today.month, today.day, 23, 59, 59);
+
+    final query = db.select(db.transactions)
+      ..where((t) =>
+          t.date.isBetween(drift.Variable(starts.first), drift.Variable(end)) &
+          t.transferGroupId.isNull());
+
+    return db.transaction(() async {
+      final rows = await query.get();
+      final totals = <DateTime, ({double income, double expenses})>{
+        for (final start in starts) start: (income: 0.0, expenses: 0.0),
+      };
+
+      for (final t in rows) {
+        final start =
+            _bucketStart(DateTime(t.date.year, t.date.month, t.date.day),
+                bucket, 0);
+        final acc = totals[start];
+        // A transaction inside the range always floors into one of the buckets,
+        // but a future-dated row beyond `end` would not.
+        if (acc == null) continue;
+        final base = await toBaseAmount(t);
+        totals[start] = base > 0
+            ? (income: acc.income + base, expenses: acc.expenses)
+            : (income: acc.income, expenses: acc.expenses + base.abs());
+      }
+
+      return [
+        for (final start in starts)
+          CashFlowPoint(
+            date: start,
+            income: totals[start]!.income,
+            expenses: totals[start]!.expenses,
+          ),
+      ];
+    }).asStream();
+  }
+
+  /// Start of the bucket [back] units before [d], in pure calendar arithmetic
+  /// — never via [Duration], so a DST shift can't slide a bucket by an hour.
+  static DateTime _bucketStart(DateTime d, CashFlowBucket bucket, int back) {
+    return switch (bucket) {
+      CashFlowBucket.day => DateTime(d.year, d.month, d.day - back),
+      CashFlowBucket.week =>
+        DateTime(d.year, d.month, d.day - back * 7 - (d.weekday - 1)),
+      CashFlowBucket.month => DateTime(d.year, d.month - back, 1),
+      CashFlowBucket.year => DateTime(d.year - back, 1, 1),
+    };
   }
 }

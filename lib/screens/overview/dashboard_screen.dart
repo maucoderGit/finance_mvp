@@ -1,7 +1,7 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
-import 'package:finance_mvp/widgets/goal_projection_card.dart';
+import 'package:finance_mvp/widgets/cash_flow_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,8 +13,49 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _chartToggle = 0;
-  int _filterTime = 2;
+  bool _showIncome = false;
+  CashFlowBucket _bucket = CashFlowBucket.month;
+
+  /// Every figure here is denominated in the base currency, so it is read once
+  /// rather than per widget. [FutureBuilder] on the balance still re-queries on
+  /// rebuild, which is what keeps it live.
+  String _baseCode = 'USD';
+  String _symbol = r'$';
+  bool _baseLoaded = false;
+
+  /// Cached so toggling Spending/Income — a rebuild that changes no query
+  /// parameters — doesn't re-run the aggregation. Dropped when the bucket
+  /// changes, which is the only input the query depends on.
+  Stream<List<CashFlowPoint>>? _cashFlow;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBase();
+  }
+
+  Future<void> _loadBase() async {
+    final repo = context.read<FinanceRepository>();
+    final code = await repo.getBaseCurrencyCode();
+    final symbol = await repo.getBaseCurrencySymbol();
+    if (!mounted) return;
+    setState(() {
+      _baseCode = code;
+      _symbol = symbol;
+      _baseLoaded = true;
+    });
+  }
+
+  Stream<List<CashFlowPoint>> _cashFlowFor(CashFlowBucket bucket) =>
+      _cashFlow ??= context.read<FinanceRepository>().watchCashFlow(bucket: bucket);
+
+  void _selectBucket(CashFlowBucket bucket) {
+    if (bucket == _bucket) return;
+    setState(() {
+      _bucket = bucket;
+      _cashFlow = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,18 +91,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: FutureBuilder<String>(
-                future: _loadTotalBalance(),
-                builder: (context, snapshot) {
-                  return Text(
-                    snapshot.data ?? '\$0.00',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-                },
+              child: FutureBuilder<double>(
+                future: _baseLoaded ? _loadTotalBalance() : null,
+                builder: (context, snapshot) => Text(
+                  snapshot.data == null
+                      ? ''
+                      : formatMoney(snapshot.data!, symbol: _symbol),
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -86,46 +127,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<String> _loadTotalBalance() async {
-    final repo = context.read<FinanceRepository>();
-    final total =
-        await repo.calculateTotalBalance(await repo.getBaseCurrencyCode());
-    return formatMoney(total, symbol: await repo.getBaseCurrencySymbol());
-  }
-
-  Future<({double value, String symbol})> _loadMonthNet() async {
-    final repo = context.read<FinanceRepository>();
-    final summary = await repo.watchMonthlySummary(DateTime.now()).first;
-    return (
-      value: summary.income - summary.expenses,
-      symbol: await repo.getBaseCurrencySymbol(),
-    );
-  }
+  Future<double> _loadTotalBalance() =>
+      context.read<FinanceRepository>().calculateTotalBalance(_baseCode);
 
   Widget _buildTopAppBar(Color textColor) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 2.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+            onPressed: () => Navigator.of(context).pop(),
           ),
-          Text(
-            'Dashboard',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          // No trailing action: the notification bell this held had no
+          // destination and no screen behind it.
+          const SizedBox(width: 48),
+          Expanded(
+            child: Text(
+              'Dashboard',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {},
-            color: textColor,
           ),
         ],
       ),
@@ -161,87 +187,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         children: [
           _buildSegmentedControl(segmentedControlBackgroundColor,
-              segmentedControlActiveColor, primaryColor, textColor),
+              segmentedControlActiveColor, textColor),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              FutureBuilder<({double value, String symbol})>(
-                future: _loadMonthNet(),
-                builder: (context, snapshot) {
-                  final value = snapshot.data?.value ?? 0.0;
-                  final symbol = snapshot.data?.symbol ?? r'$';
-                  return Text(
-                    formatMoney(value, symbol: symbol),
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'This month',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Placeholder for the chart
-          SizedBox(
-            height: 150,
-            width: double.infinity,
-            // Replace with actual chart widget
-            child: CustomPaint(
-              painter: _ChartPainter(primaryColor),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('1', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text('7', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text('14', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text('21', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text('30', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Goal Projections',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 16.0),
-          const GoalProjectionCard(
-            title: 'Emergency Fund',
-            projectedDate: 'Dec 2024',
-            currentAmount: '8k',
-            totalAmount: '10k',
-            progress: 0.8,
-            icon: Icons.shield,
-          ),
-          const SizedBox(height: 16.0),
-          const GoalProjectionCard(
-            title: 'Vacation to Italy',
-            projectedDate: 'Jun 2025',
-            currentAmount: '2k',
-            totalAmount: '5k',
-            progress: 0.4,
-            icon: Icons.beach_access,
+          StreamBuilder<List<CashFlowPoint>>(
+            stream: _cashFlowFor(_bucket),
+            builder: (context, snapshot) {
+              if (!_baseLoaded) return const SizedBox(height: 220);
+              return CashFlowChart(
+                data: snapshot.data ?? const <CashFlowPoint>[],
+                showIncome: _showIncome,
+                bucket: _bucket,
+                currencyCode: _baseCode,
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSegmentedControl(Color backgroundColor, Color activeColor,
-      Color primaryColor, Color textColor) {
+  Widget _buildSegmentedControl(
+      Color backgroundColor, Color activeColor, Color textColor) {
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -261,16 +227,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int index,
     String text,
     Color activeColor,
-    Color primaryColor,
+    Color activeTextColor,
   ) {
-    final bool isSelected = _chartToggle == index;
+    final isSelected = _showIncome == (index == 1);
     return Expanded(
       child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _chartToggle = index;
-          });
-        },
+        onTap: () => setState(() => _showIncome = index == 1),
         child: Container(
           decoration: BoxDecoration(
             color: isSelected ? activeColor : Colors.transparent,
@@ -289,7 +251,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Text(
               text,
               style: TextStyle(
-                color: isSelected ? primaryColor : Colors.grey[500],
+                color: isSelected ? activeTextColor : Colors.grey[500],
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
@@ -331,24 +293,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildFilterItem(0, 'D', primaryColor),
-            _buildFilterItem(1, 'W', primaryColor),
-            _buildFilterItem(2, 'M', primaryColor),
-            _buildFilterItem(3, 'Y', primaryColor),
+            for (final bucket in CashFlowBucket.values)
+              _buildFilterItem(bucket, primaryColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilterItem(int index, String text, Color primaryColor) {
-    final bool isSelected = _filterTime == index;
+  Widget _buildFilterItem(CashFlowBucket bucket, Color primaryColor) {
+    final isSelected = _bucket == bucket;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _filterTime = index;
-        });
-      },
+      onTap: () => _selectBucket(bucket),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         decoration: BoxDecoration(
@@ -356,7 +312,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderRadius: BorderRadius.circular(24.0),
         ),
         child: Text(
-          text,
+          bucket.shortLabel,
           style: TextStyle(
             color: isSelected ? Colors.white : Colors.grey[600],
             fontWeight: FontWeight.w600,
@@ -365,138 +321,5 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
-  }
-}
-
-class _ChartPainter extends CustomPainter {
-  final Color primaryColor;
-
-  _ChartPainter(this.primaryColor);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = primaryColor
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.726); // 109 / 150
-    path.cubicTo(
-        size.width * 0.0385,
-        size.height * 0.726, // 18.15 / 472
-        size.width * 0.0385,
-        size.height * 0.14, // 21 / 150
-        size.width * 0.0769,
-        size.height * 0.14); // 36.3 / 472
-    path.cubicTo(
-        size.width * 0.115,
-        size.height * 0.14, // 54.46 / 472
-        size.width * 0.115,
-        size.height * 0.273, // 41 / 150
-        size.width * 0.153,
-        size.height * 0.273); // 72.6 / 472
-    path.cubicTo(
-        size.width * 0.192,
-        size.height * 0.273, // 90.76 / 472
-        size.width * 0.192,
-        size.height * 0.62, // 93 / 150
-        size.width * 0.23,
-        size.height * 0.62); // 108.9 / 472
-    path.cubicTo(
-        size.width * 0.269,
-        size.height * 0.62, // 127.07 / 472
-        size.width * 0.269,
-        size.height * 0.22, // 33 / 150
-        size.width * 0.307,
-        size.height * 0.22); // 145.23 / 472
-    path.cubicTo(
-        size.width * 0.346,
-        size.height * 0.22, // 163.38 / 472
-        size.width * 0.346,
-        size.height * 0.673, // 101 / 150
-        size.width * 0.384,
-        size.height * 0.673); // 181.53 / 472
-    path.cubicTo(
-        size.width * 0.423,
-        size.height * 0.673, // 199.69 / 472
-        size.width * 0.423,
-        size.height * 0.406, // 61 / 150
-        size.width * 0.461,
-        size.height * 0.406); // 217.84 / 472
-    path.cubicTo(
-        size.width * 0.5,
-        size.height * 0.406, // 236 / 472
-        size.width * 0.5,
-        size.height * 0.3, // 45 / 150
-        size.width * 0.538,
-        size.height * 0.3); // 254.15 / 472
-    path.cubicTo(
-        size.width * 0.576,
-        size.height * 0.3, // 272.3 / 472
-        size.width * 0.576,
-        size.height * 0.806, // 121 / 150
-        size.width * 0.615,
-        size.height * 0.806); // 290.46 / 472
-    path.cubicTo(
-        size.width * 0.653,
-        size.height * 0.806, // 308.6 / 472
-        size.width * 0.653,
-        size.height * 0.993, // 149 / 150
-        size.width * 0.692,
-        size.height * 0.993); // 326.76 / 472
-    path.cubicTo(
-        size.width * 0.73,
-        size.height * 0.993, // 344.92 / 472
-        size.width * 0.73,
-        size.height * 0.006, // 1 / 150
-        size.width * 0.769,
-        size.height * 0.006); // 363.07 / 472
-    path.cubicTo(
-        size.width * 0.807,
-        size.height * 0.006, // 381.23 / 472
-        size.width * 0.807,
-        size.height * 0.54, // 81 / 150
-        size.width * 0.846,
-        size.height * 0.54); // 399.38 / 472
-    path.cubicTo(
-        size.width * 0.884,
-        size.height * 0.54, // 417.53 / 472
-        size.width * 0.884,
-        size.height * 0.86, // 129 / 150
-        size.width * 0.923,
-        size.height * 0.86); // 435.69 / 472
-    path.cubicTo(
-        size.width * 0.961,
-        size.height * 0.86, // 453.84 / 472
-        size.width * 0.961,
-        size.height * 0.166, // 25 / 150
-        size.width,
-        size.height * 0.166); // 472 / 472
-
-    canvas.drawPath(path, paint);
-
-    final fillPath = Path.from(path);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          primaryColor.withValues(alpha: 0.2),
-          primaryColor.withValues(alpha: 0),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawPath(fillPath, fillPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
   }
 }
