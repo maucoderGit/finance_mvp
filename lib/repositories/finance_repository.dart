@@ -755,30 +755,36 @@ class FinanceRepository {
               t.recurrenceParentId.isNull()))
         .get();
 
-    var created = 0;
-    for (final t in templates) {
-      final rule = _ruleOf(t);
-      if (rule == null) continue;
+    // All-or-nothing: each template's occurrences and its bumped counter move
+    // together, so a failure part-way can't leave rows written but the counter
+    // un-bumped — which would duplicate those occurrences on the next open.
+    return db.transaction(() async {
+      var created = 0;
+      for (final t in templates) {
+        final rule = _ruleOf(t);
+        if (rule == null) continue;
 
-      var index = t.recurrenceGeneratedCount + 1;
-      var made = 0;
-      while (made < maxOccurrencesPerRun) {
-        final due = rule.occurrence(index);
-        if (due == null || due.isAfter(today)) break;
-        await db.into(db.transactions).insert(_occurrenceOf(t, due));
-        made++;
-        index++;
-      }
+        var index = t.recurrenceGeneratedCount + 1;
+        var made = 0;
+        while (made < maxOccurrencesPerRun) {
+          final due = rule.occurrence(index);
+          if (due == null || due.isAfter(today)) break;
+          await db.into(db.transactions).insert(_occurrenceOf(t, due));
+          made++;
+          index++;
+        }
 
-      if (made > 0) {
-        created += made;
-        await (db.update(db.transactions)
-              ..where((row) => row.id.equals(t.id)))
-            .write(TransactionsCompanion(
-                recurrenceGeneratedCount: drift.Value(t.recurrenceGeneratedCount + made)));
+        if (made > 0) {
+          created += made;
+          await (db.update(db.transactions)
+                ..where((row) => row.id.equals(t.id)))
+              .write(TransactionsCompanion(
+                  recurrenceGeneratedCount:
+                      drift.Value(t.recurrenceGeneratedCount + made)));
+        }
       }
-    }
-    return created;
+      return created;
+    });
   }
 
   /// Ceiling on occurrences generated per series per run. A daily recurrence
