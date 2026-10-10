@@ -18,6 +18,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+part 'transaction_form_parts.dart';
+
 enum TransactionType {
   income,
   expense,
@@ -216,19 +218,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
             : _transferToAccount!.currencyCode)
         : account.currencyCode;
 
-    double? rate;
-    if (targetCode != baseCode) {
-      rate = await repo.getRateWithFallback(targetCode, DateTime.now());
-      // National-currency (VES) pairs execute at the parallel/market price:
-      // prefer it for the rate field so P2P trades and replacement-value
-      // conversions show the rate actually used.
-      if (targetCode == nationalCode) {
-        final marketRate = await repo.getLatestMarketRate();
-        if (marketRate != null && marketRate.rate > 0) {
-          rate = marketRate.rate;
-        }
-      }
-    }
+    // National-currency (VES) pairs execute at the parallel/market price; the
+    // repository resolves that override for us.
+    final rate = await repo.effectiveRate(targetCode);
 
     // Prefill the manual rate override (account currency vs base) so the user
     // sees what will be applied, unless they already typed one.
@@ -485,42 +477,26 @@ class _TransactionScreenState extends State<TransactionScreen> {
       amountValue = -amountValue;
     }
 
-    // Auto-capture the exchange rate ("1 base = X account currency") at the
-    // transaction date: the closest stored rate, falling back to the latest.
-    // Only meaningful for non-base accounts — a base-currency account moves
-    // base units 1:1.
-    double? rateAtCreation;
+    // Auto-capture the exchange rate ("1 base = X account currency") and the
+    // base-currency value. A base-currency account moves base units 1:1.
     final baseCode = await repo.getBaseCurrencyCode();
     final isBaseAccount = _selectedAccount!.currencyCode == baseCode;
-    if (!isBaseAccount) {
-      rateAtCreation = await repo.getRateWithFallback(
-          _selectedAccount!.currencyCode, DateTime.now());
-    }
 
     // Manual rate override from the Details step. The field is prefilled with
-    // the captured rate by _loadConversionPreview, so an empty field just
-    // keeps rateAtCreation unless the user typed something. For base-currency
-    // accounts it is ignored entirely: a stray "1 USD = X VES" value would
-    // otherwise corrupt the base amount of a plain $ expense.
-    if (!isBaseAccount) {
-      final customRate =
-          double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
-      if (customRate != null && customRate > 0) {
-        rateAtCreation = customRate;
-      }
-    }
-
-    // Compute the transaction value in the base currency at creation time.
-    // Base accounts are already in base units; only non-base accounts convert
-    // by the captured rate. Snapped to the base currency's minor unit so the
-    // stored value is a real amount of money, not a division artefact.
-    double? baseAmount;
-    if (isBaseAccount) {
-      baseAmount = amountValue;
-    } else if (rateAtCreation != null && rateAtCreation != 0) {
-      baseAmount =
-          quantizeTo(amountValue / rateAtCreation, await repo.getDecimalDigits(baseCode));
-    }
+    // the captured rate by _loadConversionPreview, so an empty field keeps the
+    // captured rate. For base-currency accounts it is ignored entirely: a stray
+    // "1 USD = X VES" value would otherwise corrupt the base amount of a plain
+    // $ expense.
+    final manualRate = isBaseAccount
+        ? null
+        : double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
+    final fx = await repo.captureFxFields(
+      accountCurrencyCode: _selectedAccount!.currencyCode,
+      signedAmount: amountValue,
+      manualRate: manualRate,
+    );
+    final rateAtCreation = fx.rateAtCreation;
+    final baseAmount = fx.baseAmount;
 
     // FX arbitrage differential (USDT-lived) logged on national-currency
     // transactions: official BCV rate vs the executed market (P2P) rate held
@@ -528,8 +504,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     // income (replacement loss). Recomputed on edit since it re-saves here.
     double? fxDelta;
     final nationalCode = await repo.getNationalCurrencyCode();
-    if (_selectedAccount!.currencyCode == nationalCode &&
-        _selectedAccount!.currencyCode != baseCode) {
+    if (!isBaseAccount && _selectedAccount!.currencyCode == nationalCode) {
       final bcvRate =
           await repo.getRateWithFallback(nationalCode, DateTime.now());
       if (bcvRate != null &&
@@ -733,13 +708,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     double? executionRate;
     final nationalCode = await repo.getNationalCurrencyCode();
     if (crossCurrency) {
-      executionRate = await repo.getRateWithFallback(rateCurrency, now);
-      if (rateCurrency == nationalCode) {
-        final marketRate = await repo.getLatestMarketRate();
-        if (marketRate != null && marketRate.rate > 0) {
-          executionRate = marketRate.rate;
-        }
-      }
+      executionRate = await repo.effectiveRate(rateCurrency, at: now);
       final custom =
           double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
       if (custom != null && custom > 0) executionRate = custom;
@@ -1036,17 +1005,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 onPressed: _pickTransactionImage,
                               ),
                       ),
-                      // const SizedBox(width: 10),
-                      // Container(
-                      //   decoration: BoxDecoration(
-                      //     color: context.colors.primary,
-                      //     shape: BoxShape.circle,
-                      //   ),
-                      //   child: const IconButton(
-                      //     icon: Icon(Icons.search, color: Colors.white),
-                      //     onPressed: null, // No action
-                      //   ),
-                      // ),
                     ],
                   ),
                 ],
@@ -1062,285 +1020,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     const SizedBox(height: 8),
                     Expanded(
                       child: SingleChildScrollView(
-                        child: _currentStep == 0
-                            ? SizedBox(
-                                child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Account',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: context.colors.textLight,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  GestureDetector(
-                                    onTap: () {
-                                      _pickAccountFromDatabase();
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: context.colors.cardBackground,
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color:
-                                                context.colors.cardBackground,
-                                            spreadRadius: 1,
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 5),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              color: context.colors.primary,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Center(
-                                              child: Text(
-                                                'OKX',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            _selectedAccount?.name ??
-                                                'Select Account',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: context.colors.textDark,
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: context.colors.primaryLight
-                                                  .withValues(alpha: 0.15),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              _selectedAccount?.currencyCode ??
-                                                  'USD',
-                                              style: TextStyle(
-                                                color: context.colors.primary,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 20.0),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Flexible(
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              _formatCurrency(_amount,
-                                                  symbol: ''),
-                                              style: TextStyle(
-                                                fontSize: 50,
-                                                fontWeight: FontWeight.bold,
-                                                color: context.colors.textDark,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              top: 12.0, left: 4.0),
-                                          child: Text(
-                                            _selectedAccount?.currencyCode ??
-                                                'USD',
-                                            style: TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.bold,
-                                              color: context.colors.textLight,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  _buildConversionPreview(),
-                                  const SizedBox(height: 4),
-                                  Numpad(
-                                    onNumberTap: _onNumberTap,
-                                    onBackspaceTap: _onBackspaceTap,
-                                  ),
-                                  // SizedBox(height: MediaQuery.of(context).size.height * 0.1,),
-                                ],
-                              ))
-: _currentStep == 1
-                                ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 8),
-                                  GestureDetector(
-                                      onTap: () => setState(() {
-                                            _currentStep -= 1;
-                                          }),
-                                      child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Text.rich(
-                                          TextSpan(
-                                            children: [
-                                              TextSpan(
-                                                text: _formatCurrency(_amount,
-                                                    symbol: ''),
-                                                style: TextStyle(
-                                                  fontSize: 48,
-                                                  fontWeight: FontWeight.bold,
-                                                  color:
-                                                      context.colors.textDark,
-                                                ),
-                                              ),
-                                              TextSpan(
-                                                text:
-                                                    ' ${_selectedAccount?.currencyCode ?? 'USD'}',
-                                                style: TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.normal,
-                                                  color:
-                                                      context.colors.textLight,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      )),
-
-                                  const SizedBox(height: 18),
-
-                                  // Income/Expense/Transfer Toggle
-                                  _buildIncomeExpenseToggle(),
-
-                                  // Destination account for an internal transfer
-                                  if (_transactionType ==
-                                      TransactionType.transfer) ...[
-                                    const SizedBox(height: 20),
-                                    Text('To account',
-                                        style: TextStyle(
-                                            color: context.colors.textLight,
-                                            fontSize: 16)),
-                                    const SizedBox(height: 8),
-                                    _buildToAccountSelector(),
-                                  ],
-
-                                  // Exchange rate: only for cross-currency
-                                  // transfers. Plain transactions apply the
-                                  // silently captured market rate instead.
-                                  if (_transactionType ==
-                                          TransactionType.transfer &&
-                                      _selectedAccount != null &&
-                                      _transferToAccount != null &&
-                                      _selectedAccount!.currencyCode !=
-                                          _transferToAccount!.currencyCode) ...[
-                                    const SizedBox(height: 20),
-                                    Text(
-                                      'Exchange rate',
-                                      style: TextStyle(
-                                          color: context.colors.textLight,
-                                          fontSize: 16),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    _buildRateField(),
-                                  ],
-
-                                  // Category
-                                  if (_transactionType !=
-                                      TransactionType.transfer) ...[
-                                    const SizedBox(height: 20),
-                                    Text('Category',
-                                        style: TextStyle(
-                                            color: context.colors.textLight,
-                                            fontSize: 16)),
-                                    const SizedBox(height: 8),
-                                    _buildCategorySelector(),
-                                  ],
-
-                                  const SizedBox(height: 20),
-
-                                  // Add Reference Field
-                                  _buildReferenceField(_referenceController),
-
-                                  // Contact Field
-                                  if (_transactionType !=
-                                      TransactionType.transfer) ...[
-                                    const SizedBox(height: 20),
-                                    Text('Contact',
-                                        style: TextStyle(
-                                            color: context.colors.textLight,
-                                            fontSize: 16)),
-                                    const SizedBox(height: 8),
-                                    _buildContactField(),
-                                  ],
-
-                                  // Pay-toward-debt Field
-                                  if (_transactionType !=
-                                      TransactionType.transfer) ...[
-                                    const SizedBox(height: 12),
-                                    _buildDebtField(),
-                                  ],
-
-                                  // Recurrence Section
-                                  if (_transactionType !=
-                                      TransactionType.transfer) ...[
-                                    const SizedBox(height: 20),
-                                    const Text(
-                                      'Recurrance',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildRecurrenceCard(),
-                                  ],
-
-                                  // Debt/installments opt-in: unlocks step 3. Shown for new transaction
-                                  // and when editing one that already sourced a
-                                  // debt (so its quota plan can be re-edited or
-                                  // dropped).
-                                  if (_transactionType !=
-                                          TransactionType.transfer &&
-                                      (widget.existingTransaction == null ||
-                                          _sourceDebt != null)) ...[
-                                    const SizedBox(height: 20),
-                                    _buildDebtOptInCard(),
-                                  ],
-                                ],
-                              )
-                                : _buildDebtPlanStep(),
+                        child: switch (_currentStep) {
+                          0 => _buildAmountStep(),
+                          1 => _buildDetailsStep(),
+                          _ => _buildDebtPlanStep(),
+                        },
                       ),
                     ),
                     _buildStepControls(),
@@ -1354,8 +1038,244 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  Widget _buildStepIndicator() {
-    return Container(
+  /// Step 0: pick the account and punch in the amount.
+  Widget _buildAmountStep() {
+    return SizedBox(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Account',
+            style: TextStyle(
+              fontSize: 16,
+              color: context.colors.textLight,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildAccountCard(),
+          const SizedBox(height: 24),
+          _buildAmountDisplay(),
+          const SizedBox(height: 4),
+          _buildConversionPreview(),
+          const SizedBox(height: 4),
+          Numpad(
+            onNumberTap: _onNumberTap,
+            onBackspaceTap: _onBackspaceTap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Step 1: type (income/expense/transfer) and all the optional details.
+  Widget _buildDetailsStep() {
+    final isTransfer = _transactionType == TransactionType.transfer;
+    final isCrossCurrencyTransfer = isTransfer &&
+        _selectedAccount != null &&
+        _transferToAccount != null &&
+        _selectedAccount!.currencyCode != _transferToAccount!.currencyCode;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        _buildSummaryHeader(),
+        const SizedBox(height: 18),
+        _buildIncomeExpenseToggle(),
+        if (isTransfer) ...[
+          const SizedBox(height: 20),
+          _fieldLabel('To account'),
+          const SizedBox(height: 8),
+          _buildToAccountSelector(),
+        ],
+        // The rate field only matters for cross-currency transfers; plain
+        // transactions apply the silently captured market rate instead.
+        if (isCrossCurrencyTransfer) ...[
+          const SizedBox(height: 20),
+          _fieldLabel('Exchange rate'),
+          const SizedBox(height: 8),
+          _buildRateField(),
+        ],
+        if (!isTransfer) ...[
+          const SizedBox(height: 20),
+          _fieldLabel('Category'),
+          const SizedBox(height: 8),
+          _buildCategorySelector(),
+        ],
+        const SizedBox(height: 20),
+        _buildReferenceField(_referenceController),
+        if (!isTransfer) ...[
+          const SizedBox(height: 20),
+          _fieldLabel('Contact'),
+          const SizedBox(height: 8),
+          _buildContactField(),
+          const SizedBox(height: 12),
+          _buildDebtField(),
+          const SizedBox(height: 20),
+          const Text(
+            'Recurrance',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          _buildRecurrenceCard(),
+          // Debt/installments opt-in: unlocks step 3. Shown for a new
+          // transaction and when editing one that already sourced a debt (so
+          // its quota plan can be re-edited or dropped).
+          if (widget.existingTransaction == null || _sourceDebt != null) ...[
+            const SizedBox(height: 20),
+            _buildDebtOptInCard(),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// Small section label used across the details step.
+  Widget _fieldLabel(String text) => Text(
+        text,
+        style: TextStyle(color: context.colors.textLight, fontSize: 16),
+      );
+
+  /// The tappable account chip on the amount step. Shows the selected
+  /// account's own icon/colour, falling back to an "add" affordance.
+  Widget _buildAccountCard() {
+    final account = _selectedAccount;
+    return GestureDetector(
+      onTap: _pickAccountFromDatabase,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.colors.cardBackground,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: context.colors.cardBackground,
+              spreadRadius: 1,
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: account == null
+                    ? context.colors.primary
+                    : Color(account.iconColor),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                account == null ? Icons.add : accountIconFor(account.icon),
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              account?.name ?? 'Select Account',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: context.colors.textDark,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: context.colors.primaryLight.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                account?.currencyCode ?? 'USD',
+                style: TextStyle(
+                  color: context.colors.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The big editable amount on the amount step, with its currency suffix.
+  Widget _buildAmountDisplay() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                _formatCurrency(_amount, symbol: ''),
+                style: TextStyle(
+                  fontSize: 50,
+                  fontWeight: FontWeight.bold,
+                  color: context.colors.textDark,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0, left: 4.0),
+            child: Text(
+              _selectedAccount?.currencyCode ?? 'USD',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: context.colors.textLight,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The tappable amount + currency line at the top of the details step;
+  /// tapping it hops back to the amount step.
+  Widget _buildSummaryHeader() {
+    return GestureDetector(
+      onTap: () => setState(() => _currentStep -= 1),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: _formatCurrency(_amount, symbol: ''),
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: context.colors.textDark,
+                ),
+              ),
+              TextSpan(
+                text: ' ${_selectedAccount?.currencyCode ?? 'USD'}',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.normal,
+                  color: context.colors.textLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {    return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: context.colors.cardBackground,
@@ -2415,486 +2335,4 @@ Future<void> _openContactPicker() async {
         'biweekly' => 'biweek',
         _ => 'month',
       };
-}
-
-const _frequencies = <(String, String)>[
-  ('weekly', 'Weekly'),
-  ('biweekly', 'Biweekly'),
-  ('monthly', 'Monthly'),
-];
-
-/// Bottom sheet listing open (unpaid) debts to link a transaction as a
-/// payment against one of them.
-class _DebtPickerSheet extends StatefulWidget {
-  const _DebtPickerSheet({required this.repo});
-
-  final FinanceRepository repo;
-
-  @override
-  State<_DebtPickerSheet> createState() => _DebtPickerSheetState();
-}
-
-class _DebtPickerSheetState extends State<_DebtPickerSheet> {
-  List<db.Debt> _debts = [];
-  Map<int, double> _remaining = {};
-  Map<String, String> _symbols = {};
-  Map<int, String> _contactNames = {};
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final repo = widget.repo;
-    final debts = await repo.getAllDebts();
-    final contacts = await repo.getAllContacts();
-    final currencies = await repo.getAllCurrencies();
-    final symbolByCode = {
-      for (final c in currencies) c.code: c.symbol,
-    };
-    final remainingByDebt = <int, double>{};
-    for (final debt in debts) {
-      final remaining = await repo.getDebtRemaining(debt);
-      if (debt.isSettled || remaining <= 0) continue;
-      remainingByDebt[debt.id] = remaining;
-    }
-    if (!mounted) return;
-    setState(() {
-      _debts = debts.where((d) => remainingByDebt.containsKey(d.id)).toList();
-      _remaining = remainingByDebt;
-      _symbols = symbolByCode;
-      _contactNames = {for (final c in contacts) c.id: c.name};
-      _loaded = true;
-    });
-  }
-
-  String _titleFor(db.Debt debt) {
-    if (debt.contactId != null && _contactNames[debt.contactId] != null) {
-      return _contactNames[debt.contactId]!;
-    }
-    return (debt.description ?? '').trim().isEmpty
-        ? 'Debt'
-        : debt.description!.trim();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = context.colors;
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      maxChildSize: 0.9,
-      minChildSize: 0.5,
-      builder: (context, scrollController) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Pay toward debt',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.textDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.close, color: colorScheme.textLight),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            if (!_loaded)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_debts.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: Text(
-                    'No open debts yet.\nAdd one from Settings → Debts & Debtors.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: colorScheme.textLight),
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  itemCount: _debts.length,
-                  itemBuilder: (context, index) {
-                    final debt = _debts[index];
-                    final symbol = _symbols[debt.currencyCode] ?? r'$';
-                    return ListTile(
-                      leading: Icon(
-                        Icons.account_balance_wallet_outlined,
-                        color: colorScheme.primary,
-                      ),
-                      title: Text(_titleFor(debt),
-                          style: TextStyle(color: colorScheme.textDark)),
-                      subtitle: Text(
-                        '${debt.direction == 'creditor' ? 'I owe' : 'They owe me'}'
-                        ' · ${formatMoney(_remaining[debt.id]!,
-                            symbol: symbol)} of '
-                        '${formatMoney(debt.amount, symbol: symbol)}',
-                        style: TextStyle(color: colorScheme.textLight),
-                      ),
-                      onTap: () => Navigator.pop(context, debt),
-                    );
-                  },
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// A tappable label/value row inside the recurrence card. Deliberately looks
-/// like the other pickers in this flow (chevron on the right) so it doesn't
-/// read as a dead chip.
-class _RecurrenceRow extends StatelessWidget {
-  const _RecurrenceRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: context.colors.primary),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 15)),
-            const Spacer(),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: context.colors.primary,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: context.colors.textLight),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "Next: 28 Feb 2026", or a note that the series has already finished.
-class _NextDueHint extends StatelessWidget {
-  const _NextDueHint({required this.rule});
-
-  final Recurrence rule;
-
-  @override
-  Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final next = rule.nextOccurrenceOnOrAfter(today);
-    return Text(
-      next == null
-          ? 'This series has already finished.'
-          : 'Next: ${DateFormat.yMMMd().format(next)}',
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: next == null ? context.colors.textLight : context.colors.primary,
-      ),
-    );
-  }
-}
-
-/// Stepper shared by the two sheets: `- value +` clamped to [min]..[max].
-class _CountStepper extends StatelessWidget {
-  const _CountStepper({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.max = 365,
-  });
-
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
-  final int max;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 15)),
-        Row(
-          children: [
-            _StepButton(
-              icon: Icons.remove,
-              enabled: value > 1,
-              onTap: () => onChanged(value - 1),
-            ),
-            SizedBox(
-              width: 56,
-              child: Text(
-                '$value',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ),
-            _StepButton(
-              icon: Icons.add,
-              enabled: value < max,
-              onTap: () => onChanged(value + 1),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: enabled
-              ? context.colors.primaryLight.withValues(alpha: 0.25)
-              : context.colors.fieldsBackground,
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: enabled ? context.colors.primary : context.colors.textLight,
-        ),
-      ),
-    );
-  }
-}
-
-/// Picks how often the transaction repeats.
-class _RepeatsSheet extends StatefulWidget {
-  const _RepeatsSheet({required this.type, required this.interval});
-
-  final RecurrenceType type;
-  final int interval;
-
-  @override
-  State<_RepeatsSheet> createState() => _RepeatsSheetState();
-}
-
-class _RepeatsSheetState extends State<_RepeatsSheet> {
-  late RecurrenceType _type = widget.type;
-  late int _interval = widget.interval;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Repeat',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final t in RecurrenceType.values)
-                  ChoiceChip(
-                    label: Text(t.label),
-                    selected: _type == t,
-                    onSelected: (_) => setState(() => _type = t),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _CountStepper(
-              label: 'Every',
-              value: _interval,
-              max: _type == RecurrenceType.daily ? 365 : 60,
-              onChanged: (v) => setState(() => _interval = v),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context, (type: _type, interval: _interval)),
-                child: const Text('Done'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// What the `_pickEnds` sheet hands back.
-class _RecurrenceEndChoice {
-  const _RecurrenceEndChoice({required this.end, this.endDate, this.totalCount});
-
-  final RecurrenceEnd end;
-  final DateTime? endDate;
-  final int? totalCount;
-}
-
-/// Picks when the series stops.
-class _EndsSheet extends StatefulWidget {
-  const _EndsSheet({
-    required this.end,
-    required this.endDate,
-    required this.totalCount,
-  });
-
-  final RecurrenceEnd end;
-  final DateTime? endDate;
-  final int totalCount;
-
-  @override
-  State<_EndsSheet> createState() => _EndsSheetState();
-}
-
-class _EndsSheetState extends State<_EndsSheet> {
-  late RecurrenceEnd _end = widget.end;
-  late DateTime? _endDate = widget.endDate;
-  late int _count = widget.totalCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Ends',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            RadioGroup<RecurrenceEnd>(
-              groupValue: _end,
-              onChanged: (v) => setState(() => _end = v!),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final e in RecurrenceEnd.values)
-                    RadioListTile<RecurrenceEnd>(
-                      value: e,
-                      activeColor: context.colors.primary,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(e.label,
-                          style: TextStyle(color: context.colors.textDark)),
-                      subtitle: Text(
-                        switch (e) {
-                          RecurrenceEnd.never =>
-                            'Keep going until you turn it off',
-                          RecurrenceEnd.onDate => 'Stop after this day',
-                          RecurrenceEnd.afterCount =>
-                            'Stop after a set number of bills',
-                        },
-                        style: TextStyle(color: context.colors.textLight),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            if (_end == RecurrenceEnd.onDate)
-              TextButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 18),
-                label: Text(
-                  _endDate == null
-                      ? 'Pick end date'
-                      : DateFormat.yMMMd().format(_endDate!),
-                ),
-                onPressed: _pickDate,
-              ),
-            if (_end == RecurrenceEnd.afterCount) ...[
-              const SizedBox(height: 8),
-              _CountStepper(
-                label: 'Occurrences',
-                value: _count,
-                onChanged: (v) => setState(() => _count = v),
-              ),
-            ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  _RecurrenceEndChoice(
-                    end: _end,
-                    // Default to a year out rather than leaving it unset, which
-                    // would read as "never" while the radio says "on a date".
-                    endDate: _end == RecurrenceEnd.onDate
-                        ? (_endDate ??
-                            DateTime.now().add(const Duration(days: 365)))
-                        : null,
-                    totalCount: _end == RecurrenceEnd.afterCount ? _count : null,
-                  ),
-                ),
-                child: const Text('Done'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _endDate = picked);
-  }
 }

@@ -1337,4 +1337,76 @@ void main() {
       await sub.cancel();
     });
   });
+
+  group('fx helpers', () {
+    test('effectiveRate applies the market override only to national',
+        () async {
+      await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+        currencyCode: 'VES',
+        rate: 36.5,
+        date: DateTime.now(),
+      ));
+      await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+        currencyCode: 'EUR',
+        rate: 1.1,
+        date: DateTime.now(),
+      ));
+      await repo.addMarketRate(MarketRatesCompanion.insert(
+        rate: 40.0,
+        date: DateTime.now(),
+      ));
+
+      // National currency: parallel market price wins over the official rate.
+      expect(await repo.effectiveRate('VES'), closeTo(40, 0.001));
+      // Other currencies: the stored rate.
+      expect(await repo.effectiveRate('EUR'), closeTo(1.1, 0.001));
+      // Base currency needs no rate.
+      expect(await repo.effectiveRate('USD'), isNull);
+    });
+
+    test('captureFxFields keeps a base account at 1:1', () async {
+      final fx = await repo.captureFxFields(
+          accountCurrencyCode: 'USD', signedAmount: -25);
+
+      expect(fx.rateAtCreation, isNull);
+      expect(fx.baseAmount, -25);
+    });
+
+    test('captureFxFields uses the stored rate and quantizes', () async {
+      await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+        currencyCode: 'VES',
+        rate: 40,
+        date: DateTime.now(),
+      ));
+
+      final fx = await repo.captureFxFields(
+          accountCurrencyCode: 'VES', signedAmount: 4000);
+
+      expect(fx.rateAtCreation, 40);
+      expect(fx.baseAmount, 100);
+    });
+
+    test('captureFxFields lets a manual rate override the stored one',
+        () async {
+      await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+        currencyCode: 'VES',
+        rate: 40,
+        date: DateTime.now(),
+      ));
+
+      final fx = await repo.captureFxFields(
+          accountCurrencyCode: 'VES', signedAmount: 4000, manualRate: 50);
+
+      expect(fx.rateAtCreation, 50);
+      expect(fx.baseAmount, 80);
+    });
+
+    test('captureFxFields yields no base amount without a rate', () async {
+      final fx = await repo.captureFxFields(
+          accountCurrencyCode: 'VES', signedAmount: 4000);
+
+      expect(fx.rateAtCreation, isNull);
+      expect(fx.baseAmount, isNull);
+    });
+  });
 }

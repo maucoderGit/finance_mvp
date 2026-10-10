@@ -397,6 +397,54 @@ class FinanceRepository {
     return rate?.rate ?? official;
   }
 
+  /// The rate ("1 base = X [currencyCode]") the app executes at: the closest
+  /// stored rate at or before [at] (falling back to the newest), replaced by
+  /// the parallel market price for the national currency so P2P trades and
+  /// replacement-value conversions use the rate actually paid. Returns null
+  /// for the base currency (a base amount is already in base units) or when
+  /// nothing is stored.
+  Future<double?> effectiveRate(String currencyCode, {DateTime? at}) async {
+    final date = at ?? DateTime.now();
+    if (currencyCode == await getBaseCurrencyCode()) return null;
+
+    var rate = await getRateWithFallback(currencyCode, date);
+    if (currencyCode == await getNationalCurrencyCode()) {
+      final market = await getLatestMarketRate();
+      if (market != null && market.rate > 0) rate = market.rate;
+    }
+    return rate;
+  }
+
+  /// The FX fields persisted on a saved transaction: the rate captured at
+  /// creation and the value in the base currency.
+  ///
+  /// A base-currency account carries no rate and its amount is already in base
+  /// units. A non-base account captures [manualRate] when the user typed one
+  /// (else the closest stored rate), and its base amount is quantized to the
+  /// base currency's minor unit so stored money is not a division artefact.
+  Future<({double? rateAtCreation, double? baseAmount})> captureFxFields({
+    required String accountCurrencyCode,
+    required double signedAmount,
+    double? manualRate,
+    DateTime? at,
+  }) async {
+    final baseCode = await getBaseCurrencyCode();
+    if (accountCurrencyCode == baseCode) {
+      return (rateAtCreation: null, baseAmount: signedAmount);
+    }
+
+    final rate = (manualRate != null && manualRate > 0)
+        ? manualRate
+        : await getRateWithFallback(accountCurrencyCode, at ?? DateTime.now());
+
+    final baseAmount = (rate != null && rate != 0)
+        ? quantizeTo(
+            signedAmount / rate, await getDecimalDigits(baseCode))
+        : null;
+
+    return (rateAtCreation: rate, baseAmount: baseAmount);
+  }
+
   Future<DateTime?> getLastAutoFetchDate() async {
     final setting = await (db.select(db.userSettings)
           ..where((tbl) => tbl.id.equals(0)))
