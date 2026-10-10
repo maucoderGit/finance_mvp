@@ -79,12 +79,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 leading: Icon(icon, color: color),
                 title: Text(category.name),
                 onTap: () {
-                  Navigator.pop(context, {
-                    'id': category.id,
-                    'name': category.name,
-                    'icon': icon,
-                    'color': color,
-                  });
+                  Navigator.pop(context, category);
                 },
               );
             },

@@ -11,6 +11,7 @@ import 'package:finance_mvp/screens/settings/category_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:finance_mvp/services/finance/fx_delta.dart';
 import 'package:finance_mvp/services/finance/recurrence.dart';
+import 'package:finance_mvp/services/finance/transaction_planner.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/widgets/numpad.dart';
@@ -24,6 +25,22 @@ enum TransactionType {
   income,
   expense,
   transfer,
+}
+
+/// A category chosen in the form, with its icon and colour already resolved so
+/// the row is cheap to build and there are no untyped map lookups.
+class SelectedCategory {
+  const SelectedCategory({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.color,
+  });
+
+  final int id;
+  final String name;
+  final IconData icon;
+  final Color color;
 }
 
 class TransactionScreen extends StatefulWidget {
@@ -69,7 +86,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   String? _selectedDebtTitle;
   String _selectedDebtSymbol = r'$';
   db.Account? _selectedAccount;
-  Map? category;
+  SelectedCategory? category;
   String? _imagePath;
 
   /// Destination account of an internal transfer/menudeo.
@@ -281,12 +298,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
     for (final candidate in categories) {
       if (candidate.id == categoryId) {
         setState(() {
-          category = {
-            'id': candidate.id,
-            'name': candidate.name,
-            'icon': categoryIcons[candidate.icon] ?? Icons.bookmark,
-            'color': Color(candidate.color),
-          };
+          category = SelectedCategory(
+            id: candidate.id,
+            name: candidate.name,
+            icon: categoryIcons[candidate.icon] ?? Icons.bookmark,
+            color: Color(candidate.color),
+          );
         });
         break;
       }
@@ -524,7 +541,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       id: existing != null ? Value(existing.id) : const Value.absent(),
       amount: Value(amountValue),
       accountId: Value(_selectedAccount!.id),
-      categoryId: Value(category?['id']),
+      categoryId: Value(category?.id),
       currencyCode: Value(_selectedAccount!.currencyCode),
       reference: Value(_referenceController.text),
       contactId: Value(_selectedContact?.id),
@@ -551,65 +568,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  /// Builds the debt row and its quota schedule for the current form state
-  /// (one debt + one [db.DebtInstallments] per installment, first due date at
-  /// [_intervalDate](0)). Each installment is snapped to the account currency's
-  /// minor unit; the last one absorbs the remainder so the schedule always sums
-  /// back to [total].
-  Future<
-      ({
-        String title,
-        double amount,
-        String direction,
-        int? contactId,
-        String currency,
-        DateTime firstDueDate,
-        db.DebtsCompanion debt,
-        List<db.DebtInstallmentsCompanion> installments
-      })> _buildDebtPlan() async {
+  /// The debt plan for the current form state, delegated to
+  /// [TransactionPlanner] so the schedule math stays unit-testable.
+  Future<DebtPlan> _buildDebtPlan() {
     final ref = _referenceController.text.trim();
-    final catName = (category?['name'] as String?)?.trim();
-    final title = ref.isNotEmpty
-        ? ref
-        : (catName?.isNotEmpty == true ? catName! : 'Debt');
-    final total = double.tryParse(_amount) ?? 0.0;
-    final n = _installmentCount;
-    final now = DateTime.now();
-    final direction =
-        _transactionType == TransactionType.expense ? 'creditor' : 'debtor';
-    final contactId = _selectedContact?.id;
-    final currency = _selectedAccount!.currencyCode;
-    final digits =
-        await context.read<FinanceRepository>().getDecimalDigits(currency);
-    final per = quantizeTo(total / n, digits);
-
-    final debt = db.DebtsCompanion.insert(
-      contactId: Value(contactId),
-      direction: Value(direction),
-      description: Value(title),
-      amount: total,
-      currencyCode: currency,
-      date: now,
-      dueDate: Value(_intervalDate(0)),
-      frequency: Value(_dueFrequency),
-    );
-
-    return (
+    final catName = category?.name.trim();
+    final title =
+        ref.isNotEmpty ? ref : (catName?.isNotEmpty == true ? catName! : 'Debt');
+    return TransactionPlanner(context.read<FinanceRepository>()).buildDebtPlan(
       title: title,
-      amount: total,
-      direction: direction,
-      contactId: contactId,
-      currency: currency,
-      firstDueDate: _intervalDate(0),
-      debt: debt,
-      installments: [
-        for (var i = 0; i < n; i++)
-          db.DebtInstallmentsCompanion(
-            index: Value(i),
-            amount: Value(i == n - 1 ? total - per * (n - 1) : per),
-            dueDate: Value(_intervalDate(i)),
-          ),
-      ],
+      total: double.tryParse(_amount) ?? 0.0,
+      installmentCount: _installmentCount,
+      firstDueDate: _dueDate ?? DateTime.now(),
+      frequency: _dueFrequency,
+      direction:
+          _transactionType == TransactionType.expense ? 'creditor' : 'debtor',
+      currency: _selectedAccount!.currencyCode,
+      contactId: _selectedContact?.id,
     );
   }
 
@@ -654,20 +629,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  /// Due date of the [index]-th installment, spaced from the picked first due
-  /// date by the selected frequency (last one rolls over month end safely).
-  DateTime _intervalDate(int index) {
-    final d = _dueDate ?? DateTime.now();
-    switch (_dueFrequency) {
-      case 'weekly':
-        return d.add(Duration(days: 7 * index));
-      case 'biweekly':
-        return d.add(Duration(days: 14 * index));
-      default:
-        return DateTime(d.year, d.month + index, d.day);
-    }
-  }
-
   /// Save an internal transfer/menudeo as two linked legs (source negative,
   /// destination positive) sharing one [transferGroupId]. The single rate
   /// field describes the rate-target currency; per-account rates keep both
@@ -694,100 +655,26 @@ class _TransactionScreenState extends State<TransactionScreen> {
       return;
     }
 
-    final baseCode = await repo.getBaseCurrencyCode();
     final amount = double.tryParse(_amount) ?? 0.0;
     final now = DateTime.now();
-    final crossCurrency = from.currencyCode != to.currencyCode;
 
-    // The manual rate field is "1 base = X". When the source is the base
-    // currency the dest is the rate target; otherwise it's the source.
-    final rateCurrency = crossCurrency && from.currencyCode != baseCode
-        ? from.currencyCode
-        : to.currencyCode;
-
-    double? executionRate;
-    final nationalCode = await repo.getNationalCurrencyCode();
-    if (crossCurrency) {
-      executionRate = await repo.effectiveRate(rateCurrency, at: now);
-      final custom =
-          double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
-      if (custom != null && custom > 0) executionRate = custom;
-    }
-
-    // Per-leg rates: the execution rate goes to the rate-target leg, the other
-    // non-base leg (if any) converts at its own stored rate so the two legs
-    // agree on the transferred base value.
-    double? srcRate;
-    double? dstRate;
-    if (crossCurrency) {
-      srcRate = from.currencyCode == rateCurrency
-          ? executionRate
-          : await repo.getRateWithFallback(from.currencyCode, now);
-      dstRate = to.currencyCode == rateCurrency
-          ? executionRate
-          : await repo.getRateWithFallback(to.currencyCode, now);
-      if (from.currencyCode == baseCode) srcRate = null;
-      if (to.currencyCode == baseCode) dstRate = null;
-    }
-
-    final srcInBase = from.currencyCode == baseCode
-        ? amount
-        : (srcRate != null && srcRate > 0 ? amount / srcRate : amount);
-    final dstAmount = to.currencyCode == from.currencyCode
-        ? amount
-        : to.currencyCode == baseCode
-            ? srcInBase
-            : (dstRate != null && dstRate > 0
-                ? srcInBase * dstRate
-                : srcInBase);
-    final dstInBase = to.currencyCode == baseCode
-        ? dstAmount
-        : (dstRate != null && dstRate > 0 ? dstAmount / dstRate : srcInBase);
-
-    double? fromFx;
-    double? toFx;
-    if (from.currencyCode == nationalCode && from.currencyCode != baseCode) {
-      final bcv = await repo.getRateWithFallback(nationalCode, now);
-      if (bcv != null && bcv > 0 && srcRate != null && srcRate > 0) {
-        fromFx =
-            fxDeltaUsdt(amountVes: -amount, bcvRate: bcv, marketRate: srcRate);
-      }
-    }
-    if (to.currencyCode == nationalCode && to.currencyCode != baseCode) {
-      final bcv = await repo.getRateWithFallback(nationalCode, now);
-      if (bcv != null && bcv > 0 && dstRate != null && dstRate > 0) {
-        toFx = fxDeltaUsdt(
-            amountVes: dstAmount, bcvRate: bcv, marketRate: dstRate);
-      }
-    }
+    // Source/destination rates, base values and FX delta are computed by the
+    // planner so they stay consistent between the two legs.
+    final legs = await TransactionPlanner(repo).buildTransferLegs(
+      from: from,
+      to: to,
+      amount: amount,
+      reference: _referenceController.text,
+      date: now,
+      manualRate:
+          double.tryParse(_rateController.text.trim().replaceAll(',', '.')),
+    );
+    final fromCompanion = legs.fromLeg;
+    final toCompanion = legs.toLeg;
 
     final existing = widget.existingTransaction;
     final groupId =
         existing?.transferGroupId ?? now.microsecondsSinceEpoch.toString();
-
-    final fromCompanion = db.TransactionsCompanion(
-      amount: Value(-amount),
-      accountId: Value(from.id),
-      currencyCode: Value(from.currencyCode),
-      reference: Value(_referenceController.text),
-      date: Value(now),
-      exchangeRateAtCreation: Value(srcRate),
-      // The source leg is a negative transaction, so its base value must be
-      // negative too — otherwise revaluation cost basis counts the outflow as
-      // an inflow and fabricates a phantom loss.
-      baseCurrencyAmount: Value(-srcInBase),
-      fxDelta: Value(fromFx),
-    );
-    final toCompanion = db.TransactionsCompanion(
-      amount: Value(dstAmount),
-      accountId: Value(to.id),
-      currencyCode: Value(to.currencyCode),
-      reference: Value(_referenceController.text),
-      date: Value(now),
-      exchangeRateAtCreation: Value(dstRate),
-      baseCurrencyAmount: Value(dstInBase),
-      fxDelta: Value(toFx),
-    );
 
     if (existing?.transferGroupId != null) {
       final isSourceLeg = existing!.amount < 0;
@@ -1517,16 +1404,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   Widget _buildCategorySelector() {
     return GestureDetector(
-        onTap: () {
-          showModalBottomSheet(
+        onTap: () async {
+          final picked = await showModalBottomSheet<db.Category>(
               context: context,
               isDismissible: true,
-              builder: (context) => const CategoryScreen()).then((value) {
-            if (value == null) return;
-
-            setState(() {
-              category = value;
-            });
+              builder: (context) => const CategoryScreen());
+          if (picked == null || !mounted) return;
+          setState(() {
+            category = SelectedCategory(
+              id: picked.id,
+              name: picked.name,
+              icon: categoryIcons[picked.icon] ?? Icons.bookmark,
+              color: Color(picked.color),
+            );
           });
         },
         child: Container(
@@ -1537,11 +1427,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ),
           child: Row(
             children: [
-              Icon(category?["icon"] ?? Icons.bookmark), // Dark green icon
+              Icon(category?.icon ?? Icons.bookmark),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  category?["name"] ?? "Select category",
+                  category?.name ?? "Select category",
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600),
                 ),
@@ -2024,7 +1914,7 @@ Future<void> _openContactPicker() async {
     final total = double.tryParse(_amount) ?? 0.0;
     final per = total / _installmentCount;
     final code = _selectedAccount?.currencyCode ?? 'USD';
-    final cat = category?['name'];
+    final cat = category?.name;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2222,7 +2112,7 @@ Future<void> _openContactPicker() async {
                   'split into $_installmentCount installments of ~'
                   '${formatMoney(per)} $code each, '
                   'due every $_periodLabel (last due '
-                  '${DateFormat('MMM dd, yyyy').format(_intervalDate(_installmentCount - 1))}).',
+                  '${DateFormat('MMM dd, yyyy').format(TransactionPlanner.intervalDate(_dueDate, _dueFrequency, _installmentCount - 1))}).',
           style: TextStyle(fontSize: 12, color: context.colors.textLight),
         ),
       ],
