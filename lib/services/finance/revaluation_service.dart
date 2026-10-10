@@ -51,20 +51,26 @@ class RevaluationService {
           if (rate != null && rate != 0) {
             costBasis += tx.amount / rate;
           } else {
-            // No rate available at creation; fall back to current rate.
-            costBasis += await _repository.convertAmount(
-                amount: tx.amount,
-                fromCode: account.currencyCode,
-                toCode: baseCode);
+            // No rate available at creation; fall back to the current rate.
+            // If even that is missing, the cost basis can't be valued — leave
+            // it at zero rather than fabricating a 1:1 value.
+            costBasis += await _repository.tryConvertAmount(
+                    amount: tx.amount,
+                    fromCode: account.currencyCode,
+                    toCode: baseCode) ??
+                0.0;
           }
         }
       }
 
-      // Current value in base currency.
-      final currentValue = await _repository.convertAmount(
-          amount: balance,
-          fromCode: account.currencyCode,
-          toCode: baseCode);
+      // Current value in base currency. When the account's currency has no
+      // usable rate, we cannot value it: report no gain/loss instead of a
+      // fabricated 1:1 conversion.
+      final currentValue = await _repository.tryConvertAmount(
+              amount: balance,
+              fromCode: account.currencyCode,
+              toCode: baseCode) ??
+          costBasis;
 
       final gainLoss = currentValue - costBasis;
       final percent =
@@ -87,11 +93,15 @@ class RevaluationService {
   }
 
   /// Compute unrealized FX gain/loss aggregated by currency across accounts.
-  Future<List<CurrencyGainLoss>> getUnrealizedGainLossByCurrency() async {
-    final byAccount = await getUnrealizedGainLossByAccount();
+  ///
+  /// Pass [byAccount] to reuse a list the caller already computed, avoiding a
+  /// second full transaction scan.
+  Future<List<CurrencyGainLoss>> getUnrealizedGainLossByCurrency(
+      {List<GainLossResult>? byAccount}) async {
+    final accounts = byAccount ?? await getUnrealizedGainLossByAccount();
 
     final grouped = <String, List<GainLossResult>>{};
-    for (final result in byAccount) {
+    for (final result in accounts) {
       grouped.putIfAbsent(result.currencyCode, () => []).add(result);
     }
 
@@ -116,16 +126,20 @@ class RevaluationService {
   }
 
   /// Build a full summary of the revaluation situation.
+  ///
+  /// Pass [byAccount] to reuse a list the caller already computed.
   Future<RevaluationSummary> getRevaluationSummary(
-      {String? nationalCurrencyCode}) async {
+      {String? nationalCurrencyCode, List<GainLossResult>? byAccount}) async {
     final baseCode = await _repository.getBaseCurrencyCode();
     final nationalCode =
         nationalCurrencyCode ?? await _repository.getNationalCurrencyCode();
 
-    final byAccount = await getUnrealizedGainLossByAccount();
+    final accounts = byAccount ?? await getUnrealizedGainLossByAccount();
 
-    final totalValue = byAccount.fold<double>(0, (s, r) => s + r.currentValueInBase);
-    final totalCostBasis = byAccount.fold<double>(0, (s, r) => s + r.costBasisInBase);
+    final totalValue =
+        accounts.fold<double>(0, (s, r) => s + r.currentValueInBase);
+    final totalCostBasis =
+        accounts.fold<double>(0, (s, r) => s + r.costBasisInBase);
     final totalGainLoss = totalValue - totalCostBasis;
 
     final currentRate = nationalCode == baseCode

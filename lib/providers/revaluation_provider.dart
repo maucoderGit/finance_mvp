@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
@@ -17,7 +16,8 @@ class RevaluationProvider extends ChangeNotifier {
   List<NetWorthDataPoint> _netWorthHistory = [];
   List<PowerDataPoint> _purchasingPowerHistory = [];
 
-  StreamSubscription? _subscription;
+  bool _refreshing = false;
+  bool _disposed = false;
 
   RevaluationProvider(this._service);
 
@@ -30,23 +30,33 @@ class RevaluationProvider extends ChangeNotifier {
   List<PowerDataPoint> get purchasingPowerHistory => _purchasingPowerHistory;
 
   /// Refresh all revaluation data.
+  ///
+  /// Re-entrancy guarded: overlapping refreshes (home + revaluation screens
+  /// both fire on open) would otherwise interleave and let a stale run
+  /// overwrite newer results. The per-account scan is computed once and shared
+  /// with the currency/summary aggregates instead of scanned three times.
   Future<void> refresh() async {
+    if (_refreshing || _disposed) return;
+    _refreshing = true;
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _summary = await _service.getRevaluationSummary();
-      _gainLossByAccount = await _service.getUnrealizedGainLossByAccount();
-      _gainLossByCurrency = await _service.getUnrealizedGainLossByCurrency();
+      final byAccount = await _service.getUnrealizedGainLossByAccount();
+      _gainLossByAccount = byAccount;
+      _summary = await _service.getRevaluationSummary(byAccount: byAccount);
+      _gainLossByCurrency =
+          await _service.getUnrealizedGainLossByCurrency(byAccount: byAccount);
       _netWorthHistory = await _service.getNetWorthHistory();
-      _purchasingPowerHistory =
-          await _service.getPurchasingPowerHistory(_summary?.nationalCurrencyCode ?? 'VES');
+      _purchasingPowerHistory = await _service.getPurchasingPowerHistory(
+          _summary?.nationalCurrencyCode ?? 'VES');
     } catch (e) {
       _error = e.toString();
     } finally {
       _loading = false;
-      notifyListeners();
+      _refreshing = false;
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -61,7 +71,7 @@ class RevaluationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _disposed = true;
     super.dispose();
   }
 }

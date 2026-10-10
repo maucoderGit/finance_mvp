@@ -203,4 +203,40 @@ void main() {
     expect(history, hasLength(2));
     expect(history.last.baseAmount, closeTo(100, 0.001));
   });
+
+  test('reusing a precomputed account scan yields the same aggregates',
+      () async {
+    final accountId = await createAccount('Cash', 'EUR');
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'EUR',
+      rate: 1.1,
+      date: DateTime.now().subtract(const Duration(days: 10)),
+    ));
+    await repo.createTransaction(TransactionsCompanion.insert(
+      amount: 100,
+      accountId: accountId,
+      currencyCode: 'EUR',
+      date: DateTime.now(),
+      exchangeRateAtCreation: const drift.Value(1.1),
+    ));
+    await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+      currencyCode: 'EUR',
+      rate: 1.0,
+      date: DateTime.now(),
+    ));
+
+    // Computing the scan once and sharing it must match the self-computing
+    // overloads exactly.
+    final byAccount = await service.getUnrealizedGainLossByAccount();
+    final shared =
+        await service.getRevaluationSummary(byAccount: byAccount);
+    final sharedByCurrency =
+        await service.getUnrealizedGainLossByCurrency(byAccount: byAccount);
+    final self = await service.getRevaluationSummary();
+    final selfByCurrency = await service.getUnrealizedGainLossByCurrency();
+
+    expect(shared.totalValueInBase, closeTo(self.totalValueInBase, 0.001));
+    expect(sharedByCurrency.single.unrealizedGainLoss,
+        closeTo(selfByCurrency.single.unrealizedGainLoss, 0.001));
+  });
 }
