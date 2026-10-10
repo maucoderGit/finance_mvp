@@ -114,6 +114,7 @@ class CurrencyProvider extends ChangeNotifier {
       final todayDate = DateTime(today.year, today.month, today.day);
 
       var updated = 0;
+      String? sourceError;
       for (final source in _sources) {
         final quotes = toSync
             .map((c) => c.code)
@@ -134,12 +135,13 @@ class CurrencyProvider extends ChangeNotifier {
             ));
           }
         } catch (e) {
-          _syncError = e.toString();
+          sourceError = e.toString();
         }
       }
 
       // Persist today's parallel/market VES rate for net-worth valuation and
       // FX deltas. Optional: failures don't block the currency sync.
+      String? marketError;
       try {
         final marketRate = await _marketRateSource.fetchLatestRate();
         if (marketRate != null && marketRate > 0) {
@@ -149,22 +151,28 @@ class CurrencyProvider extends ChangeNotifier {
           ));
         }
       } catch (e) {
-        if (updated == 0) _syncError ??= e.toString();
+        marketError = e.toString();
       }
 
       if (updated > 0) {
-        _syncError = unsupported.isEmpty
-            ? null
-            : 'Unsupported: ${unsupported.join(', ')}. Add manually.';
         _lastSyncDate = DateTime.now();
+        // Record when we last auto-fetched, but leave the user's auto/manual
+        // selection alone — a (possibly forced) sync must not flip it to auto.
         await _repository.updateUserSettings(UserSettingsCompanion(
           lastAutoFetchDate: Value(DateTime.now()),
-          currencySelectionMode: const Value('auto'),
         ));
+        // A source that errored during a partially-successful sync is a real
+        // failure the UI must still see, not a success we silently overwrite.
+        _syncError = sourceError ??
+            (unsupported.isEmpty
+                ? null
+                : 'Unsupported: ${unsupported.join(', ')}. Add manually.');
       } else {
-        _syncError ??= unsupported.isEmpty
-            ? 'No rate source returned data.'
-            : 'Unsupported: ${unsupported.join(', ')}. Add manually.';
+        _syncError = sourceError ??
+            marketError ??
+            (unsupported.isEmpty
+                ? 'No rate source returned data.'
+                : 'Unsupported: ${unsupported.join(', ')}. Add manually.');
       }
 
       return updated;
@@ -200,25 +208,30 @@ class CurrencyProvider extends ChangeNotifier {
         to: today,
       );
 
-      var count = 0;
+      final companions = <CurrencyRatesCompanion>[];
       rates.forEach((dateStr, quoteRates) {
         final date = DateTime.tryParse(dateStr);
         final rate = quoteRates[currencyCode];
         if (date == null || rate == null || rate <= 0) return;
-        count++;
-        _repository.addExchangeRate(CurrencyRatesCompanion(
+        companions.add(CurrencyRatesCompanion(
           currencyCode: Value(currencyCode),
           rate: Value(rate),
           date: Value(date),
         ));
       });
-      return count;
+      // Await the batch before reporting a count: the previous fire-and-forget
+      // per-row insert returned a count while the writes were still in flight
+      // (and swallowed any insert failure).
+      if (companions.isNotEmpty) {
+        await _repository.addExchangeRatesBatch(companions);
+      }
+      return companions.length;
     }
 
     final rates = await source.fetchLatestRates(base: baseCode, quotes: [currencyCode]);
     final rate = rates[currencyCode];
     if (rate == null || rate <= 0) return 0;
-    _repository.addExchangeRate(CurrencyRatesCompanion(
+    await _repository.addExchangeRate(CurrencyRatesCompanion(
       currencyCode: Value(currencyCode),
       rate: Value(rate),
       date: Value(DateTime.now()),
