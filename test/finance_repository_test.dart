@@ -1266,4 +1266,75 @@ void main() {
       expect(await repo.calculateTotalBalance('USD'), closeTo(100, 0.001));
     });
   });
+
+  group('reactive summary streams', () {
+    test('watchMonthlySummary re-emits when a transaction is recorded',
+        () async {
+      await repo.createAccountWithInitialTransaction(
+        AccountsCompanion.insert(
+          name: 'Cash',
+          currencyCode: 'USD',
+          icon: 'cash',
+          iconColor: 0xFF4CAF50,
+        ),
+        100,
+      );
+      final account = (await repo.getAllAccounts()).single;
+
+      final emissions = <MonthlySummary>[];
+      final sub =
+          repo.watchMonthlySummary(DateTime.now()).listen(emissions.add);
+      await pumpEventQueue();
+      expect(emissions, hasLength(1));
+      expect(emissions.last.income, closeTo(100, 0.001));
+
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 50,
+        accountId: account.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+      await pumpEventQueue();
+
+      expect(emissions.length, greaterThanOrEqualTo(2));
+      expect(emissions.last.income, closeTo(150, 0.001));
+      await sub.cancel();
+    });
+
+    test('watchCashFlow re-emits when a transaction is recorded', () async {
+      await repo.createAccountWithInitialTransaction(
+        AccountsCompanion.insert(
+          name: 'Cash',
+          currencyCode: 'USD',
+          icon: 'cash',
+          iconColor: 0xFF4CAF50,
+        ),
+        0,
+      );
+      final account = (await repo.getAllAccounts()).single;
+
+      final emissions = <List<CashFlowPoint>>[];
+      final sub = repo
+          .watchCashFlow(bucket: CashFlowBucket.day)
+          .listen(emissions.add);
+      await pumpEventQueue();
+      final before = emissions.last.fold<double>(
+          0, (s, p) => s + p.income);
+      expect(before, 0);
+
+      await repo.createTransaction(TransactionsCompanion.insert(
+        amount: 30,
+        accountId: account.id,
+        currencyCode: 'USD',
+        date: DateTime.now(),
+      ));
+      await pumpEventQueue();
+
+      expect(emissions.length, greaterThanOrEqualTo(2));
+      final after =
+          emissions.last.fold<double>(0, (s, p) => s + p.income);
+      expect(after, closeTo(30, 0.001));
+      await sub.cancel();
+    });
+  });
 }

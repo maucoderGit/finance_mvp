@@ -1184,17 +1184,28 @@ class FinanceRepository {
   /// base currency's minor unit so the monthly summary doesn't accumulate
   /// per-row conversion residue.
   Future<double> toBaseAmount(Transaction transaction) async {
-    final baseCode = await getBaseCurrencyCode();
+    return _toBaseAmount(transaction, await getBaseCurrencyCode());
+  }
+
+  /// [toBaseAmount] with the base code already resolved, so a per-row loop
+  /// doesn't issue one `userSettings` query per transaction.
+  Future<double> _toBaseAmount(Transaction transaction, String baseCode) async {
     if (transaction.currencyCode == baseCode) return transaction.amount;
     final stored = transaction.baseCurrencyAmount;
     if (stored != null) return stored;
-    return convertAmount(
-      amount: transaction.amount,
-      fromCode: transaction.currencyCode,
-      toCode: baseCode,
-    );
+    return await tryConvertAmount(
+          amount: transaction.amount,
+          fromCode: transaction.currencyCode,
+          toCode: baseCode,
+        ) ??
+        0.0;
   }
 
+  /// Reactive monthly income/expense/FX summary for [date]'s month. Watches the
+  /// transactions table, so recording a transaction re-emits the summary.
+  ///
+  /// (Base-currency changes are not part of the query and won't re-emit; the
+  /// screen rebuilds on those settings changes anyway.)
   Stream<MonthlySummary> watchMonthlySummary(DateTime date) {
     final startOfMonth = DateTime(date.year, date.month, 1);
     final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
@@ -1206,14 +1217,14 @@ class FinanceRepository {
           // are neither income nor expense and must not bend the summary.
           t.transferGroupId.isNull());
 
-    return db.transaction(() async {
-      final transactionsInMonth = await query.get();
+    return query.watch().asyncMap((transactionsInMonth) async {
+      final baseCode = await getBaseCurrencyCode();
       double totalIncome = 0;
       double totalExpenses = 0;
       double totalFxImpact = 0;
 
       for (final t in transactionsInMonth) {
-        final baseAmount = await toBaseAmount(t);
+        final baseAmount = await _toBaseAmount(t, baseCode);
         if (baseAmount > 0) {
           totalIncome += baseAmount;
         } else {
@@ -1225,7 +1236,7 @@ class FinanceRepository {
           income: totalIncome,
           expenses: totalExpenses,
           fxImpact: totalFxImpact);
-    }).asStream();
+    });
   }
 
   /// Money in and out of the base currency, one point per [bucket], oldest
@@ -1254,8 +1265,8 @@ class FinanceRepository {
           t.date.isBetween(drift.Variable(starts.first), drift.Variable(end)) &
           t.transferGroupId.isNull());
 
-    return db.transaction(() async {
-      final rows = await query.get();
+    return query.watch().asyncMap((rows) async {
+      final baseCode = await getBaseCurrencyCode();
       final totals = <DateTime, ({double income, double expenses})>{
         for (final start in starts) start: (income: 0.0, expenses: 0.0),
       };
@@ -1268,7 +1279,7 @@ class FinanceRepository {
         // A transaction inside the range always floors into one of the buckets,
         // but a future-dated row beyond `end` would not.
         if (acc == null) continue;
-        final base = await toBaseAmount(t);
+        final base = await _toBaseAmount(t, baseCode);
         totals[start] = base > 0
             ? (income: acc.income + base, expenses: acc.expenses)
             : (income: acc.income, expenses: acc.expenses + base.abs());
@@ -1282,7 +1293,7 @@ class FinanceRepository {
             expenses: totals[start]!.expenses,
           ),
       ];
-    }).asStream();
+    });
   }
 
   /// Start of the bucket [back] units before [d], in pure calendar arithmetic
