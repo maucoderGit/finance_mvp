@@ -234,7 +234,7 @@ class AccountsScreen extends StatelessWidget {
 
                           final baseCurrencyCode =
                               await repository.getBaseCurrencyCode();
-                          final converted = await repository.convertAmount(
+                          final converted = await repository.tryConvertAmount(
                             amount: accountBalance,
                             fromCode: account.currencyCode,
                             toCode: baseCurrencyCode,

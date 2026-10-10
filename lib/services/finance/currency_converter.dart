@@ -23,6 +23,20 @@ const _pow10 = <double>[
   1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
 ];
 
+/// Thrown when a conversion is requested but no usable (present and non-zero)
+/// rate is stored for the pair. Returning the unconverted amount instead would
+/// value a missing-rate currency 1:1 with the target — a wrong number that
+/// flows straight into balances, goal progress and debt settlement.
+class MissingExchangeRateException implements Exception {
+  MissingExchangeRateException(this.fromCode, this.toCode);
+
+  final String fromCode;
+  final String toCode;
+
+  @override
+  String toString() => 'No exchange rate stored to convert $fromCode to $toCode';
+}
+
 /// Formats [amount] with the phone locale's group/decimal separators, so
 /// 1234.50 reads "1.234,50" in es-VE but "1,234.50" in en-US. Prepend
 /// [currencyCode] (e.g. "VES") and/or override the [symbol] to customize.

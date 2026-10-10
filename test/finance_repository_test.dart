@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_db.dart';
@@ -1207,6 +1208,62 @@ void main() {
 
       expect(await db.select(db.goals).get(), isEmpty);
       expect(await db.select(db.accounts).get(), isEmpty);
+    });
+  });
+
+  group('conversion safety', () {
+    test('convertAmount throws instead of faking a 1:1 rate', () async {
+      // No VES rate is stored: the old code returned the VES amount unchanged,
+      // valuing bolivares 1:1 with USD. Now it must refuse to guess.
+      expect(
+        () => repo.convertAmount(amount: 100, fromCode: 'VES', toCode: 'USD'),
+        throwsA(isA<MissingExchangeRateException>()),
+      );
+    });
+
+    test('a stored zero rate is treated as missing, never divided by', () async {
+      await repo.addExchangeRate(CurrencyRatesCompanion.insert(
+        currencyCode: 'VES',
+        rate: 0,
+        date: DateTime.now(),
+      ));
+
+      expect(
+        () => repo.convertAmount(amount: 100, fromCode: 'VES', toCode: 'USD'),
+        throwsA(isA<MissingExchangeRateException>()),
+      );
+    });
+
+    test('tryConvertAmount returns null when the pair has no rate', () async {
+      expect(
+        await repo.tryConvertAmount(
+            amount: 5, fromCode: 'VES', toCode: 'USD'),
+        isNull,
+      );
+    });
+
+    test('calculateTotalBalance skips accounts with no usable rate', () async {
+      await repo.createAccountWithInitialTransaction(
+        AccountsCompanion.insert(
+          name: 'Cash',
+          currencyCode: 'USD',
+          icon: 'cash',
+          iconColor: 0xFF4CAF50,
+        ),
+        100,
+      );
+      await repo.createAccountWithInitialTransaction(
+        AccountsCompanion.insert(
+          name: 'Bolivares',
+          currencyCode: 'VES',
+          icon: 'account_balance_wallet',
+          iconColor: 0xFF2196F3,
+        ),
+        4000,
+      );
+
+      // No VES rate: the VES account is skipped, not counted as 4000 USD.
+      expect(await repo.calculateTotalBalance('USD'), closeTo(100, 0.001));
     });
   });
 }

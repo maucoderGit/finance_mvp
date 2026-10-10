@@ -669,16 +669,23 @@ class FinanceRepository {
       final inBase = tx.baseCurrencyAmount ??
           (tx.currencyCode == base
               ? tx.amount
-              : await convertAmount(
-                  amount: tx.amount, fromCode: tx.currencyCode,
-                  toCode: base));
+              : (await tryConvertAmount(
+                      amount: tx.amount,
+                      fromCode: tx.currencyCode,
+                      toCode: base) ??
+                  // No rate to value this payment: count it as nothing paid, so
+                  // the debt stays open rather than being falsely settled.
+                  0.0));
       paidInBase += inBase.abs();
     }
 
     final paidInDebtCurrency = debt.currencyCode == base
         ? paidInBase
-        : await convertAmount(
-            amount: paidInBase, fromCode: base, toCode: debt.currencyCode);
+        : (await tryConvertAmount(
+                amount: paidInBase,
+                fromCode: base,
+                toCode: debt.currencyCode) ??
+            0.0);
     // Snapped to the debt currency's minor unit: this value is compared
     // against zero to decide whether the debt is settled, so a converted
     // remainder like 1.4e-14 must not survive as "still owed".
@@ -712,11 +719,13 @@ class FinanceRepository {
     for (final debt in debts) {
       final remaining = await getDebtRemaining(debt);
       if (remaining <= 0) continue;
-      final inBase = await convertAmount(
+      final inBase = await tryConvertAmount(
         amount: remaining,
         fromCode: debt.currencyCode,
         toCode: base,
       );
+      // Unrated debt currency: skip rather than value it 1:1 with the base.
+      if (inBase == null) continue;
       if (debt.direction == 'creditor') {
         owedByMe += inBase;
       } else {
@@ -866,10 +875,11 @@ class FinanceRepository {
     for (final goal in goals.values) {
       final account = accounts[goal.accountId]!;
       final balance = balanceByAccount[account.id] ?? 0.0;
-      final current = await convertAmount(
-          amount: balance,
-          fromCode: account.currencyCode,
-          toCode: goal.currencyCode);
+      final current = await tryConvertAmount(
+              amount: balance,
+              fromCode: account.currencyCode,
+              toCode: goal.currencyCode) ??
+          0.0;
       out.add(GoalProgress(
         goal: goal,
         account: account,
@@ -1029,19 +1039,45 @@ class FinanceRepository {
     final baseCurrencyCode = await getBaseCurrencyCode();
 
     if (toCode == baseCurrencyCode) {
-      final rate = await getLatestRate(fromCode);
-      return _quantizeIn(rate != null ? amount / rate.rate : amount, toCode);
+      final rate = await _usableRate(fromCode);
+      if (rate == null) throw MissingExchangeRateException(fromCode, toCode);
+      return _quantizeIn(amount / rate, toCode);
     }
 
     if (fromCode == baseCurrencyCode) {
-      final rate = await getLatestRate(toCode);
-      return _quantizeIn(rate != null ? amount * rate.rate : amount, toCode);
+      final rate = await _usableRate(toCode);
+      if (rate == null) throw MissingExchangeRateException(fromCode, toCode);
+      return _quantizeIn(amount * rate, toCode);
     }
 
     final amountInBase = await convertAmount(
         amount: amount, fromCode: fromCode, toCode: baseCurrencyCode);
     return await convertAmount(
         amount: amountInBase, fromCode: baseCurrencyCode, toCode: toCode);
+  }
+
+  /// Like [convertAmount] but returns null instead of throwing when the pair
+  /// has no usable rate — for display/analytics paths that can degrade to
+  /// "unavailable" rather than showing a fabricated 1:1 value.
+  Future<double?> tryConvertAmount({
+    required double amount,
+    required String fromCode,
+    required String toCode,
+  }) async {
+    try {
+      return await convertAmount(
+          amount: amount, fromCode: fromCode, toCode: toCode);
+    } on MissingExchangeRateException {
+      return null;
+    }
+  }
+
+  /// The latest stored rate for [currencyCode], or null when absent or
+  /// non-positive. A stored 0 would otherwise divide/multiply into
+  /// Infinity/NaN and poison every balance downstream.
+  Future<double?> _usableRate(String currencyCode) async {
+    final rate = await getLatestRate(currencyCode);
+    return (rate != null && rate.rate > 0) ? rate.rate : null;
   }
 
   /// Round [value] to [code]'s minor unit. Every converted amount goes through
@@ -1070,10 +1106,14 @@ class FinanceRepository {
     double total = 0;
     for (final account in allAccounts) {
       final balance = totalByAccount[account.id] ?? 0.0;
-      total += await convertForNetWorth(
+      // Accounts whose currency has no usable rate are skipped: a partial
+      // total of the currencies we *can* value beats a fabricated 1:1 sum
+      // (and beats throwing and blanking the whole screen).
+      final converted = await tryConvertForNetWorth(
           amount: balance,
           fromCode: account.currencyCode,
           toCode: toCode);
+      if (converted != null) total += converted;
     }
 
     return total;
@@ -1101,6 +1141,21 @@ class FinanceRepository {
     }
 
     return convertAmount(amount: amount, fromCode: fromCode, toCode: toCode);
+  }
+
+  /// Like [convertForNetWorth] but returns null instead of throwing when no
+  /// usable rate exists — for aggregation paths that skip what they can't value.
+  Future<double?> tryConvertForNetWorth({
+    required double amount,
+    required String fromCode,
+    required String toCode,
+  }) async {
+    try {
+      return await convertForNetWorth(
+          amount: amount, fromCode: fromCode, toCode: toCode);
+    } on MissingExchangeRateException {
+      return null;
+    }
   }
 
   // ── Net Worth History ──
