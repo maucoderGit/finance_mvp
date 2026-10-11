@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:intl/intl.dart';
@@ -71,8 +72,10 @@ class GoalProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${formatMoney(goal.current, currencyCode: currency)}'
-            ' of ${formatMoney(goal.goal.targetAmount, currencyCode: currency)}',
+            context.l10n.goalProgressOf(
+              formatMoney(goal.current, currencyCode: currency),
+              formatMoney(goal.goal.targetAmount, currencyCode: currency),
+            ),
             style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
           ),
           const SizedBox(height: 12),
@@ -88,11 +91,13 @@ class GoalProgressCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          if (showAccountName) _footnote('Held in ${goal.account.name}'),
+          if (showAccountName)
+            _footnote(context.l10n.goalHeldIn(goal.account.name)),
           if (showProjection && projectedOn != null)
-            _footnote('On track for ${DateFormat.yMMM().format(projectedOn!)}'),
+            _footnote(context.l10n
+                .goalOnTrackFor(DateFormat.yMMM().format(projectedOn!))),
           if (showProjection && projectedOn == null && !goal.isReached)
-            _footnote('Not saving enough yet to project a date'),
+            _footnote(context.l10n.goalNoProjection),
         ],
       ),
     );

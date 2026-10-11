@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -43,7 +44,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Select Category',
+          context.l10n.categorySelectTitle,
           style: TextStyle(
             color: context.colors.textDark,
             fontWeight: FontWeight.bold,
@@ -66,7 +67,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
           }
           final categories = snapshot.data!;
           if (categories.isEmpty) {
-            return const Center(child: Text('No categories found.'));
+            return Center(child: Text(context.l10n.categoryNoneFound));
           }
           return ListView.builder(
             itemCount: categories.length,

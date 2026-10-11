@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -93,9 +94,9 @@ class _CurrencyFormState extends State<CurrencyForm> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Add New Currency',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Text(
+                context.l10n.currencyAddTitle,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
               Row(
@@ -105,13 +106,16 @@ class _CurrencyFormState extends State<CurrencyForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Name', style: labelStyle),
+                        Text(context.l10n.currencyFieldName, style: labelStyle),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _nameController,
-                          decoration: inputDecoration.copyWith(hintText: 'e.g. Euro'),
+                          decoration: inputDecoration.copyWith(
+                              hintText: context.l10n.currencyNameHint),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Please enter a name';
+                            if (value == null || value.isEmpty) {
+                              return context.l10n.currencyNameRequired;
+                            }
                             return null;
                           },
                         ),
@@ -123,13 +127,16 @@ class _CurrencyFormState extends State<CurrencyForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Code', style: labelStyle),
+                        Text(context.l10n.currencyFieldCode, style: labelStyle),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _codeController,
-                          decoration: inputDecoration.copyWith(hintText: 'e.g. EUR'),
+                          decoration: inputDecoration.copyWith(
+                              hintText: context.l10n.currencyCodeHint),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Please enter a code';
+                            if (value == null || value.isEmpty) {
+                              return context.l10n.currencyCodeRequired;
+                            }
                             return null;
                           },
                         ),
@@ -139,13 +146,16 @@ class _CurrencyFormState extends State<CurrencyForm> {
                 ],
               ),
               const SizedBox(height: 16),
-              Text('Symbol', style: labelStyle),
+              Text(context.l10n.currencyFieldSymbol, style: labelStyle),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _symbolController,
-                decoration: inputDecoration.copyWith(hintText: 'e.g. €'),
+                decoration: inputDecoration.copyWith(
+                    hintText: context.l10n.currencySymbolHint),
                 validator: (value) {
-                  if (value == null || value.isEmpty) return 'Please enter a symbol';
+                  if (value == null || value.isEmpty) {
+                    return context.l10n.currencySymbolRequired;
+                  }
                   return null;
                 },
               ),
@@ -157,13 +167,17 @@ class _CurrencyFormState extends State<CurrencyForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Separator', style: labelStyle),
+                        Text(context.l10n.currencyFieldSeparator,
+                            style: labelStyle),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _separatorController,
-                          decoration: inputDecoration.copyWith(hintText: 'e.g. ,'),
+                          decoration: inputDecoration.copyWith(
+                              hintText: context.l10n.currencySeparatorHint),
                            validator: (value) {
-                            if (value == null || value.isEmpty) return 'Please enter a separator';
+                            if (value == null || value.isEmpty) {
+                              return context.l10n.currencySeparatorRequired;
+                            }
                             return null;
                           },
                         ),
@@ -175,15 +189,21 @@ class _CurrencyFormState extends State<CurrencyForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Decimal Digits', style: labelStyle),
+                        Text(context.l10n.currencyFieldDecimalDigits,
+                            style: labelStyle),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _decimalDigitsController,
-                          decoration: inputDecoration.copyWith(hintText: 'e.g. 2'),
+                          decoration: inputDecoration.copyWith(
+                              hintText: context.l10n.currencyDecimalHint),
                           keyboardType: TextInputType.number,
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Enter number of digits';
-                            if (int.tryParse(value) == null) return 'Enter a valid number';
+                            if (value == null || value.isEmpty) {
+                              return context.l10n.currencyDecimalRequired;
+                            }
+                            if (int.tryParse(value) == null) {
+                              return context.l10n.currencyDecimalInvalid;
+                            }
                             return null;
                           },
                         ),
@@ -204,7 +224,7 @@ class _CurrencyFormState extends State<CurrencyForm> {
                           side: BorderSide(color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        child: const Text('Cancel'),
+                        child: Text(context.l10n.cancel),
                       ),
                     ),
                   ),
@@ -218,7 +238,8 @@ class _CurrencyFormState extends State<CurrencyForm> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           backgroundColor: Theme.of(context).primaryColor,
                         ),
-                        child: const Text('Save Currency', style: TextStyle(color: Colors.white),),
+                        child: Text(context.l10n.currencySave,
+                            style: const TextStyle(color: Colors.white)),
                       ),
                     ),
                   ),

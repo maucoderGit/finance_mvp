@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:flutter/material.dart';
@@ -63,7 +64,7 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Select Recipient'),
+        title: Text(context.l10n.contactSelectRecipient),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -73,7 +74,7 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'New contact',
+            tooltip: context.l10n.contactsNew,
             icon: Icon(Icons.add, color: context.colors.textDark),
             onPressed: _createContact,
           ),
@@ -87,7 +88,7 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
               controller: _searchController,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Search by name or phone...',
+                hintText: context.l10n.contactsSearchHint,
                 prefixIcon: Icon(Icons.search, color: context.colors.textLight),
                 filled: true,
                 fillColor: context.colors.cardBackground,
@@ -109,8 +110,8 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _contacts.isEmpty
-                              ? 'No contacts yet'
-                              : 'No matching contacts',
+                              ? context.l10n.contactsNone
+                              : context.l10n.contactsNoMatch,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: context.colors.textDark,
@@ -120,8 +121,7 @@ class _ContactPickerScreenState extends State<ContactPickerScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 32),
                           child: Text(
-                            'Add one with the + button to link it to this '
-                            'transaction.',
+                            context.l10n.contactPickerAddHint,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,

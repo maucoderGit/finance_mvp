@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +65,7 @@ class CashFlowChart extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          '${showIncome ? 'Income' : 'Spending'} · ${bucket.windowLabel.toLowerCase()}',
+          '${showIncome ? context.l10n.income : context.l10n.spending} · ${_windowLabel(context, bucket).toLowerCase()}',
           style: TextStyle(color: context.colors.textLight, fontSize: 13),
         ),
         const SizedBox(height: 16),
@@ -154,5 +155,13 @@ class CashFlowChart extends StatelessWidget {
         CashFlowBucket.week => DateFormat('MMM d'),
         CashFlowBucket.month => DateFormat('MMM'),
         CashFlowBucket.year => DateFormat('yyyy'),
+      };
+
+  static String _windowLabel(BuildContext context, CashFlowBucket bucket) =>
+      switch (bucket) {
+        CashFlowBucket.day => context.l10n.cashFlowWindowDay,
+        CashFlowBucket.week => context.l10n.cashFlowWindowWeek,
+        CashFlowBucket.month => context.l10n.cashFlowWindowMonth,
+        CashFlowBucket.year => context.l10n.cashFlowWindowYear,
       };
 }

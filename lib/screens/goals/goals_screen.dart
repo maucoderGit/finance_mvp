@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/goals/goal_form_screen.dart';
 import 'package:finance_mvp/widgets/goal_progress_card.dart';
@@ -54,19 +55,16 @@ class _GoalsScreenState extends State<GoalsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete "${goal.goal.name}"?'),
-        content: Text(
-          'The goal is removed. The ${goal.account.name} account and its '
-          'transactions stay — that money is yours.',
-        ),
+        title: Text(context.l10n.goalsDeleteTitle(goal.goal.name)),
+        content: Text(context.l10n.goalsDeleteBody(goal.account.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -80,7 +78,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Goals'),
+        title: Text(context.l10n.goalsTitle),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -90,7 +88,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'New goal',
+            tooltip: context.l10n.goalsNew,
             icon: Icon(Icons.add, color: context.colors.textDark),
             onPressed: _openForm,
           ),
@@ -113,7 +111,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     Icon(Icons.flag, size: 40, color: context.colors.textLight),
                     const SizedBox(height: 12),
                     Text(
-                      'No goals yet',
+                      context.l10n.goalsNone,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -122,8 +120,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'A goal opens an account to hold the money, so your '
-                      'progress is always your real balance.',
+                      context.l10n.goalsNoneHint,
                       textAlign: TextAlign.center,
                       style: TextStyle(color: context.colors.textLight),
                     ),

@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:finance_mvp/screens/debts/debt_form_screen.dart';
@@ -124,7 +125,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 child: Row(
                   children: [
                     Text(
-                      'Linked payments',
+                      context.l10n.debtsLinkedPayments,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -143,8 +144,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  '${payments.length} payment(s) · '
-                  '${formatMoney(totalPaid, symbol: symbol)} total',
+                  context.l10n.debtsPaymentsTotal(
+                    payments.length,
+                    formatMoney(totalPaid, symbol: symbol),
+                  ),
                   style: TextStyle(
                       fontSize: 12, color: context.colors.textLight),
                 ),
@@ -156,8 +159,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         padding: const EdgeInsets.all(32),
                         child: Center(
                           child: Text(
-                            'No linked transactions yet.\nRecord an expense and choose '
-                            "\u201CPay toward debt\u201D to link one.",
+                            context.l10n.debtsNoLinkedPayments,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: context.colors.textLight),
@@ -191,7 +193,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                 padding: const EdgeInsets.only(
                                     left: 4, top: 2),
                                 child: Text(
-                                  'Applied: ${formatMoney(usedRaw.abs(), symbol: symbol)}',
+                                  context.l10n.debtsApplied(
+                                      formatMoney(usedRaw.abs(),
+                                          symbol: symbol)),
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: context.colors.textLight),
@@ -213,19 +217,26 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete debt?'),
+        title: Text(context.l10n.debtsDeleteTitle),
         content: Text(
-          'This removes the ${debt.direction == 'creditor' ? 'debt to' : 'loan to'} '
-          '${_contactNames[debt.contactId] ?? 'contact'} (${formatMoney(debt.amount, symbol: _currencies[debt.currencyCode]?.symbol ?? debt.currencyCode)}).',
+          (debt.direction == 'creditor'
+                  ? context.l10n.debtsDeleteBodyDebt
+                  : context.l10n.debtsDeleteBodyLoan)(
+            _contactNames[debt.contactId] ?? context.l10n.debtsContactFallback,
+            formatMoney(debt.amount,
+                symbol: _currencies[debt.currencyCode]?.symbol ??
+                    debt.currencyCode),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.delete,
+                style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -245,7 +256,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Debts & Debtors'),
+        title: Text(context.l10n.debtsTitle),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -255,7 +266,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'New debt',
+            tooltip: context.l10n.debtsNew,
             icon: Icon(Icons.add, color: context.colors.textDark),
             onPressed: _add,
           ),
@@ -268,7 +279,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
             children: [
               Expanded(
                 child: _SummaryCard(
-                  label: 'They owe me',
+                  label: context.l10n.debtsTheyOweMe,
                   amount: totals?.owedToMe ?? 0,
                   symbol: _baseSymbol,
                   tone: 'good',
@@ -277,7 +288,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _SummaryCard(
-                  label: 'I owe',
+                  label: context.l10n.debtsIOwe,
                   amount: totals?.owedByMe ?? 0,
                   symbol: _baseSymbol,
                   tone: 'bad',
@@ -295,7 +306,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                       size: 40, color: context.colors.textLight),
                   const SizedBox(height: 8),
                   Text(
-                    'No debts yet',
+                    context.l10n.debtsNone,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: context.colors.textDark,
@@ -303,7 +314,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Track loans you gave or received with the + button.',
+                    context.l10n.debtsNoneHint,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
@@ -315,15 +326,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
             ),
           for (final debt in openDebts) _buildDebtTile(debt),
           if (settledDebts.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 20, bottom: 8),
-              child: Text('Settled',
-                  style: TextStyle(
+            Padding(
+              padding: const EdgeInsets.only(top: 20, bottom: 8),
+              child: Text(context.l10n.debtsSettled,
+                  style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.grey)),
-            ),
-            for (final debt in settledDebts) _buildDebtTile(debt),
+            ),            for (final debt in settledDebts) _buildDebtTile(debt),
           ],
         ],
       ),
@@ -335,20 +345,23 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final symbol =
         _currencies[debt.currencyCode]?.symbol ?? debt.currencyCode;
     final isCreditor = debt.direction == 'creditor';
-    final title = contactName ?? debt.description ?? 'Debt';
+    final title = contactName ?? debt.description ?? context.l10n.debtsDebt;
     final remaining = _remaining[debt.id] ?? debt.amount;
     final schedule = _installments[debt.id];
     final subtitle = <String>[
-      if (isCreditor) 'I owe' else 'They owe me',
+      if (isCreditor) context.l10n.debtsIOwe else context.l10n.debtsTheyOweMe,
       if (contactName != null && debt.description != null)
         debt.description!,
       if (schedule != null && schedule.length > 1)
-        '${schedule.length} cuotas',
+        context.l10n.debtsInstallments(schedule.length),
       if (debt.dueDate != null)
-        'Due ${DateFormat('MMM dd, yyyy').format(debt.dueDate!)}',
+        context.l10n
+            .debtsDue(DateFormat('MMM dd, yyyy').format(debt.dueDate!)),
       if (!debt.isSettled)
-        '${formatMoney(remaining, symbol: symbol)} of '
-            '${formatMoney(debt.amount, symbol: symbol)}',
+        context.l10n.debtsProgressOf(
+          formatMoney(remaining, symbol: symbol),
+          formatMoney(debt.amount, symbol: symbol),
+        ),
       DateFormat('MMM dd, yyyy').format(debt.date),
     ].join(' · ');
     return Padding(
@@ -414,13 +427,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: 'Linked payments',
+                  tooltip: context.l10n.debtsLinkedPayments,
                   icon: Icon(Icons.receipt_long,
                       color: context.colors.textLight),
                   onPressed: () => _showPayments(debt),
                 ),
                 IconButton(
-                  tooltip: debt.isSettled ? 'Reopen' : 'Settle',
+                  tooltip: debt.isSettled
+                      ? context.l10n.debtsReopen
+                      : context.l10n.debtsSettle,
                   icon: Icon(
                     debt.isSettled
                         ? Icons.restore
@@ -432,7 +447,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   onPressed: () => _toggleSettled(debt),
                 ),
                 IconButton(
-                  tooltip: 'Delete',
+                  tooltip: context.l10n.delete,
                   icon: Icon(Icons.delete_outline,
                       color: context.colors.textLight),
                   onPressed: () => _delete(debt),

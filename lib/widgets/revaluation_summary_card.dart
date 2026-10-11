@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 
 /// Summary card showing total value, cost basis, and unrealized gain/loss.
@@ -41,7 +42,7 @@ class RevaluationSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'TOTAL UNREALIZED',
+            context.l10n.revalTotalUnrealized,
             style: TextStyle(
               color: context.colors.textLight,
               fontSize: 12,
@@ -69,7 +70,11 @@ class RevaluationSummaryCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                '${percent.toStringAsFixed(1)}% vs cost basis (${formatMoney(totalCostBasisInBase, currencyCode: baseCurrencyCode)})',
+                context.l10n.revalVsCostBasis(
+                  percent.toStringAsFixed(1),
+                  formatMoney(totalCostBasisInBase,
+                      currencyCode: baseCurrencyCode),
+                ),
                 style: TextStyle(color: context.colors.textLight, fontSize: 13),
               ),
             ],
@@ -89,8 +94,11 @@ class RevaluationSummaryCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'In 12 months, $nationalCurrencyCode devalued '
-                      '${inflationPercent!.toStringAsFixed(1)}% vs ${baseCurrencyCode == 'USD' ? 'USD' : baseCurrencyCode}',
+                      context.l10n.revalDevaluationNote(
+                        nationalCurrencyCode,
+                        inflationPercent!.toStringAsFixed(1),
+                        baseCurrencyCode == 'USD' ? 'USD' : baseCurrencyCode,
+                      ),
                       style: TextStyle(
                           color: context.colors.textDark, fontSize: 13, height: 1.3),
                     ),

@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/contacts/contact_picker_screen.dart';
 import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
@@ -136,7 +137,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0 || _currency == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount')),
+        SnackBar(content: Text(context.l10n.debtAmountInvalid)),
       );
       return;
     }
@@ -175,7 +176,9 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text(widget.existingDebt == null ? 'New Debt' : 'Edit Debt'),
+        title: Text(widget.existingDebt == null
+            ? context.l10n.debtFormNew
+            : context.l10n.debtFormEdit),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -187,13 +190,14 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Text('Direction', style: TextStyle(color: context.colors.textLight)),
+          Text(context.l10n.debtFormDirection,
+              style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: _DirectionButton(
-                  label: 'They owe me',
+                  label: context.l10n.debtDirectionDebtor,
                   selected: _direction == debtDirectionDebtor,
                   onTap: () =>
                       setState(() => _direction = debtDirectionDebtor),
@@ -202,7 +206,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _DirectionButton(
-                  label: 'I owe',
+                  label: context.l10n.debtDirectionCreditor,
                   selected: _direction == debtDirectionCreditor,
                   onTap: () =>
                       setState(() => _direction = debtDirectionCreditor),
@@ -211,12 +215,13 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Contact (optional)',
+          Text(context.l10n.debtFormContactOptional,
               style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           _buildContactField(),
           const SizedBox(height: 20),
-          Text('Amount', style: TextStyle(color: context.colors.textLight)),
+          Text(context.l10n.debtFormAmount,
+              style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           TextField(
             controller: _amountController,
@@ -245,13 +250,13 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Currency',
+              Text(context.l10n.debtFormCurrency,
                   style: TextStyle(color: context.colors.textLight)),
               TextButton(
                 onPressed: _pickCurrency,
                 child: Text(
                   _currency == null
-                      ? 'Select'
+                      ? context.l10n.select
                       : '${_currency!.code} — ${_currency!.symbol}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
@@ -259,13 +264,13 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('Description (optional)',
+          Text(context.l10n.debtFormDescriptionOptional,
               style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           TextField(
             controller: _descriptionController,
             decoration: InputDecoration(
-              hintText: 'e.g. Loan for the market',
+              hintText: context.l10n.debtFormDescriptionHint,
               filled: true,
               fillColor: context.colors.fieldsBackground,
               border: OutlineInputBorder(
@@ -279,7 +284,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Settled',
+                Text(context.l10n.debtsSettled,
                     style: TextStyle(color: context.colors.textDark)),
                 Switch(
                   value: _isSettled,
@@ -291,20 +296,20 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Due date (optional)',
+              Text(context.l10n.debtFormDueDateOptional,
                   style: TextStyle(color: context.colors.textLight)),
               TextButton(
                 onPressed: _pickDueDate,
                 child: Text(
                   _dueDate == null
-                      ? '+ Set date'
+                      ? context.l10n.debtFormSetDate
                       : '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
               if (_dueDate != null)
                 IconButton(
-                  tooltip: 'Clear due date',
+                  tooltip: context.l10n.debtFormClearDueDate,
                   icon: Icon(Icons.close,
                       size: 18, color: context.colors.textLight),
                   onPressed: () => setState(() => _dueDate = null),
@@ -322,7 +327,8 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
                 ),
                 backgroundColor: Theme.of(context).primaryColor,
               ),
-              child: const Text('Save Debt', style: TextStyle(color: Colors.white)),
+              child: Text(context.l10n.debtFormSave,
+                  style: const TextStyle(color: Colors.white)),
             ),
           ),
           const SizedBox(height: 40),
@@ -352,7 +358,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             ],
             Expanded(
               child: Text(
-                contact?.name ?? 'Select contact',
+                contact?.name ?? context.l10n.debtFormSelectContact,
                 style: TextStyle(
                   fontSize: 16,
                   color: contact == null
@@ -363,7 +369,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
             ),
             if (contact != null)
               IconButton(
-                tooltip: 'Remove contact',
+                tooltip: context.l10n.debtFormRemoveContact,
                 icon: Icon(Icons.close,
                     size: 18, color: context.colors.textLight),
                 onPressed: () => setState(() => _contact = null),

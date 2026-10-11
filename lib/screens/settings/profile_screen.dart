@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
@@ -24,7 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (path != null && mounted) {
       await context.read<FinanceRepository>().saveProfilePicturePath(path);
       if (mounted) {
-        showToast(context, message: 'Profile picture updated');
+        showToast(context, message: context.l10n.profilePictureUpdated);
       }
     }
     if (mounted) setState(() => _saving = false);
@@ -36,7 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: Text(context.l10n.profileTitle),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -62,7 +63,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    username?.trim().isNotEmpty == true ? username! : 'User',
+                    username?.trim().isNotEmpty == true
+                        ? username!
+                        : context.l10n.defaultUserName,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -71,7 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap the edit icon to change your profile picture',
+                    context.l10n.profileTapEdit,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: context.colors.textLight),
                   ),

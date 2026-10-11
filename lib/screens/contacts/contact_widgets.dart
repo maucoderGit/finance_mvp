@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 String initialsFor(String name) {
@@ -132,7 +133,9 @@ Future<({String name, String phone})?> showContactFormSheet(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              contact == null ? 'New contact' : 'Edit contact',
+              contact == null
+                  ? context.l10n.contactsNew
+                  : context.l10n.contactsEdit,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -146,8 +149,8 @@ Future<({String name, String phone})?> showContactFormSheet(
                 controller: nameController,
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'e.g. La Casa Bakery',
+                  labelText: context.l10n.nameLabel,
+                  hintText: context.l10n.contactsNameHint,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -161,7 +164,7 @@ Future<({String name, String phone})?> showContactFormSheet(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Phone (optional)',
+                  labelText: context.l10n.contactsPhoneOptional,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -188,7 +191,9 @@ Future<({String name, String phone})?> showContactFormSheet(
                   backgroundColor: Theme.of(context).primaryColor,
                 ),
                 child: Text(
-                  contact == null ? 'Add contact' : 'Save changes',
+                  contact == null
+                      ? context.l10n.contactsAdd
+                      : context.l10n.saveChanges,
                   style: const TextStyle(color: Colors.white),
                 ),
               ),

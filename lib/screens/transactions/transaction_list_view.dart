@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transactions/transaction_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
@@ -13,12 +14,12 @@ import 'package:provider/provider.dart';
 /// day, so a period of hundreds of moves stays scannable.
 class TransactionListView extends StatefulWidget {
   final List<db.Transaction> transactions;
-  final String emptyMessage;
+  final String? emptyMessage;
 
   const TransactionListView({
     super.key,
     required this.transactions,
-    this.emptyMessage = 'No transactions yet',
+    this.emptyMessage,
   });
 
   @override
@@ -36,7 +37,7 @@ class _TransactionListViewState extends State<TransactionListView> {
             Icon(Icons.receipt_long_outlined,
                 size: 32, color: context.colors.textLight),
             const SizedBox(height: 8),
-            Text(widget.emptyMessage,
+            Text(widget.emptyMessage ?? context.l10n.txNone,
                 style: TextStyle(color: context.colors.textLight)),
           ],
         ),
@@ -111,9 +112,9 @@ class _DayHeader extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final label = day == today
-        ? 'Today'
+        ? context.l10n.txToday
         : day == today.subtract(const Duration(days: 1))
-            ? 'Yesterday'
+            ? context.l10n.txYesterday
             : DateFormat('EEEE, MMM d').format(day);
 
     return Padding(
@@ -222,7 +223,7 @@ class TransactionItem extends StatelessWidget {
                   Text(
                     transaction.reference?.trim().isNotEmpty == true
                         ? transaction.reference!.trim()
-                        : 'Transaction',
+                        : context.l10n.txTransaction,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

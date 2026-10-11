@@ -4,12 +4,12 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/contacts/contact_picker_screen.dart';
 import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:finance_mvp/screens/settings/category_screen.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
-import 'package:finance_mvp/services/finance/fx_delta.dart';
 import 'package:finance_mvp/services/finance/recurrence.dart';
 import 'package:finance_mvp/services/finance/transaction_planner.dart';
 import 'package:finance_mvp/services/profile_picture_service.dart';
@@ -235,14 +235,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
             : _transferToAccount!.currencyCode)
         : account.currencyCode;
 
-    // National-currency (VES) pairs execute at the parallel/market price; the
-    // repository resolves that override for us.
-    final rate = await repo.effectiveRate(targetCode);
-
-    // Prefill the manual rate override (account currency vs base) so the user
-    // sees what will be applied, unless they already typed one.
-    if (rate != null && rate > 0 && _rateController.text.trim().isEmpty) {
-      _rateController.text = rate.toStringAsFixed(2);
+    // Exchange is an explicit act only for cross-currency transfers: the real
+    // (parallel) price is the reference and prefill the editable field. A plain
+    // income/expense is bookkeeping — convert it at the stored/official
+    // reference rate, identically for a USD or a VES account.
+    final double? rate;
+    if (isTransfer) {
+      rate = await repo.effectiveRate(targetCode);
+      if (rate != null && rate > 0 && _rateController.text.trim().isEmpty) {
+        _rateController.text = rate.toStringAsFixed(2);
+      }
+    } else {
+      // A plain move has no editable rate: drop any value left over from a
+      // transfer so switching back re-prefills the reference cleanly.
+      _rateController.clear();
+      rate = targetCode != baseCode
+          ? await repo.getRateWithFallback(targetCode, DateTime.now())
+          : null;
     }
 
     if (!mounted) return;
@@ -380,14 +389,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       if (nationalCode == baseCode || nationalRate == null) {
         amountLine = Text(
-          'No exchange rate available for $nationalCode yet',
+          context.l10n.txfNoExchangeRate(nationalCode),
           style: TextStyle(fontSize: 14, color: context.colors.textLight),
         );
         rateLine = null;
       } else {
         final localAmount = amount * nationalRate;
         amountLine = Text(
-          '≈ ${_formatCurrency(localAmount.toString(), symbol: _previewNationalSymbol ?? r'$')}',
+          context.l10n.txfApproxAmount(
+              _formatCurrency(localAmount.toString(),
+                  symbol: _previewNationalSymbol ?? r'$')),
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -395,14 +406,17 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ),
         );
         rateLine = Text(
-          '1 $baseCode = ${nationalRate.toStringAsFixed(2)} $nationalCode',
+          context.l10n.txfRateLine(
+              baseCode, nationalRate.toStringAsFixed(2), nationalCode),
           style: TextStyle(fontSize: 12, color: context.colors.textLight),
         );
       }
     } else if (rate != null) {
       final baseAmount = rate != 0 ? amount / rate : 0.0;
       amountLine = Text(
-        '≈ ${_formatCurrency(baseAmount.toString(), symbol: _previewBaseSymbol ?? r'$')}',
+        context.l10n.txfApproxAmount(
+            _formatCurrency(baseAmount.toString(),
+                symbol: _previewBaseSymbol ?? r'$')),
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
@@ -410,12 +424,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
         ),
       );
       rateLine = Text(
-        '1 $baseCode = ${rate.toStringAsFixed(2)} $accountCode',
+        context.l10n.txfRateLine(
+            baseCode, rate.toStringAsFixed(2), accountCode),
         style: TextStyle(fontSize: 12, color: context.colors.textLight),
       );
     } else {
       amountLine = Text(
-        'No exchange rate available for $accountCode yet',
+        context.l10n.txfNoExchangeRate(accountCode),
         style: TextStyle(fontSize: 14, color: context.colors.textLight),
       );
       rateLine = null;
@@ -477,7 +492,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (_selectedAccount == null) {
       if (mounted) {
         showToast(context,
-            message: 'Select an account first.', type: ToastType.error);
+            message: context.l10n.txfSelectAccountFirst,
+            type: ToastType.error);
       }
       return null;
     }
@@ -486,7 +502,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (amountValue <= 0) {
       if (mounted) {
         showToast(context,
-            message: 'Enter an amount.', type: ToastType.error);
+            message: context.l10n.txfEnterAmount, type: ToastType.error);
       }
       return null;
     }
@@ -494,47 +510,17 @@ class _TransactionScreenState extends State<TransactionScreen> {
       amountValue = -amountValue;
     }
 
-    // Auto-capture the exchange rate ("1 base = X account currency") and the
-    // base-currency value. A base-currency account moves base units 1:1.
-    final baseCode = await repo.getBaseCurrencyCode();
-    final isBaseAccount = _selectedAccount!.currencyCode == baseCode;
-
-    // Manual rate override from the Details step. The field is prefilled with
-    // the captured rate by _loadConversionPreview, so an empty field keeps the
-    // captured rate. For base-currency accounts it is ignored entirely: a stray
-    // "1 USD = X VES" value would otherwise corrupt the base amount of a plain
-    // $ expense.
-    final manualRate = isBaseAccount
-        ? null
-        : double.tryParse(_rateController.text.trim().replaceAll(',', '.'));
+    // A plain income/expense is bookkeeping, not an exchange: capture the
+    // stored/official reference rate for the account currency (1:1 for a base
+    // account) with no manual override. The parallel/market price is reserved
+    // for explicit cross-currency transfers (see TransactionPlanner), so plain
+    // moves carry no FX arbitrage delta either.
     final fx = await repo.captureFxFields(
       accountCurrencyCode: _selectedAccount!.currencyCode,
       signedAmount: amountValue,
-      manualRate: manualRate,
     );
     final rateAtCreation = fx.rateAtCreation;
     final baseAmount = fx.baseAmount;
-
-    // FX arbitrage differential (USDT-lived) logged on national-currency
-    // transactions: official BCV rate vs the executed market (P2P) rate held
-    // in the rate field. Positive on expenses (gap savings), negative on
-    // income (replacement loss). Recomputed on edit since it re-saves here.
-    double? fxDelta;
-    final nationalCode = await repo.getNationalCurrencyCode();
-    if (!isBaseAccount && _selectedAccount!.currencyCode == nationalCode) {
-      final bcvRate =
-          await repo.getRateWithFallback(nationalCode, DateTime.now());
-      if (bcvRate != null &&
-          bcvRate > 0 &&
-          rateAtCreation != null &&
-          rateAtCreation > 0) {
-        fxDelta = fxDeltaUsdt(
-          amountVes: amountValue,
-          bcvRate: bcvRate,
-          marketRate: rateAtCreation,
-        );
-      }
-    }
 
     final existing = widget.existingTransaction;
     return db.TransactionsCompanion(
@@ -564,7 +550,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       exchangeRateAtCreation: Value(rateAtCreation),
       baseCurrencyAmount: Value(baseAmount),
       imagePath: Value(_imagePath),
-      fxDelta: Value(fxDelta),
+      fxDelta: const Value(null),
     );
   }
 
@@ -574,7 +560,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final ref = _referenceController.text.trim();
     final catName = category?.name.trim();
     final title =
-        ref.isNotEmpty ? ref : (catName?.isNotEmpty == true ? catName! : 'Debt');
+        ref.isNotEmpty ? ref : (catName?.isNotEmpty == true ? catName! : context.l10n.txfDebt);
     return TransactionPlanner(context.read<FinanceRepository>()).buildDebtPlan(
       title: title,
       total: double.tryParse(_amount) ?? 0.0,
@@ -641,7 +627,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (from == null || to == null) {
       if (mounted) {
         showToast(context,
-            message: 'Select a destination account first.',
+            message: context.l10n.txfSelectDestinationFirst,
             type: ToastType.error);
       }
       return;
@@ -649,7 +635,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (from.id == to.id) {
       if (mounted) {
         showToast(context,
-            message: 'Source and destination must be different.',
+            message: context.l10n.txfSourceDestinationDifferent,
             type: ToastType.error);
       }
       return;
@@ -705,16 +691,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete transaction'),
-        content: const Text('This will remove the payment permanently.'),
+        title: Text(context.l10n.txfDeleteTransaction),
+        content: Text(context.l10n.txfDeleteTransactionBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.txfCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.l10n.txfDelete),
           ),
         ],
       ),
@@ -739,8 +725,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
       showToast(
         context,
         message: exclude == null
-            ? 'Create an account first in "Register Accounts".'
-            : 'Create a second account to transfer between.',
+            ? context.l10n.txfCreateAccountFirst
+            : context.l10n.txfCreateSecondAccount,
         type: ToastType.error,
       );
       return;
@@ -765,11 +751,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ),
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
+              Padding(
+                padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Select Account',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  context.l10n.txfSelectAccount,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ),
               Expanded(
@@ -852,7 +839,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       ),
                       const SizedBox(width: 15),
                       Text(
-                        'Payment',
+                        context.l10n.txfPayment,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -932,7 +919,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Account',
+            context.l10n.txfAccount,
             style: TextStyle(
               fontSize: 16,
               color: context.colors.textLight,
@@ -972,7 +959,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _buildIncomeExpenseToggle(),
         if (isTransfer) ...[
           const SizedBox(height: 20),
-          _fieldLabel('To account'),
+          _fieldLabel(context.l10n.txfToAccount),
           const SizedBox(height: 8),
           _buildToAccountSelector(),
         ],
@@ -980,13 +967,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
         // transactions apply the silently captured market rate instead.
         if (isCrossCurrencyTransfer) ...[
           const SizedBox(height: 20),
-          _fieldLabel('Exchange rate'),
+          _fieldLabel(context.l10n.txfExchangeRate),
           const SizedBox(height: 8),
           _buildRateField(),
         ],
         if (!isTransfer) ...[
           const SizedBox(height: 20),
-          _fieldLabel('Category'),
+          _fieldLabel(context.l10n.txfCategory),
           const SizedBox(height: 8),
           _buildCategorySelector(),
         ],
@@ -994,15 +981,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _buildReferenceField(_referenceController),
         if (!isTransfer) ...[
           const SizedBox(height: 20),
-          _fieldLabel('Contact'),
+          _fieldLabel(context.l10n.txfContact),
           const SizedBox(height: 8),
           _buildContactField(),
           const SizedBox(height: 12),
           _buildDebtField(),
           const SizedBox(height: 20),
-          const Text(
-            'Recurrance',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Text(
+            context.l10n.txfRecurrence,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
           _buildRecurrenceCard(),
@@ -1063,7 +1050,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             ),
             const SizedBox(width: 12),
             Text(
-              account?.name ?? 'Select Account',
+              account?.name ?? context.l10n.txfSelectAccount,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -1170,9 +1157,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
       ),
       child: Row(
         children: [
-          _buildStepSegment('Amount', 0),
-          _buildStepSegment('Details', 1),
-          _buildStepSegment('Debt', 2, locked: !_debtEnabled),
+          _buildStepSegment(context.l10n.txfAmount, 0),
+          _buildStepSegment(context.l10n.txfDetails, 1),
+          _buildStepSegment(context.l10n.txfDebt, 2, locked: !_debtEnabled),
         ],
       ),
     );
@@ -1238,20 +1225,20 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     switch (_currentStep) {
       case 0:
-        primaryLabel = 'Add details';
+        primaryLabel = context.l10n.txfAddDetails;
         onPrimary = () => setState(() => _currentStep = 1);
         break;
       case 1:
         if (_debtEnabled) {
-          primaryLabel = 'Continue to debt plan';
+          primaryLabel = context.l10n.txfContinueToDebtPlan;
           onPrimary = () => setState(() => _currentStep = 2);
         } else {
-          primaryLabel = 'Save';
+          primaryLabel = context.l10n.txfSave;
           onPrimary = _saveTransaction;
         }
         break;
       default:
-        primaryLabel = 'Confirm and save with debt';
+        primaryLabel = context.l10n.txfConfirmSaveWithDebt;
         onPrimary = _saveTransaction;
     }
 
@@ -1290,7 +1277,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 ),
               ),
               child: Text(
-                'Return',
+                context.l10n.txfReturn,
                 style: TextStyle(
                   fontSize: 18,
                   color: context.colors.textDark,
@@ -1318,7 +1305,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           Icon(Icons.swap_horiz, color: context.colors.textLight),
           const SizedBox(width: 8),
           Text(
-            '1 $baseCode =',
+            context.l10n.txfRatePrefix(baseCode ?? ''),
             style: TextStyle(fontSize: 16, color: context.colors.textLight),
           ),
           const SizedBox(width: 8),
@@ -1327,8 +1314,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
               controller: _rateController,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                hintText: 'Rate',
+              decoration: InputDecoration(
+                hintText: context.l10n.txfRateHint,
                 border: InputBorder.none,
               ),
               style: TextStyle(fontSize: 16, color: context.colors.textDark),
@@ -1374,7 +1361,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             ),
             const SizedBox(width: 12),
             Text(
-              to?.name ?? 'Select To Account',
+              to?.name ?? context.l10n.txfSelectToAccount,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -1431,7 +1418,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  category?.name ?? "Select category",
+                  category?.name ?? context.l10n.txfSelectCategory,
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w600),
                 ),
@@ -1445,9 +1432,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   Widget _buildIncomeExpenseToggle() {
     final options = [
-      (TransactionType.income, 'Income'),
-      (TransactionType.expense, 'Expense'),
-      (TransactionType.transfer, 'Transfer'),
+      (TransactionType.income, context.l10n.txfIncome),
+      (TransactionType.expense, context.l10n.txfExpense),
+      (TransactionType.transfer, context.l10n.txfTransfer),
     ];
     return Container(
       padding: const EdgeInsets.all(3),
@@ -1461,13 +1448,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
           for (final (type, label) in options)
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() {
+                onTap: () {
+                  setState(() {
                     _transactionType = type;
                     if (type == TransactionType.transfer && _debtEnabled) {
                       _debtEnabled = false;
                       if (_currentStep > 1) _currentStep = 1;
                     }
-                  }),
+                  });
+                  // Type decides transfer-vs-reference pricing, so the preview
+                  // (and its rate field) must be rebuilt on every switch.
+                  _loadConversionPreview();
+                },
                 child: Container(
                   height: 46,
                   alignment: Alignment.center,
@@ -1510,8 +1502,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
           Expanded(
             child: TextField(
               controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Enter reference',
+              decoration: InputDecoration(
+                hintText: context.l10n.txfEnterReference,
                 border: InputBorder.none,
               ),
               style: TextStyle(fontSize: 16, color: context.colors.textDark),
@@ -1556,7 +1548,7 @@ Future<void> _openContactPicker() async {
               Expanded(
                 child: contact == null
                     ? Text(
-                        'Select contact (optional)',
+                        context.l10n.txfSelectContactOptional,
                         style: TextStyle(color: context.colors.textLight),
                       )
                     : Column(
@@ -1582,7 +1574,7 @@ Future<void> _openContactPicker() async {
               ),
               if (contact != null)
                 IconButton(
-                  tooltip: 'Remove contact',
+                  tooltip: context.l10n.txfRemoveContact,
                   icon: Icon(Icons.close,
                       size: 18, color: context.colors.textLight),
                   onPressed: () => setState(() => _selectedContact = null),
@@ -1621,6 +1613,7 @@ Future<void> _openContactPicker() async {
   /// Contact name (or description) and currency symbol for a debt row.
   Future<({String title, String symbol})> _debtMeta(db.Debt debt) async {
     final repo = context.read<FinanceRepository>();
+    final debtLabel = context.l10n.txfDebt;
     var title = debt.description;
     if (debt.contactId != null) {
       final contact = await repo.getContactById(debt.contactId!);
@@ -1628,7 +1621,7 @@ Future<void> _openContactPicker() async {
     }
     final currency = await repo.getCurrency(debt.currencyCode);
     return (
-      title: title?.trim().isEmpty == false ? title!.trim() : 'Debt',
+      title: title?.trim().isEmpty == false ? title!.trim() : debtLabel,
       symbol: currency?.symbol ?? r'$',
     );
   }
@@ -1658,14 +1651,14 @@ Future<void> _openContactPicker() async {
               Expanded(
                 child: debt == null
                     ? Text(
-                        'Pay toward debt (optional)',
+                        context.l10n.txfPayTowardDebtOptional,
                         style: TextStyle(color: context.colors.textLight),
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _selectedDebtTitle ?? 'Debt',
+                            _selectedDebtTitle ?? context.l10n.txfDebt,
                             style: TextStyle(
                               fontSize: 16,
                               color: context.colors.textDark,
@@ -1683,7 +1676,7 @@ Future<void> _openContactPicker() async {
               ),
               if (debt != null)
                 IconButton(
-                  tooltip: 'Remove debt link',
+                  tooltip: context.l10n.txfRemoveDebtLink,
                   icon: Icon(Icons.close,
                       size: 18, color: context.colors.textLight),
                   onPressed: () => setState(() {
@@ -1703,9 +1696,13 @@ Future<void> _openContactPicker() async {
   String _debtSubtitle(db.Debt debt) {
     final remaining = _selectedDebtRemaining;
     return remaining == null
-        ? (debt.direction == 'creditor' ? 'I owe' : 'They owe me')
-        : '${formatMoney(remaining, symbol: _selectedDebtSymbol)} of '
-            '${formatMoney(debt.amount, symbol: _selectedDebtSymbol)}';
+        ? (debt.direction == 'creditor'
+            ? context.l10n.txfIOwe
+            : context.l10n.txfTheyOweMe)
+        : context.l10n.txfDebtProgress(
+            formatMoney(remaining, symbol: _selectedDebtSymbol),
+            formatMoney(debt.amount, symbol: _selectedDebtSymbol),
+          );
   }
 
   Widget _buildRecurrenceCard() {
@@ -1724,9 +1721,10 @@ Future<void> _openContactPicker() async {
             children: [
               Row(
                 children: [
-                  const Text(
-                    'Recurring',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  Text(
+                    context.l10n.txfRecurring,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(width: 8),
                   Icon(Icons.autorenew,
@@ -1747,26 +1745,25 @@ Future<void> _openContactPicker() async {
           if (_isRecurrenceEnabled) ...[
             const SizedBox(height: 4),
             Text(
-              'This transaction repeats. Later occurrences are added to your '
-              'ledger automatically when you open the app.',
+              context.l10n.txfRecurringDescription,
               style: TextStyle(color: context.colors.textLight, fontSize: 13),
             ),
             const SizedBox(height: 12),
             _RecurrenceRow(
               icon: Icons.event,
-              label: 'First due',
+              label: context.l10n.txfFirstDue,
               value: DateFormat.yMMMd().format(_date),
               onTap: _pickFirstDue,
             ),
             _RecurrenceRow(
               icon: Icons.repeat,
-              label: 'Repeats',
+              label: context.l10n.txfRepeats,
               value: _repeatsLabel,
               onTap: _pickRepeats,
             ),
             _RecurrenceRow(
               icon: Icons.event_busy,
-              label: 'Ends',
+              label: context.l10n.txfEnds,
               value: _endsLabel,
               onTap: _pickEnds,
             ),
@@ -1791,26 +1788,27 @@ Future<void> _openContactPicker() async {
 
   String get _repeatsLabel => switch (_recurrenceType) {
         RecurrenceType.daily => _recurrenceInterval == 1
-            ? 'Every day'
-            : 'Every $_recurrenceInterval days',
+            ? context.l10n.txfEveryDay
+            : context.l10n.txfEveryNDays(_recurrenceInterval),
         RecurrenceType.weekly => _recurrenceInterval == 1
-            ? 'Every week'
-            : 'Every $_recurrenceInterval weeks',
+            ? context.l10n.txfEveryWeek
+            : context.l10n.txfEveryNWeeks(_recurrenceInterval),
         RecurrenceType.monthly => _recurrenceInterval == 1
-            ? 'Every month'
-            : 'Every $_recurrenceInterval months',
+            ? context.l10n.txfEveryMonth
+            : context.l10n.txfEveryNMonths(_recurrenceInterval),
         RecurrenceType.yearly => _recurrenceInterval == 1
-            ? 'Every year'
-            : 'Every $_recurrenceInterval years',
+            ? context.l10n.txfEveryYear
+            : context.l10n.txfEveryNYears(_recurrenceInterval),
       };
 
   String get _endsLabel => switch (_recurrenceEnd) {
-        RecurrenceEnd.never => 'Never',
+        RecurrenceEnd.never =>
+          _recurrenceEndLabel(context.l10n, RecurrenceEnd.never),
         RecurrenceEnd.onDate => _recurrenceEndDate == null
-            ? 'Pick a date'
+            ? context.l10n.txfPickADate
             : DateFormat.yMMMd().format(_recurrenceEndDate!),
         RecurrenceEnd.afterCount =>
-          'After $_recurrenceTotalCount ${_recurrenceTotalCount == 1 ? 'time' : 'times'}',
+          context.l10n.txfAfterNTimes(_recurrenceTotalCount),
       };
 
   Future<void> _pickFirstDue() async {
@@ -1889,7 +1887,7 @@ Future<void> _openContactPicker() async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Generate debt and installments',
+                  context.l10n.txfGenerateDebtInstallments,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -1898,7 +1896,7 @@ Future<void> _openContactPicker() async {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Split this payment into installments with a due date',
+                  context.l10n.txfSplitPaymentInstallments,
                   style: TextStyle(
                       fontSize: 12, color: context.colors.textLight),
                 ),
@@ -1933,8 +1931,8 @@ Future<void> _openContactPicker() async {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_transactionType == TransactionType.expense ? 'Expense' : 'Income'}'
-                ' · ${_selectedAccount?.name ?? 'Account'}'
+                '${_transactionType == TransactionType.expense ? context.l10n.txfExpense : context.l10n.txfIncome}'
+                ' · ${_selectedAccount?.name ?? context.l10n.txfAccount}'
                 '${cat != null ? ' · $cat' : ''}',
                 style:
                     TextStyle(fontSize: 12, color: context.colors.textLight),
@@ -1952,13 +1950,13 @@ Future<void> _openContactPicker() async {
           ),
         ),
         const SizedBox(height: 20),
-        Text('Frequency',
+        Text(context.l10n.txfFrequency,
             style: TextStyle(
                 color: context.colors.textLight, fontSize: 16)),
         const SizedBox(height: 8),
         _buildFrequencySelector(),
         const SizedBox(height: 20),
-        Text('Installments',
+        Text(context.l10n.txfInstallments,
             style: TextStyle(
                 color: context.colors.textLight, fontSize: 16)),
         const SizedBox(height: 8),
@@ -2035,7 +2033,7 @@ Future<void> _openContactPicker() async {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Per $_periodLabel',
+                      Text(context.l10n.txfPerPeriod(_periodLabel),
                           style: TextStyle(
                               fontSize: 12,
                               color: context.colors.textLight)),
@@ -2058,7 +2056,7 @@ Future<void> _openContactPicker() async {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '0% interest',
+                      context.l10n.txfZeroInterest,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -2080,7 +2078,7 @@ Future<void> _openContactPicker() async {
                         color: context.colors.primary),
                     const SizedBox(width: 8),
                     Text(
-                      'First due date',
+                      context.l10n.txfFirstDueDate,
                       style: TextStyle(
                         fontSize: 13,
                         color: context.colors.textLight,
@@ -2107,12 +2105,18 @@ Future<void> _openContactPicker() async {
         const SizedBox(height: 16),
         Text(
           _installmentCount == 1
-              ? 'Saving creates one debt with a due date for this payment.'
-              : 'Saving creates one debt of ${formatMoney(total)} $code, '
-                  'split into $_installmentCount installments of ~'
-                  '${formatMoney(per)} $code each, '
-                  'due every $_periodLabel (last due '
-                  '${DateFormat('MMM dd, yyyy').format(TransactionPlanner.intervalDate(_dueDate, _dueFrequency, _installmentCount - 1))}).',
+              ? context.l10n.txfSavingCreatesOneDebt
+              : context.l10n.txfSavingCreatesInstallments(
+                  formatMoney(total),
+                  code,
+                  _installmentCount,
+                  formatMoney(per),
+                  _periodLabel,
+                  DateFormat('MMM dd, yyyy').format(
+                    TransactionPlanner.intervalDate(
+                        _dueDate, _dueFrequency, _installmentCount - 1),
+                  ),
+                ),
           style: TextStyle(fontSize: 12, color: context.colors.textLight),
         ),
       ],
@@ -2129,23 +2133,23 @@ Future<void> _openContactPicker() async {
       ),
       child: Row(
         children: [
-          for (final (value, label) in _frequencies)
+          for (final id in _frequencies)
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _dueFrequency = value),
+                onTap: () => setState(() => _dueFrequency = id),
                 child: Container(
                   alignment: Alignment.center,
                   margin: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: _dueFrequency == value
+                    color: _dueFrequency == id
                         ? context.colors.primary
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    label,
+                    _frequencyLabel(context.l10n, id),
                     style: TextStyle(
-                      color: _dueFrequency == value
+                      color: _dueFrequency == id
                           ? context.colors.fieldsBackground
                           : context.colors.textDark,
                       fontWeight: FontWeight.bold,
@@ -2221,8 +2225,8 @@ Future<void> _openContactPicker() async {
   }
 
   String get _periodLabel => switch (_dueFrequency) {
-        'weekly' => 'week',
-        'biweekly' => 'biweek',
-        _ => 'month',
+        'weekly' => context.l10n.txfPeriodWeek,
+        'biweekly' => context.l10n.txfPeriodBiweek,
+        _ => context.l10n.txfPeriodMonth,
       };
 }

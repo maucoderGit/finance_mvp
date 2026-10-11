@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
 
 /// Line chart showing how the purchasing power of the national currency
@@ -18,8 +19,8 @@ class PurchasingPowerChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.length < 2) {
-      return const _EmptyChart(
-        message: 'Add exchange rates over time to see purchasing power.',
+      return _EmptyChart(
+        message: context.l10n.purchasingPowerEmpty,
       );
     }
 
@@ -50,7 +51,7 @@ class PurchasingPowerChart extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Purchasing Power of $nationalCurrencyCode',
+                  context.l10n.purchasingPowerTitle(nationalCurrencyCode),
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
@@ -61,7 +62,7 @@ class PurchasingPowerChart extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Value of 1 $nationalCurrencyCode in base currency over time',
+            context.l10n.purchasingPowerSubtitle(nationalCurrencyCode),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
@@ -126,13 +127,13 @@ class PurchasingPowerChart extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _changeIndicator(data),
+          _changeIndicator(context, data),
         ],
       ),
     );
   }
 
-  Widget _changeIndicator(List<PowerDataPoint> points) {
+  Widget _changeIndicator(BuildContext context, List<PowerDataPoint> points) {
     final cumulative = points.last.cumulativeChange * 100;
     final lostValue = cumulative < 0;
     final color =
@@ -151,8 +152,10 @@ class PurchasingPowerChart extends StatelessWidget {
         Expanded(
           child: Text(
             lostValue
-                ? 'Devaluated ${cumulative.abs().toStringAsFixed(1)}% over this period'
-                : 'Appreciated ${cumulative.abs().toStringAsFixed(1)}% over this period',
+                ? context.l10n.purchasingPowerDevaluated(
+                    cumulative.abs().toStringAsFixed(1))
+                : context.l10n.purchasingPowerAppreciated(
+                    cumulative.abs().toStringAsFixed(1)),
             style: TextStyle(color: color, fontWeight: FontWeight.w600),
           ),
         ),

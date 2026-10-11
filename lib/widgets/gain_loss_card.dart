@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/models/gain_loss.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
 
@@ -96,7 +97,7 @@ class GainLossCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Value now',
+                      context.l10n.gainLossValueNow,
                       style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,
@@ -115,7 +116,7 @@ class GainLossCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    isGain ? 'Gain' : 'Loss',
+                    isGain ? context.l10n.gainLossGain : context.l10n.gainLossLoss,
                     style: TextStyle(
                         fontSize: 12,
                         color: color,

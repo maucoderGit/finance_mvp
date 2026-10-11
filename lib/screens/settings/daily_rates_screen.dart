@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
@@ -47,14 +48,15 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
       showToast(
         context,
         message: count > 0
-            ? 'Synced $count rate(s) from the API.'
-            : 'No rates available from the API. Add them manually.',
+            ? context.l10n.ratesSynced(count)
+            : context.l10n.ratesNoneFromApi,
         type: count > 0 ? ToastType.success : ToastType.warning,
       );
     } catch (e) {
       if (!mounted) return;
       showToast(context,
-          message: 'Sync failed: $e', type: ToastType.error);
+          message: context.l10n.ratesSyncFailed('$e'),
+          type: ToastType.error);
     } finally {
       if (mounted) {
         setState(() => _syncing = false);
@@ -75,7 +77,9 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(
-              '${isEdit ? 'Edit' : 'Add'} Rate for ${widget.currency.code}'),
+              isEdit
+                  ? context.l10n.ratesDialogTitleEdit(widget.currency.code)
+                  : context.l10n.ratesDialogTitleAdd(widget.currency.code)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -83,8 +87,8 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                 controller: rateController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Rate (1 USD = ?)',
+                decoration: InputDecoration(
+                  labelText: context.l10n.ratesRateLabel,
                 ),
               ),
               const SizedBox(height: 20),
@@ -100,26 +104,26 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                     setDialogState(() => selectedDate = pickedDate);
                   }
                 },
-                child: Text(
-                    'Date: ${DateFormat('MMMM dd, yyyy').format(selectedDate)}'),
+                child: Text(context.l10n
+                    .ratesDate(DateFormat('MMMM dd, yyyy').format(selectedDate))),
               )
             ],
           ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel')),
+                child: Text(context.l10n.cancel)),
             TextButton(
               onPressed: () {
                 if (double.tryParse(rateController.text) == null) {
                   showToast(context,
-                      message: 'Enter a valid rate.',
+                      message: context.l10n.ratesInvalid,
                       type: ToastType.error);
                   return;
                 }
                 Navigator.of(context).pop(true);
               },
-              child: const Text('Save'),
+              child: Text(context.l10n.save),
             ),
           ],
         ),
@@ -148,16 +152,16 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete rate?'),
-        content: Text(
-            'Remove the rate for ${DateFormat('MMMM dd, yyyy').format(rate.date)}?'),
+        title: Text(context.l10n.ratesDeleteTitle),
+        content: Text(context.l10n
+            .ratesDeleteBody(DateFormat('MMMM dd, yyyy').format(rate.date))),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
+              child: Text(context.l10n.cancel)),
           TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete')),
+              child: Text(context.l10n.delete)),
         ],
       ),
     );
@@ -172,7 +176,7 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Rates for ${widget.currency.code}'),
+        title: Text(context.l10n.ratesTitle(widget.currency.code)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -183,7 +187,7 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.sync),
-            tooltip: 'Sync from API',
+            tooltip: context.l10n.ratesSyncTooltip,
             onPressed: _syncing ? null : _syncFromApi,
           ),
         ],
@@ -207,21 +211,21 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                   children: [
                     const Icon(Icons.trending_down, size: 48, color: Colors.grey),
                     const SizedBox(height: 12),
-                    const Text(
-                      'No rates found for this currency.',
-                      style: TextStyle(fontSize: 16),
+                    Text(
+                      context.l10n.ratesEmpty,
+                      style: const TextStyle(fontSize: 16),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Use the sync button to fetch from the API, or add rates manually.',
+                    Text(
+                      context.l10n.ratesEmptyHint,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _syncing ? null : _syncFromApi,
                       icon: const Icon(Icons.cloud_download),
-                      label: const Text('Fetch from API'),
+                      label: Text(context.l10n.ratesFetch),
                     ),
                   ],
                 ),
@@ -285,7 +289,8 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                     return ListTile(
                       title: Text(DateFormat('MMMM dd, yyyy').format(rate.date)),
                       subtitle: isLatest
-                          ? const Text('Latest', style: TextStyle(color: Colors.green))
+                          ? Text(context.l10n.ratesLatest,
+                              style: const TextStyle(color: Colors.green))
                           : null,
                       onTap: () => _showRateDialog(existing: rate),
                       trailing: Row(
@@ -297,13 +302,13 @@ class _DailyRatesScreenState extends State<DailyRatesScreen> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.edit_outlined),
-                            tooltip: 'Edit rate',
+                            tooltip: context.l10n.ratesEditTooltip,
                             visualDensity: VisualDensity.compact,
                             onPressed: () => _showRateDialog(existing: rate),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline),
-                            tooltip: 'Delete rate',
+                            tooltip: context.l10n.ratesDeleteTooltip,
                             visualDensity: VisualDensity.compact,
                             onPressed: () => _confirmDelete(rate),
                           ),

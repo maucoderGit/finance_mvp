@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/widgets/goal_progress_card.dart';
 import 'package:flutter/material.dart';
@@ -132,7 +133,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     final target = double.tryParse(_targetController.text);
     if (name.isEmpty || target == null || target <= 0 || _currency == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Give the goal a name and a target above 0')),
+        SnackBar(content: Text(context.l10n.goalFormInvalid)),
       );
       return;
     }
@@ -169,7 +170,9 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Goal' : 'New Goal'),
+        title: Text(isEditing
+            ? context.l10n.goalFormEdit
+            : context.l10n.goalFormNew),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -181,20 +184,21 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Text('Goal name', style: TextStyle(color: context.colors.textLight)),
+          Text(context.l10n.goalFormName,
+              style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           TextField(
             controller: _nameController,
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
-              hintText: 'Emergency fund',
+              hintText: context.l10n.goalFormNameHint,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
           const SizedBox(height: 20),
-          Text('Target amount',
+          Text(context.l10n.goalFormTarget,
               style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           TextField(
@@ -215,12 +219,13 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
             icon: const Icon(Icons.payments_outlined),
             label: Text(
               _currency == null
-                  ? 'Currency'
+                  ? context.l10n.goalFormCurrency
                   : '${_currency!.code} — ${_currency!.name}',
             ),
           ),
           const SizedBox(height: 20),
-          Text('Icon', style: TextStyle(color: context.colors.textLight)),
+          Text(context.l10n.goalFormIcon,
+              style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -252,7 +257,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Target date (optional)',
+          Text(context.l10n.goalFormDateOptional,
               style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
           Row(
@@ -263,7 +268,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                   icon: const Icon(Icons.event),
                   label: Text(
                     _deadline == null
-                        ? 'Pick a date'
+                        ? context.l10n.goalFormPickDate
                         : '${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}',
                   ),
                 ),
@@ -278,7 +283,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Keep the money in',
+          Text(context.l10n.goalFormKeepIn,
               style: TextStyle(color: context.colors.textLight)),
           const SizedBox(height: 8),
 // Rendered only once accounts are in: a DropdownButton asserts that its value
@@ -297,8 +302,8 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                   DropdownMenuItem(value: a.id, child: Text(a.name)),
                 // 0 rather than null so the choice can be displayed as well as
                 // picked; null means "make one".
-                const DropdownMenuItem(
-                    value: 0, child: Text('New savings account')),
+                DropdownMenuItem(
+                    value: 0, child: Text(context.l10n.goalFormNewAccount)),
               ],
               onChanged: (value) =>
                   setState(() => _accountId = value == 0 ? null : value),
@@ -306,14 +311,14 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
           const SizedBox(height: 8),
           Text(
             _accountId == null
-                ? 'An empty savings account will be opened for this goal.'
-                : 'Transfer money into this account to fund the goal.',
+                ? context.l10n.goalFormNewAccountHint
+                : context.l10n.goalFormTransferHint,
             style: TextStyle(color: context.colors.textLight, fontSize: 12),
           ),
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: _save,
-            child: const Text('Save goal'),
+            child: Text(context.l10n.goalFormSave),
           ),
         ],
       ),

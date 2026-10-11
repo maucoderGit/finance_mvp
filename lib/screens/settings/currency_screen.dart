@@ -1,6 +1,7 @@
 
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/screens/settings/currency_form.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
@@ -54,7 +55,7 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Currency'),
+        title: Text(context.l10n.currencySelectTitle),
         actionsPadding: const EdgeInsets.only(right: 10),
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -84,10 +85,10 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search by name or code',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
+              decoration: InputDecoration(
+                hintText: context.l10n.currencySearchHint,
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12.0)),
                 ),
               ),
@@ -105,7 +106,7 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
                 final baseCurrencyCode = snapshot.data![1] as String;
 
                 if (allCurrencies.isEmpty) {
-                  return const Center(child: Text('No currencies found.'));
+                  return Center(child: Text(context.l10n.currencyNoneFound));
                 }
 
                 final query = _searchController.text.toLowerCase();
@@ -198,7 +199,7 @@ class _CurrencyListItem extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.timeline),
                 onPressed: onViewRates,
-                tooltip: 'View historical rates',
+                tooltip: context.l10n.currencyViewRates,
               ),
           ],
         ),

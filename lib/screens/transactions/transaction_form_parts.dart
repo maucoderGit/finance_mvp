@@ -1,10 +1,27 @@
 part of 'transaction_screen.dart';
 
-const _frequencies = <(String, String)>[
-  ('weekly', 'Weekly'),
-  ('biweekly', 'Biweekly'),
-  ('monthly', 'Monthly'),
-];
+String _recurrenceTypeLabel(AppLocalizations l10n, RecurrenceType type) =>
+    switch (type) {
+      RecurrenceType.daily => l10n.recurrenceDaily,
+      RecurrenceType.weekly => l10n.recurrenceWeekly,
+      RecurrenceType.monthly => l10n.recurrenceMonthly,
+      RecurrenceType.yearly => l10n.recurrenceYearly,
+    };
+
+String _recurrenceEndLabel(AppLocalizations l10n, RecurrenceEnd end) =>
+    switch (end) {
+      RecurrenceEnd.never => l10n.recurrenceEndNever,
+      RecurrenceEnd.onDate => l10n.recurrenceEndOnDate,
+      RecurrenceEnd.afterCount => l10n.recurrenceEndAfterCount,
+    };
+
+const _frequencies = <String>['weekly', 'biweekly', 'monthly'];
+
+String _frequencyLabel(AppLocalizations l10n, String id) => switch (id) {
+      'weekly' => l10n.frequencyWeekly,
+      'biweekly' => l10n.frequencyBiweekly,
+      _ => l10n.frequencyMonthly,
+    };
 
 /// Bottom sheet listing open (unpaid) debts to link a transaction as a
 /// payment against one of them.
@@ -59,7 +76,7 @@ class _DebtPickerSheetState extends State<_DebtPickerSheet> {
       return _contactNames[debt.contactId]!;
     }
     return (debt.description ?? '').trim().isEmpty
-        ? 'Debt'
+        ? context.l10n.debtsDebt
         : debt.description!.trim();
   }
 
@@ -80,7 +97,7 @@ class _DebtPickerSheetState extends State<_DebtPickerSheet> {
               child: Row(
                 children: [
                   Text(
-                    'Pay toward debt',
+                    context.l10n.txPayTowardDebt,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -105,7 +122,7 @@ class _DebtPickerSheetState extends State<_DebtPickerSheet> {
                 padding: const EdgeInsets.all(32),
                 child: Center(
                   child: Text(
-                    'No open debts yet.\nAdd one from Settings → Debts & Debtors.',
+                    context.l10n.txNoOpenDebts,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: colorScheme.textLight),
                   ),
@@ -127,10 +144,11 @@ class _DebtPickerSheetState extends State<_DebtPickerSheet> {
                       title: Text(_titleFor(debt),
                           style: TextStyle(color: colorScheme.textDark)),
                       subtitle: Text(
-                        '${debt.direction == 'creditor' ? 'I owe' : 'They owe me'}'
-                        ' · ${formatMoney(_remaining[debt.id]!,
-                            symbol: symbol)} of '
-                        '${formatMoney(debt.amount, symbol: symbol)}',
+                        '${debt.direction == 'creditor' ? context.l10n.debtsIOwe : context.l10n.debtsTheyOweMe}'
+                        ' · ${context.l10n.debtsProgressOf(
+                          formatMoney(_remaining[debt.id]!, symbol: symbol),
+                          formatMoney(debt.amount, symbol: symbol),
+                        )}',
                         style: TextStyle(color: colorScheme.textLight),
                       ),
                       onTap: () => Navigator.pop(context, debt),
@@ -203,8 +221,8 @@ class _NextDueHint extends StatelessWidget {
     final next = rule.nextOccurrenceOnOrAfter(today);
     return Text(
       next == null
-          ? 'This series has already finished.'
-          : 'Next: ${DateFormat.yMMMd().format(next)}',
+          ? context.l10n.txSeriesFinished
+          : context.l10n.txNext(DateFormat.yMMMd().format(next)),
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w500,
@@ -321,8 +339,8 @@ class _RepeatsSheetState extends State<_RepeatsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Repeat',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(context.l10n.txRepeat,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -330,7 +348,7 @@ class _RepeatsSheetState extends State<_RepeatsSheet> {
               children: [
                 for (final t in RecurrenceType.values)
                   ChoiceChip(
-                    label: Text(t.label),
+                    label: Text(_recurrenceTypeLabel(context.l10n, t)),
                     selected: _type == t,
                     onSelected: (_) => setState(() => _type = t),
                   ),
@@ -338,7 +356,7 @@ class _RepeatsSheetState extends State<_RepeatsSheet> {
             ),
             const SizedBox(height: 20),
             _CountStepper(
-              label: 'Every',
+              label: context.l10n.txEvery,
               value: _interval,
               max: _type == RecurrenceType.daily ? 365 : 60,
               onChanged: (v) => setState(() => _interval = v),
@@ -348,7 +366,7 @@ class _RepeatsSheetState extends State<_RepeatsSheet> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context, (type: _type, interval: _interval)),
-                child: const Text('Done'),
+                child: Text(context.l10n.txDone),
               ),
             ),
           ],
@@ -397,8 +415,8 @@ class _EndsSheetState extends State<_EndsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Ends',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(context.l10n.txEnds,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             RadioGroup<RecurrenceEnd>(
               groupValue: _end,
@@ -411,15 +429,13 @@ class _EndsSheetState extends State<_EndsSheet> {
                       value: e,
                       activeColor: context.colors.primary,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(e.label,
+                      title: Text(_recurrenceEndLabel(context.l10n, e),
                           style: TextStyle(color: context.colors.textDark)),
                       subtitle: Text(
                         switch (e) {
-                          RecurrenceEnd.never =>
-                            'Keep going until you turn it off',
-                          RecurrenceEnd.onDate => 'Stop after this day',
-                          RecurrenceEnd.afterCount =>
-                            'Stop after a set number of bills',
+                          RecurrenceEnd.never => context.l10n.txEndNever,
+                          RecurrenceEnd.onDate => context.l10n.txEndOnDate,
+                          RecurrenceEnd.afterCount => context.l10n.txEndAfterCount,
                         },
                         style: TextStyle(color: context.colors.textLight),
                       ),
@@ -432,7 +448,7 @@ class _EndsSheetState extends State<_EndsSheet> {
                 icon: const Icon(Icons.calendar_today, size: 18),
                 label: Text(
                   _endDate == null
-                      ? 'Pick end date'
+                      ? context.l10n.txPickEndDate
                       : DateFormat.yMMMd().format(_endDate!),
                 ),
                 onPressed: _pickDate,
@@ -440,7 +456,7 @@ class _EndsSheetState extends State<_EndsSheet> {
             if (_end == RecurrenceEnd.afterCount) ...[
               const SizedBox(height: 8),
               _CountStepper(
-                label: 'Occurrences',
+                label: context.l10n.txOccurrences,
                 value: _count,
                 onChanged: (v) => setState(() => _count = v),
               ),
@@ -462,7 +478,7 @@ class _EndsSheetState extends State<_EndsSheet> {
                     totalCount: _end == RecurrenceEnd.afterCount ? _count : null,
                   ),
                 ),
-                child: const Text('Done'),
+                child: Text(context.l10n.txDone),
               ),
             ),
           ],

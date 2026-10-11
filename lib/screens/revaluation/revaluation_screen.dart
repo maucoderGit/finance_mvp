@@ -1,4 +1,5 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/widgets/gain_loss_card.dart';
@@ -43,8 +44,8 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
     showToast(
       context,
       message: count > 0
-          ? 'Synced $count rate(s) from the API.'
-          : 'Nothing to sync. Add rates manually if needed.',
+          ? context.l10n.revaluationSyncedRates('$count')
+          : context.l10n.revaluationNothingToSync,
       type: count > 0 ? ToastType.success : ToastType.warning,
     );
     await _refresh();
@@ -68,7 +69,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Revaluation',
+          context.l10n.revaluationTitle,
           style: TextStyle(
             color: context.colors.textDark,
             fontWeight: FontWeight.bold,
@@ -78,7 +79,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.cloud_sync, color: context.colors.primary),
-            tooltip: 'Sync rates from API',
+            tooltip: context.l10n.revaluationSyncTooltip,
             onPressed: currencyProvider.isSyncing ? null : _syncNow,
           ),
           IconButton(
@@ -86,7 +87,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
               Icons.refresh,
               color: provider.loading ? Colors.grey : context.colors.primary,
             ),
-            tooltip: 'Refresh',
+            tooltip: context.l10n.revaluationRefreshTooltip,
             onPressed: provider.loading ? null : _refresh,
           ),
         ],
@@ -116,7 +117,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
                     const SizedBox(height: 28),
 
                     Text(
-                      'GAIN / LOSS BY CURRENCY',
+                      context.l10n.revaluationGainLossByCurrency,
                       style: TextStyle(
                         color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
@@ -129,7 +130,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Text(
-                          'No holdings yet. Create accounts and transactions to see FX gain/loss.',
+                          context.l10n.revaluationNoHoldings,
                           style: TextStyle(color: Colors.grey.shade600),
                           textAlign: TextAlign.center,
                         ),
@@ -145,7 +146,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
                     const SizedBox(height: 28),
 
                     Text(
-                      'PURCHASING POWER',
+                      context.l10n.revaluationPurchasingPower,
                       style: TextStyle(
                         color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
@@ -162,7 +163,7 @@ class _RevaluationScreenState extends State<RevaluationScreen> {
                     const SizedBox(height: 28),
 
                     Text(
-                      'NET WORTH',
+                      context.l10n.revaluationNetWorth,
                       style: TextStyle(
                         color: context.colors.textLight,
                         fontWeight: FontWeight.w600,

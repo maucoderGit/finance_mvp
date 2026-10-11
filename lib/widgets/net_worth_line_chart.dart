@@ -1,8 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/models/net_worth_data_point.dart';
-import 'package:finance_mvp/services/finance/currency_converter.dart';
 
 /// Line chart of net worth over time in the base currency.
 class NetWorthLineChart extends StatelessWidget {
@@ -27,14 +27,14 @@ class NetWorthLineChart extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
           ),
         ),
-        child: const Column(
+        child: Column(
           children: [
-            Icon(Icons.show_chart, color: Colors.grey, size: 40),
-            SizedBox(height: 12),
+            const Icon(Icons.show_chart, color: Colors.grey, size: 40),
+            const SizedBox(height: 12),
             Text(
-              'Net worth history appears here after a few days of tracking.',
+              context.l10n.netWorthEmpty,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
+              style: const TextStyle(color: Colors.grey),
             ),
           ],
         ),
@@ -66,28 +66,6 @@ class NetWorthLineChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.account_balance_wallet,
-                  color: Color(0xFF1E8E3E), size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Net Worth in $baseCurrencyCode',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Latest: ${formatMoney(data.last.baseAmount, currencyCode: baseCurrencyCode)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
           SizedBox(
             height: 160,
             child: LineChart(

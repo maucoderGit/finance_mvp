@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/contacts/contact_widgets.dart';
 import 'package:flutter/material.dart';
@@ -70,19 +71,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete contact?'),
-        content: Text(
-          'This removes "${contact.name}" from your contacts. Linked '
-          'transactions keep their history but lose the name.',
-        ),
+        title: Text(context.l10n.contactsDeleteTitle),
+        content: Text(context.l10n.contactsDeleteBody(contact.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.delete,
+                style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -100,7 +99,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Contacts'),
+        title: Text(context.l10n.contactsTitle),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -110,7 +109,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'New contact',
+            tooltip: context.l10n.contactsNew,
             icon: Icon(Icons.add, color: context.colors.textDark),
             onPressed: _addContact,
           ),
@@ -124,7 +123,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               controller: _searchController,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Search by name or phone...',
+                hintText: context.l10n.contactsSearchHint,
                 prefixIcon: Icon(Icons.search, color: context.colors.textLight),
                 filled: true,
                 fillColor: context.colors.cardBackground,
@@ -146,8 +145,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _contacts.isEmpty
-                              ? 'No contacts yet'
-                              : 'No matching contacts',
+                              ? context.l10n.contactsNone
+                              : context.l10n.contactsNoMatch,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: context.colors.textDark,
@@ -165,7 +164,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                         contact: contact,
                         onTap: () => _editContact(contact),
                         trailing: IconButton(
-                          tooltip: 'Delete',
+                          tooltip: context.l10n.delete,
                           icon: Icon(Icons.delete_outline,
                               color: context.colors.textLight),
                           onPressed: () => _deleteContact(contact),
