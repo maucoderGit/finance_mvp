@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transactions/transaction_list_view.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
@@ -13,12 +14,12 @@ import 'package:provider/provider.dart';
 enum Period { week, month, quarter, year, all }
 
 extension PeriodLabel on Period {
-  String get label => switch (this) {
-        Period.week => 'Week',
-        Period.month => 'Month',
-        Period.quarter => 'Quarter',
-        Period.year => 'Year',
-        Period.all => 'All',
+  String label(AppLocalizations l10n) => switch (this) {
+        Period.week => l10n.periodWeek,
+        Period.month => l10n.periodMonth,
+        Period.quarter => l10n.periodQuarter,
+        Period.year => l10n.periodYear,
+        Period.all => l10n.periodAll,
       };
 
   /// Start-inclusive, end-exclusive bounds of the period holding [anchor];
@@ -43,21 +44,21 @@ extension PeriodLabel on Period {
 
   /// Human label of the period containing [anchor], e.g. "This month",
   /// "Q3 2026", "Sep 21 – 27".
-  String title(DateTime anchor) {
+  String title(DateTime anchor, AppLocalizations l10n) {
     final start = range(anchor)?.start;
     final isCurrent = start != null && start == range(DateTime.now())?.start;
     final f = DateFormat('MMM d');
     return switch (this) {
       Period.week => isCurrent
-          ? 'This week'
+          ? l10n.periodThisWeek
           : '${f.format(start!)} – ${f.format(start.add(const Duration(days: 6)))}',
       Period.month =>
-        isCurrent ? 'This month' : DateFormat('MMMM yyyy').format(anchor),
+        isCurrent ? l10n.periodThisMonth : DateFormat('MMMM yyyy').format(anchor),
       Period.quarter => isCurrent
-          ? 'This quarter'
+          ? l10n.periodThisQuarter
           : 'Q${((anchor.month - 1) ~/ 3) + 1} ${anchor.year}',
-      Period.year => isCurrent ? 'This year' : '${anchor.year}',
-      Period.all => 'All time',
+      Period.year => isCurrent ? l10n.periodThisYear : '${anchor.year}',
+      Period.all => l10n.periodAllTime,
     };
   }
 }
@@ -78,6 +79,18 @@ class _TransactionPageState extends State<TransactionPage> {
   /// list (and the summary) on top of the period and In/Out filters.
   final TextEditingController _searchController = TextEditingController();
   bool _searching = false;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    final arg = ModalRoute.of(context)?.settings.arguments;
+    if (arg is String && const {'All', 'In', 'Out'}.contains(arg)) {
+      _selectedToggle = arg;
+    }
+  }
 
   @override
   void dispose() {
@@ -183,9 +196,9 @@ class _TransactionPageState extends State<TransactionPage> {
                       final baseSymbol = snapshot.data?.baseSymbol ?? r'$';
                       return TransactionCard(
                         title: '${switch (_selectedToggle) {
-                          'In' => 'Money in',
-                          'Out' => 'Money out',
-                          _ => 'Net movement',
+                          'In' => context.l10n.txMoneyIn,
+                          'Out' => context.l10n.txMoneyOut,
+                          _ => context.l10n.txNetMovement,
                         }} · ${shown.length}',
                         displayAmount:
                             formatMoney(total, symbol: baseSymbol),
@@ -199,8 +212,10 @@ class _TransactionPageState extends State<TransactionPage> {
                     child: TransactionListView(
                       transactions: shown,
                       emptyMessage: _query.isNotEmpty
-                          ? 'No matches for "${_searchController.text.trim()}"'
-                          : 'No transactions in ${_period.title(_anchor).toLowerCase()}',
+                          ? context.l10n.txNoMatches(
+                              _searchController.text.trim())
+                          : context.l10n.txNoneInPeriod(
+                              _period.title(_anchor, context.l10n).toLowerCase()),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -254,7 +269,7 @@ class _TransactionPageState extends State<TransactionPage> {
             ),
             const SizedBox(width: 15),
             Text(
-              'Transactions',
+              context.l10n.txTitle,
               style: TextStyle(
                   fontSize: 20, fontWeight: FontWeight.bold, color: brand),
             ),
@@ -291,7 +306,7 @@ class _TransactionPageState extends State<TransactionPage> {
             onChanged: (_) => setState(() {}),
             style: TextStyle(color: context.colors.textDark),
             decoration: InputDecoration(
-              hintText: 'Search reference or amount',
+              hintText: context.l10n.txSearchHint,
               hintStyle: TextStyle(color: context.colors.textLight, fontSize: 14),
               isDense: true,
               filled: true,
@@ -353,7 +368,7 @@ class _TransactionPageState extends State<TransactionPage> {
               child: GestureDetector(
                 onTap: () => setState(() => _anchor = DateTime.now()),
                 child: Text(
-                  _period.title(_anchor),
+                  _period.title(_anchor, context.l10n),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 16,
@@ -408,7 +423,7 @@ class _TransactionPageState extends State<TransactionPage> {
                   : context.colors.cardBorder),
         ),
         child: Text(
-          period.label,
+          period.label(context.l10n),
           style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -455,7 +470,11 @@ class _TransactionPageState extends State<TransactionPage> {
           borderRadius: BorderRadius.circular(25),
         ),
         child: Text(
-          text,
+          switch (text) {
+            'In' => context.l10n.txToggleIn,
+            'Out' => context.l10n.txToggleOut,
+            _ => context.l10n.txToggleAll,
+          },
           style: TextStyle(
               color: isSelected ? Colors.white : context.colors.textLight,
               fontWeight: FontWeight.w600),

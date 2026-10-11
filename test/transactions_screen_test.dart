@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/app_localizations_en.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/transactions/transactions_screen.dart';
 import 'package:finance_mvp/widgets/transaction_card.dart';
@@ -99,15 +100,16 @@ void main() {
 
   test('all has no bounds', () {
     expect(Period.all.range(anchor), isNull);
-    expect(Period.all.title(anchor), 'All time');
+    expect(Period.all.title(anchor, AppLocalizationsEn()), 'All time');
   });
 
   test('titles name the current period differently from a past one', () {
+    final l10n = AppLocalizationsEn();
     final now = DateTime.now();
-    expect(Period.month.title(now), 'This month');
-    expect(Period.quarter.title(DateTime(2025, 5)), 'Q2 2025');
-    expect(Period.year.title(DateTime(2025, 5)), '2025');
-    expect(Period.week.title(DateTime(2026, 8, 19)), 'Aug 17 – Aug 23');
+    expect(Period.month.title(now, l10n), 'This month');
+    expect(Period.quarter.title(DateTime(2025, 5), l10n), 'Q2 2025');
+    expect(Period.year.title(DateTime(2025, 5), l10n), '2025');
+    expect(Period.week.title(DateTime(2026, 8, 19), l10n), 'Aug 17 – Aug 23');
   });
 
   testWidgets('summary amount follows the palette, not a hardcoded black',
