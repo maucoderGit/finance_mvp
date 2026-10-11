@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,7 +27,7 @@ class AboutScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'About Me',
+          context.l10n.aboutTitle,
           style: TextStyle(
             color: colors.primary,
             fontFamily: 'monospace',
@@ -64,7 +65,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Software dev \u2661 8-bit dreams',
+                  context.l10n.aboutRole,
                   style: TextStyle(
                     color: colors.primaryLight,
                     fontFamily: 'monospace',
@@ -81,7 +82,32 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'SOCIAL LINKS \u2661',
+                  context.l10n.aboutWhyTitle,
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _PixelBorder(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      context.l10n.aboutWhyBody,
+                      style: TextStyle(
+                        color: colors.textDark,
+                        fontFamily: 'monospace',
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  context.l10n.aboutSocialLinks,
                   style: TextStyle(
                     color: colors.primary,
                     fontFamily: 'monospace',
@@ -112,7 +138,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  '\\ (\u30c8) / thanks for playing!',
+                  context.l10n.aboutThanks,
                   style: TextStyle(
                     color: colors.textLight,
                     fontFamily: 'monospace',
@@ -137,7 +163,8 @@ class AboutScreen extends StatelessWidget {
     } catch (_) {}
     if (!context.mounted) return;
     showToast(context,
-        message: 'Could not open browser', description: uri.toString(),
+        message: context.l10n.aboutCouldNotOpenBrowser,
+        description: uri.toString(),
         type: ToastType.error);
   }
 }
@@ -336,10 +363,6 @@ class _BioBox extends StatefulWidget {
 }
 
 class _BioBoxState extends State<_BioBox> {
-  static const _fallback =
-      'hi~ i\u2019m maucoder. i like anime,\ncute things and programming. '
-      'i build\nsmall flutter apps like this one \u2661';
-
   String? _bio;
 
   @override
@@ -368,7 +391,7 @@ class _BioBoxState extends State<_BioBox> {
   Widget build(BuildContext context) {
     final colors = widget.colors;
     return Text(
-      _bio ?? _fallback,
+      _bio ?? context.l10n.aboutBioFallback,
       style: TextStyle(
         color: colors.textDark,
         fontFamily: 'monospace',
