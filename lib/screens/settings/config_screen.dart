@@ -1,9 +1,11 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_mvp/screens/settings/about_screen.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
 import 'package:finance_mvp/screens/settings/appearance_screen.dart';
+import 'package:finance_mvp/screens/settings/notifications_screen.dart';
 import 'package:finance_mvp/screens/settings/currency_screen.dart';
 import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
 import 'package:finance_mvp/screens/settings/profile_screen.dart';
@@ -21,20 +23,16 @@ class ConfigScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear all data?'),
-        content: const Text(
-          'This permanently deletes your accounts, transactions, rates and '
-          'preferences, and restarts the app from onboarding. This cannot be '
-          'undone.',
-        ),
+        title: Text(context.l10n.configClearTitle),
+        content: Text(context.l10n.configClearBody),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
+              child: Text(context.l10n.cancel)),
           TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete everything',
-                  style: TextStyle(color: Colors.red))),
+              child: Text(context.l10n.configDeleteEverything,
+                  style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -43,7 +41,7 @@ class ConfigScreen extends StatelessWidget {
 
     await repository.wipeAllData();
     if (!context.mounted) return;
-    showToast(context, message: 'All data cleared.');
+    showToast(context, message: context.l10n.configDataCleared);
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -52,7 +50,7 @@ class ConfigScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Configuration'),
+        title: Text(context.l10n.configTitle),
         centerTitle: true,
         backgroundColor: context.colors.background,
         elevation: 0,
@@ -64,11 +62,11 @@ class ConfigScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         children: [
-          const _SectionTitle(title: 'General'),
+          _SectionTitle(title: context.l10n.configSectionGeneral),
           _SettingTile(
             icon: Icons.person_outline,
-            title: 'Profile',
-            subtitle: 'Manage your user profile',
+            title: context.l10n.profileTitle,
+            subtitle: context.l10n.configProfileSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -78,8 +76,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.monetization_on_outlined,
-            title: 'Currencies',
-            subtitle: 'Manage currencies and base currency',
+            title: context.l10n.configCurrencies,
+            subtitle: context.l10n.configCurrenciesSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -89,8 +87,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.contacts_outlined,
-            title: 'Contacts',
-            subtitle: 'View and manage all your contacts',
+            title: context.l10n.configContacts,
+            subtitle: context.l10n.configContactsSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -100,8 +98,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.handshake_outlined,
-            title: 'Debts & Debtors',
-            subtitle: 'Track loans you gave or received',
+            title: context.l10n.configDebts,
+            subtitle: context.l10n.configDebtsSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -111,8 +109,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.flag_outlined,
-            title: 'Goals',
-            subtitle: 'Savings goals and their progress',
+            title: context.l10n.configGoals,
+            subtitle: context.l10n.configGoalsSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -122,8 +120,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.pie_chart_outline,
-            title: 'Dashboard',
-            subtitle: 'Overview charts and analytics',
+            title: context.l10n.dashboardTitle,
+            subtitle: context.l10n.configDashboardSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -133,8 +131,8 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.trending_up,
-            title: 'Revaluation',
-            subtitle: 'FX gains/losses and purchasing power',
+            title: context.l10n.configRevaluation,
+            subtitle: context.l10n.configRevaluationSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -143,11 +141,11 @@ class ConfigScreen extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-          const _SectionTitle(title: 'Preferences'),
+          _SectionTitle(title: context.l10n.configSectionPreferences),
           _SettingTile(
             icon: Icons.palette_outlined,
-            title: 'Appearance',
-            subtitle: 'Customize theme and appearance',
+            title: context.l10n.appearanceTitle,
+            subtitle: context.l10n.configAppearanceSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -157,18 +155,22 @@ class ConfigScreen extends StatelessWidget {
           ),
           _SettingTile(
             icon: Icons.notifications_outlined,
-            title: 'Notifications',
-            subtitle: 'Manage notification settings',
+            title: context.l10n.configNotifications,
+            subtitle: context.l10n.configNotificationsSubtitle,
             onTap: () {
-              // TODO: Navigate to Notification Settings
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
             },
           ),
           const SizedBox(height: 16),
-          const _SectionTitle(title: 'About'),
+          _SectionTitle(title: context.l10n.configSectionAbout),
           _SettingTile(
             icon: Icons.info_outline,
-            title: 'About Finance',
-            subtitle: 'App version and information',
+            title: context.l10n.configAbout,
+            subtitle: context.l10n.configAboutSubtitle,
             onTap: () {
               Navigator.push(
                 context,
@@ -177,11 +179,11 @@ class ConfigScreen extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-          const _SectionTitle(title: 'Danger zone'),
+          _SectionTitle(title: context.l10n.configSectionDanger),
           _SettingTile(
             icon: Icons.delete_forever_outlined,
-            title: 'Clear all data',
-            subtitle: 'Wipe everything and start over',
+            title: context.l10n.configClearAllData,
+            subtitle: context.l10n.configClearAllDataSubtitle,
             onTap: () => _confirmWipe(context),
             iconColor: Colors.red,
             textColor: Colors.red,

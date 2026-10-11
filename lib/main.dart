@@ -3,6 +3,7 @@ import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/l10n/app_localizations.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/locale_provider.dart';
+import 'package:finance_mvp/providers/notification_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/providers/theme_provider.dart';
 import 'package:finance_mvp/screens/accounts/accounts_screen.dart';
@@ -17,18 +18,38 @@ import 'package:finance_mvp/services/finance/revaluation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final database = AppDatabase();
   final themeProvider = await ThemeProvider.load();
   final localeProvider = await LocaleProvider.load();
+  final notificationProvider = NotificationProvider(
+    await SharedPreferences.getInstance(),
+  );
+  await notificationProvider.init();
+  if (notificationProvider.enabled) {
+    final locale =
+        localeProvider.locale ?? WidgetsBinding.instance.platformDispatcher.locale;
+    final l10n = await AppLocalizations.delegate.load(locale);
+    await notificationProvider.configure(
+      enabled: true,
+      hour: notificationProvider.hour,
+      minute: notificationProvider.minute,
+      title: l10n.notificationReminderTitle,
+      body: l10n.notificationReminderBody,
+    );
+  }
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
+        ChangeNotifierProvider<NotificationProvider>.value(
+          value: notificationProvider,
+        ),
         Provider<AppDatabase>(
           create: (_) => database,
           dispose: (_, db) => db.close(),
