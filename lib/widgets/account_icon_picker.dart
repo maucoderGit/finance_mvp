@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 const List<int> accountColorPalette = [
@@ -24,35 +25,28 @@ class AccountIconPicker extends StatelessWidget {
     required this.onColorChanged,
   });
 
-  String get _selectedTypeLabel {
-    for (final label in accountTypeLabels) {
-      if (accountIconSlug(label) == selectedType) return label;
-    }
-    return selectedType;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _PickerLabel('ICON'),
+        _PickerLabel(context.l10n.pickerIconLabel),
         const SizedBox(height: 10),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            for (final label in accountTypeLabels)
-              _buildIconDot(context, label),
+            for (final slug in accountTypeSlugs)
+              _buildIconDot(context, slug),
           ],
         ),
         const SizedBox(height: 8),
         Text(
-          _selectedTypeLabel,
+          accountTypeLabel(context.l10n, selectedType),
           style: TextStyle(color: context.colors.textLight, fontSize: 12),
         ),
         const SizedBox(height: 20),
-        const _PickerLabel('COLOR'),
+        _PickerLabel(context.l10n.pickerColorLabel),
         const SizedBox(height: 10),
         Wrap(
           spacing: 10,
@@ -70,8 +64,7 @@ class AccountIconPicker extends StatelessWidget {
     );
   }
 
-  Widget _buildIconDot(BuildContext context, String label) {
-    final slug = accountIconSlug(label);
+  Widget _buildIconDot(BuildContext context, String slug) {
     final isSelected = selectedType == slug;
     final color = Color(accountTypeColors[slug] ?? 0xFF4CAF50);
     return GestureDetector(

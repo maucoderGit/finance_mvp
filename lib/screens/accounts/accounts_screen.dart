@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart' as db;
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/screens/accounts/add_account_sheet.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
@@ -40,7 +41,7 @@ class AccountsScreen extends StatelessWidget {
     final bool? shouldSave = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Adjust ${account.name} balance'),
+        title: Text(context.l10n.accountsAdjustTitle(account.name)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -49,14 +50,14 @@ class AccountsScreen extends StatelessWidget {
               autofocus: true,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'New balance'),
+              decoration:
+                  InputDecoration(labelText: context.l10n.accountsNewBalance),
             ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Sets the balance to this value. A "Balance adjustment" '
-                'transaction is recorded for the difference.',
+                context.l10n.accountsAdjustHelp,
                 style: TextStyle(
                     color: context.colors.textLight, fontSize: 12, height: 1.4),
               ),
@@ -66,10 +67,10 @@ class AccountsScreen extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
+              child: Text(context.l10n.cancel)),
           TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save')),
+              child: Text(context.l10n.save)),
         ],
       ),
     );
@@ -79,7 +80,8 @@ class AccountsScreen extends StatelessWidget {
       if (value == null) {
         if (context.mounted) {
           showToast(context,
-              message: 'Enter a valid balance.', type: ToastType.error);
+              message: context.l10n.accountsInvalidBalance,
+              type: ToastType.error);
         }
         return;
       }
@@ -105,7 +107,7 @@ class AccountsScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Finance',
+          context.l10n.appTitle,
           style: TextStyle(
             color: context.colors.textDark,
             fontWeight: FontWeight.bold,
@@ -136,7 +138,7 @@ class AccountsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'BALANCE',
+                    context.l10n.accountsBalance,
                     style: TextStyle(
                       color: context.colors.textLight,
                       fontWeight: FontWeight.w600,
@@ -196,7 +198,7 @@ class AccountsScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'My Accounts',
+                        context.l10n.accountsMyAccounts,
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -211,7 +213,7 @@ class AccountsScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '${accounts.length} ACTIVE',
+                          context.l10n.accountsActiveCount(accounts.length),
                           style: TextStyle(
                             color: context.colors.primary,
                             fontWeight: FontWeight.bold,
@@ -253,7 +255,12 @@ class AccountsScreen extends StatelessWidget {
                               balanceSnapshot.data?['baseCode'] ?? 'USD';
                           return _AccountCard(
                             name: account.name,
-                            subtitle: account.subtitle ?? '',
+                            subtitle: accountTypeLabel(
+                                context.l10n,
+                                accountSlugFromStored(
+                                    account.icon.isNotEmpty
+                                        ? account.icon
+                                        : account.subtitle)),
                             amount: balance,
                             currencyCode: account.currencyCode,
                             convertedAmount: converted,
@@ -379,7 +386,7 @@ class _AccountCard extends StatelessWidget {
             ),
             IconButton(
               onPressed: onAdjustBalance,
-              tooltip: 'Adjust balance',
+              tooltip: context.l10n.accountsAdjustBalance,
               icon: Icon(Icons.tune, color: context.colors.textLight, size: 20),
             ),
           ],

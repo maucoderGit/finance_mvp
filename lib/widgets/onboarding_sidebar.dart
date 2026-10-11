@@ -1,4 +1,5 @@
 import 'package:finance_mvp/constants/app_colors.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 class _StepGroup {
@@ -10,13 +11,13 @@ class _StepGroup {
 }
 
 /// Groups the 7 onboarding pages into the 5 milestones shown on the rail.
-const List<_StepGroup> _stepGroups = [
-  _StepGroup('Welcome & Profile', 'Get to know you', 0, 1),
-  _StepGroup('Currencies & Valuation', 'VES, USD & multi-currency', 2, 3),
-  _StepGroup('Exchange rates', 'Auto or manual sync', 4, 4),
-  _StepGroup('Your first account', 'Customize your vault', 5, 5),
-  _StepGroup('Ready to launch', 'Portfolio analytics active', 6, 6),
-];
+List<_StepGroup> _stepGroups(AppLocalizations l10n) => [
+      _StepGroup(l10n.sidebarStep1Title, l10n.sidebarStep1Subtitle, 0, 1),
+      _StepGroup(l10n.sidebarStep2Title, l10n.sidebarStep2Subtitle, 2, 3),
+      _StepGroup(l10n.sidebarStep3Title, l10n.sidebarStep3Subtitle, 4, 4),
+      _StepGroup(l10n.sidebarStep4Title, l10n.sidebarStep4Subtitle, 5, 5),
+      _StepGroup(l10n.sidebarStep5Title, l10n.sidebarStep5Subtitle, 6, 6),
+    ];
 
 /// Branding + journey progress rail for the wide-screen onboarding layout.
 /// Lives in `widgets/` because it's expected to become the app shell sidebar
@@ -27,6 +28,7 @@ class OnboardingSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final groups = _stepGroups(context.l10n);
     return Container(
       width: 300,
       color: context.colors.cardBackground,
@@ -55,7 +57,7 @@ class OnboardingSidebar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Finance',
+                    context.l10n.appTitle,
                     style: TextStyle(
                       color: context.colors.textDark,
                       fontSize: 16,
@@ -64,7 +66,7 @@ class OnboardingSidebar extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'WEALTH PORTFOLIO',
+                    context.l10n.sidebarTagline,
                     style: TextStyle(
                       color: context.colors.textLight,
                       fontSize: 10,
@@ -78,7 +80,7 @@ class OnboardingSidebar extends StatelessWidget {
           ),
           const SizedBox(height: 36),
           Text(
-            'ONBOARDING PATHWAY',
+            context.l10n.sidebarOnboardingPathway,
             style: TextStyle(
               color: context.colors.textLight,
               fontSize: 11,
@@ -87,19 +89,19 @@ class OnboardingSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          for (final entry in _stepGroups.indexed)
+          for (final entry in groups.indexed)
             _StepRow(
               number: entry.$1 + 1,
               group: entry.$2,
-              state: _stateFor(entry.$1),
+              state: _stateFor(groups, entry.$1),
             ),
         ],
       ),
     );
   }
 
-  _StepState _stateFor(int index) {
-    final group = _stepGroups[index];
+  _StepState _stateFor(List<_StepGroup> groups, int index) {
+    final group = groups[index];
     if (currentStep > group.lastStep) return _StepState.done;
     if (currentStep >= group.firstStep) return _StepState.active;
     return _StepState.upcoming;

@@ -1,6 +1,7 @@
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/services/finance/currency_converter.dart';
@@ -40,12 +41,6 @@ class _AccountTemplate {
   final int color;
   const _AccountTemplate(this.label, this.icon, this.color);
 }
-
-final List<_AccountTemplate> _accountTemplates = [
-  for (final label in accountTypeLabels)
-    _AccountTemplate(label, accountIconSlug(label),
-        accountTypeColors[accountIconSlug(label)]!),
-];
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -106,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _saving = true);
 
     final username = _nameController.text.trim().isEmpty
-        ? 'User'
+        ? context.l10n.onboardingDefaultUserName
         : _nameController.text.trim();
 
     final currencyProvider = context.read<CurrencyProvider>();
@@ -146,7 +141,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final accountName = (name ?? _accountController.text).trim();
     if (accountName.isEmpty) {
       showToast(context,
-          message: 'Give the account a name.', type: ToastType.error);
+          message: context.l10n.onboardingAccountNameRequired,
+          type: ToastType.error);
       return false;
     }
 
@@ -156,7 +152,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final parsed = double.tryParse(balanceText);
       if (parsed == null) {
         showToast(context,
-            message: 'Enter a valid initial balance.', type: ToastType.error);
+            message: context.l10n.onboardingInitialBalanceInvalid,
+            type: ToastType.error);
         return false;
       }
       balance = parsed;
@@ -221,13 +218,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final accountTemplates = [
+      for (final slug in accountTypeSlugs)
+        _AccountTemplate(
+          accountTypeLabel(context.l10n, slug),
+          slug,
+          accountTypeColors[slug]!,
+        ),
+    ];
     final pages = <Widget>[
       _WelcomeStep(onGetStarted: () => _goToStep(1)),
       _NameStep(controller: _nameController),
       _CurrencyStep(
-        title: 'Reference currency',
-        subtitle: 'The currency you use to measure your savings '
-            '(net worth is shown in it).',
+        title: context.l10n.onboardingReferenceCurrency,
+        subtitle: context.l10n.onboardingReferenceCurrencySubtitle,
         options: _currencyOptions,
         selectedCode: _baseCode,
         onSelected: (option) {
@@ -239,9 +243,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         },
       ),
       _CurrencyStep(
-        title: 'Local currency',
-        subtitle: 'The currency you earn and spend daily. '
-            'Your purchasing power is tracked against it.',
+        title: context.l10n.onboardingLocalCurrency,
+        subtitle: context.l10n.onboardingLocalCurrencySubtitle,
         options: _currencyOptions,
         selectedCode: _nationalCode,
         onSelected: (option) {
@@ -261,7 +264,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         balanceController: _balanceController,
         accounts: _accounts,
         options: _currencyOptions,
-        templates: _accountTemplates,
+        templates: accountTemplates,
         accountCurrency: _accountCurrency,
         selectedType: _accountType,
         selectedColor: _accountColor,
@@ -283,7 +286,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       DoneStep(
         saving: _saving,
         username: _nameController.text.trim().isEmpty
-            ? 'User'
+            ? context.l10n.onboardingDefaultUserName
             : _nameController.text.trim(),
         baseCode: _baseCode,
         nationalCode: _nationalCode,
@@ -364,8 +367,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Step ${(_currentStep + 1).toString().padLeft(2, '0')} '
-                'of $_totalSteps',
+                context.l10n.onboardingStepIndicator(
+                  (_currentStep + 1).toString().padLeft(2, '0'),
+                  _totalSteps.toString(),
+                ),
                 style: TextStyle(
                   color: context.colors.primary,
                   fontSize: 11,
@@ -389,7 +394,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             TextButton(
               onPressed: () => _goToStep(_currentStep - 1),
               child: Text(
-                'Back',
+                context.l10n.onboardingBack,
                 style: TextStyle(color: context.colors.textLight, fontSize: 16),
               ),
             )
@@ -426,13 +431,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: () {
                 if (_currentStep == 5 && _accounts.isEmpty) {
                   showToast(context,
-                      message: 'Add at least one account first.',
+                      message: context.l10n.onboardingAddAccountFirst,
                       type: ToastType.error);
                   return;
                 }
                 _goToStep(_currentStep + 1);
               },
-              child: const Text('Next', style: TextStyle(fontSize: 16)),
+              child: Text(context.l10n.onboardingNext,
+                  style: const TextStyle(fontSize: 16)),
             )
           else
             FilledButton(
@@ -453,7 +459,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Finish', style: TextStyle(fontSize: 16)),
+                  : Text(context.l10n.onboardingFinish,
+                      style: const TextStyle(fontSize: 16)),
             ),
           if (_currentStep == _totalSteps - 1) const SizedBox(width: 64),
         ],
@@ -480,7 +487,7 @@ class _WelcomeStep extends StatelessWidget {
               size: 96, color: context.colors.primary),
           const SizedBox(height: 40),
           Text(
-            'Welcome to\nFinance',
+            context.l10n.onboardingWelcomeTitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.colors.textDark,
@@ -491,8 +498,7 @@ class _WelcomeStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Track your savings across currencies and protect your '
-            'purchasing power against exchange-rate changes.',
+            context.l10n.onboardingWelcomeSubtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.colors.textLight,
@@ -510,8 +516,9 @@ class _WelcomeStep extends StatelessWidget {
               ),
             ),
             onPressed: onGetStarted,
-            child: const Text('Get started',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+            child: Text(context.l10n.onboardingGetStarted,
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -536,7 +543,7 @@ class _NameStep extends StatelessWidget {
           Icon(Icons.person_outline, size: 72, color: context.colors.primary),
           const SizedBox(height: 32),
           Text(
-            'How should we call you?',
+            context.l10n.onboardingNameQuestion,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.colors.textDark,
@@ -550,7 +557,7 @@ class _NameStep extends StatelessWidget {
             autofocus: true,
             textAlign: TextAlign.center,
             decoration: InputDecoration(
-              hintText: 'Your name',
+              hintText: context.l10n.onboardingNameHint,
               filled: true,
               fillColor: context.colors.cardBackground,
               border: OutlineInputBorder(
@@ -696,7 +703,8 @@ class _CurrencyTile extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${option.name} (${option.symbol})',
+                      context.l10n.onboardingCurrencyNameSymbol(
+                          option.name, option.symbol),
                       style: TextStyle(
                           color: context.colors.textLight, fontSize: 13),
                     ),
@@ -731,7 +739,7 @@ class _SyncModeStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Exchange rates',
+            context.l10n.onboardingExchangeRates,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.colors.textDark,
@@ -741,7 +749,7 @@ class _SyncModeStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'How do you want currency rates to be kept up to date?',
+            context.l10n.onboardingExchangeRatesQuestion,
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: context.colors.textLight, fontSize: 14, height: 1.4),
@@ -749,18 +757,16 @@ class _SyncModeStep extends StatelessWidget {
           const SizedBox(height: 32),
           _SyncModeCard(
             icon: Icons.cloud_done_outlined,
-            title: 'Automatic',
-            description: 'Fetch the latest rates from the exchange API '
-                'whenever you open the app.',
+            title: context.l10n.onboardingSyncAutomatic,
+            description: context.l10n.onboardingSyncAutomaticDescription,
             isSelected: selected == 'auto',
             onTap: () => onSelected('auto'),
           ),
           const SizedBox(height: 16),
           _SyncModeCard(
             icon: Icons.edit_outlined,
-            title: 'Manual',
-            description: 'You\'ll enter rates yourself. Best when the API '
-                'can\'t track your currency.',
+            title: context.l10n.onboardingSyncManual,
+            description: context.l10n.onboardingSyncManualDescription,
             isSelected: selected == 'manual',
             onTap: () => onSelected('manual'),
           ),
@@ -926,7 +932,7 @@ class _AccountStepState extends State<_AccountStep> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Your first account',
+                  context.l10n.onboardingFirstAccountTitle,
                   style: TextStyle(
                     color: context.colors.textDark,
                     fontSize: 24,
@@ -935,9 +941,7 @@ class _AccountStepState extends State<_AccountStep> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Add at least one account to continue. The balance is '
-                  'optional. Tap a template for a quick start, or customize '
-                  'below.',
+                  context.l10n.onboardingFirstAccountSubtitle,
                   style: TextStyle(
                       color: context.colors.textLight,
                       fontSize: 14,
@@ -947,7 +951,7 @@ class _AccountStepState extends State<_AccountStep> {
                 Row(
                   children: [
                     Text(
-                      'QUICK START TEMPLATES',
+                      context.l10n.onboardingQuickStartTemplates,
                       style: TextStyle(
                         color: context.colors.textLight,
                         fontSize: 11,
@@ -957,7 +961,7 @@ class _AccountStepState extends State<_AccountStep> {
                     ),
                     const Spacer(),
                     Text(
-                      'Tap to fill presets',
+                      context.l10n.onboardingTapToFillPresets,
                       style: TextStyle(
                           color: context.colors.textLight, fontSize: 11),
                     ),
@@ -1025,7 +1029,7 @@ class _AccountStepState extends State<_AccountStep> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Account specifications',
+                context.l10n.onboardingAccountSpecifications,
                 style: TextStyle(
                   color: context.colors.textDark,
                   fontSize: 14,
@@ -1037,7 +1041,8 @@ class _AccountStepState extends State<_AccountStep> {
               Text(
                 widget.editingIndex == null
                     ? _appliedTypeLabel
-                    : 'Editing: ${widget.accounts[widget.editingIndex!].name}',
+                    : context.l10n.onboardingEditingName(
+                        widget.accounts[widget.editingIndex!].name),
                 style: TextStyle(
                   color: context.colors.textLight,
                   fontSize: 11,
@@ -1045,7 +1050,7 @@ class _AccountStepState extends State<_AccountStep> {
                 ),
               ),
               IconButton(
-                tooltip: 'Close editor',
+                tooltip: context.l10n.onboardingCloseEditor,
                 visualDensity: VisualDensity.compact,
                 onPressed: widget.onCloseEditor,
                 color: context.colors.textLight,
@@ -1054,12 +1059,13 @@ class _AccountStepState extends State<_AccountStep> {
             ],
           ),
           const SizedBox(height: 18),
-          const _FieldLabel('Account name'),
+          _FieldLabel(context.l10n.onboardingAccountNameLabel),
           const SizedBox(height: 8),
           TextField(
             key: const Key('onboarding-account-name'),
             controller: widget.controller,
-            decoration: _inputDecoration(context, hintText: 'e.g. Daily Cash'),
+            decoration: _inputDecoration(context,
+                hintText: context.l10n.onboardingAccountNameHint),
           ),
           const SizedBox(height: 18),
           if (isWide)
@@ -1107,8 +1113,8 @@ class _AccountStepState extends State<_AccountStep> {
                     widget.editingIndex == null ? Icons.add : Icons.check,
                     size: 18),
                 label: Text(widget.editingIndex == null
-                    ? 'Add account'
-                    : 'Save changes'),
+                    ? context.l10n.onboardingAddAccount
+                    : context.l10n.onboardingSaveChanges),
               ),
             ),
           ),
@@ -1133,7 +1139,7 @@ class _AccountStepState extends State<_AccountStep> {
         ),
         onPressed: widget.onOpenEditor,
         icon: const Icon(Icons.add, size: 18),
-        label: const Text('Add your own account'),
+        label: Text(context.l10n.onboardingAddOwnAccount),
       ),
     );
   }
@@ -1142,7 +1148,7 @@ class _AccountStepState extends State<_AccountStep> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _FieldLabel('Currency'),
+        _FieldLabel(context.l10n.onboardingCurrencyLabel),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: widget.accountCurrency,
@@ -1152,7 +1158,8 @@ class _AccountStepState extends State<_AccountStep> {
             for (final option in widget.options)
               DropdownMenuItem(
                 value: option.code,
-                child: Text('${option.code} — ${option.name}'),
+                child: Text(context.l10n.onboardingCurrencyCodeName(
+                    option.code, option.name)),
               ),
           ],
           onChanged: (code) {
@@ -1167,7 +1174,7 @@ class _AccountStepState extends State<_AccountStep> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _FieldLabel('Initial balance (optional)'),
+        _FieldLabel(context.l10n.onboardingInitialBalanceLabel),
         const SizedBox(height: 8),
         TextField(
           controller: widget.balanceController,
@@ -1207,7 +1214,7 @@ class _AccountStepState extends State<_AccountStep> {
         Row(
           children: [
             Text(
-              'CONFIGURED ACCOUNTS',
+              context.l10n.onboardingConfiguredAccounts,
               style: TextStyle(
                 color: context.colors.textDark,
                 fontSize: 11,
@@ -1235,7 +1242,7 @@ class _AccountStepState extends State<_AccountStep> {
             const Spacer(),
             if (widget.accounts.isNotEmpty)
               Text(
-                'Ready for first import',
+                context.l10n.onboardingReadyForFirstImport,
                 style: TextStyle(color: context.colors.textLight, fontSize: 11),
               ),
           ],
@@ -1259,7 +1266,7 @@ class _AccountStepState extends State<_AccountStep> {
                     size: 18, color: context.colors.textLight),
                 const SizedBox(width: 8),
                 Text(
-                  'No accounts yet — add one to continue.',
+                  context.l10n.onboardingNoAccountsYet,
                   style:
                       TextStyle(color: context.colors.textLight, fontSize: 13),
                 ),
@@ -1295,12 +1302,8 @@ class _AccountStepState extends State<_AccountStep> {
     return code;
   }
 
-  String get _appliedTypeLabel {
-    for (final label in accountTypeLabels) {
-      if (accountIconSlug(label) == widget.selectedType) return label;
-    }
-    return widget.selectedType;
-  }
+  String get _appliedTypeLabel => accountTypeLabel(
+      context.l10n, accountSlugFromStored(widget.selectedType));
 }
 
 class _AccountCard extends StatelessWidget {
@@ -1383,7 +1386,7 @@ class _AccountCard extends StatelessWidget {
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
-                              _typeLabel,
+                              _typeLabel(context),
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.colors.textLight,
@@ -1396,7 +1399,8 @@ class _AccountCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${account.code} · $currencyName',
+                        context.l10n.onboardingAccountCodeCurrency(
+                            account.code, currencyName),
                         style: TextStyle(
                           color: context.colors.textLight,
                           fontSize: 11,
@@ -1405,7 +1409,9 @@ class _AccountCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Balance · ${formatMoney(account.balance, currencyCode: account.code)}',
+                        context.l10n.onboardingBalanceAmount(formatMoney(
+                            account.balance,
+                            currencyCode: account.code)),
                         style: TextStyle(
                           color: context.colors.textDark,
                           fontSize: 12,
@@ -1417,13 +1423,13 @@ class _AccountCard extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
-                  tooltip: 'Edit account',
+                  tooltip: context.l10n.onboardingEditAccount,
                   color: context.colors.textLight,
                   onPressed: onTap,
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Remove account',
+                  tooltip: context.l10n.onboardingRemoveAccount,
                   color: context.colors.textLight,
                   onPressed: onRemove,
                 ),
@@ -1435,12 +1441,8 @@ class _AccountCard extends StatelessWidget {
     );
   }
 
-  String get _typeLabel {
-    for (final label in accountTypeLabels) {
-      if (accountIconSlug(label) == account.icon) return label;
-    }
-    return account.icon;
-  }
+  String _typeLabel(BuildContext context) =>
+      accountTypeLabel(context.l10n, accountSlugFromStored(account.icon));
 }
 
 class _FieldLabel extends StatelessWidget {
@@ -1494,7 +1496,7 @@ class DoneStep extends StatelessWidget {
               size: 80, color: context.colors.primary),
           const SizedBox(height: 24),
           Text(
-            "You're all set!",
+            context.l10n.onboardingAllSet,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.colors.textDark,
@@ -1503,16 +1505,24 @@ class DoneStep extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SummaryRow(label: 'Name', value: username),
-          _SummaryRow(label: 'Reference currency', value: baseCode),
-          _SummaryRow(label: 'Local currency', value: nationalCode),
           _SummaryRow(
-              label: 'Accounts',
-              value:
-                  accountCount == 1 ? '1 account' : '$accountCount accounts'),
+              label: context.l10n.onboardingSummaryName, value: username),
           _SummaryRow(
-              label: 'Rates',
-              value: isAuto ? 'Automatic sync' : 'Manual entry'),
+              label: context.l10n.onboardingReferenceCurrency,
+              value: baseCode),
+          _SummaryRow(
+              label: context.l10n.onboardingLocalCurrency,
+              value: nationalCode),
+          _SummaryRow(
+              label: context.l10n.onboardingSummaryAccounts,
+              value: accountCount == 1
+                  ? context.l10n.onboardingOneAccount
+                  : context.l10n.onboardingAccountsCount(accountCount)),
+          _SummaryRow(
+              label: context.l10n.onboardingSummaryRates,
+              value: isAuto
+                  ? context.l10n.onboardingAutomaticSync
+                  : context.l10n.onboardingManualEntry),
         ],
       ),
     );

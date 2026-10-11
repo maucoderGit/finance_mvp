@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:finance_mvp/constants/account_icons.dart';
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
 import 'package:finance_mvp/widgets/account_icon_picker.dart';
 import 'package:finance_mvp/widgets/custom_toast.dart';
@@ -24,7 +25,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
   final _nameController = TextEditingController();
   final _initialBalanceController = TextEditingController();
 
-  String _selectedType = 'Bank';
+  String _selectedType = 'bank';
   int _selectedColor = accountTypeColors['bank']!;
   String? _selectedCurrencyCode;
   bool _includeInTotal = true;
@@ -35,8 +36,8 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
     final account = widget.existing;
     if (account != null) {
       _nameController.text = account.name;
-      _selectedType =
-          (account.subtitle?.isNotEmpty ?? false) ? account.subtitle! : 'Cash';
+      _selectedType = accountSlugFromStored(
+          account.icon.isNotEmpty ? account.icon : account.subtitle);
       _selectedColor = account.iconColor;
       _selectedCurrencyCode = account.currencyCode;
       _includeInTotal = account.includeInRevaluation;
@@ -62,7 +63,8 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
 
     if (_selectedCurrencyCode == null) {
       showToast(context,
-          message: 'Please select a currency.', type: ToastType.error);
+          message: context.l10n.addAccountSelectCurrency,
+          type: ToastType.error);
       return;
     }
 
@@ -70,7 +72,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
       name: drift.Value(name),
       subtitle: drift.Value(_selectedType),
       currencyCode: drift.Value(_selectedCurrencyCode!),
-      icon: drift.Value(accountIconSlug(_selectedType)),
+      icon: drift.Value(_selectedType),
       iconColor: drift.Value(_selectedColor),
       includeInRevaluation: drift.Value(_includeInTotal),
     );
@@ -122,7 +124,9 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      widget.isEdit ? 'Edit Account' : 'Create Account',
+                      widget.isEdit
+                          ? context.l10n.addAccountEditTitle
+                          : context.l10n.addAccountCreateTitle,
                       style: const TextStyle(
                           fontSize: 24, fontWeight: FontWeight.bold),
                     ),
@@ -131,15 +135,15 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                     icon: Icon(Icons.close,
                         color: context.colors.textLight, size: 24),
                     onPressed: () => Navigator.of(context).pop(),
-                    tooltip: 'Close',
+                    tooltip: context.l10n.close,
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
                 widget.isEdit
-                    ? 'Update the details of this account.'
-                    : 'Organize your assets with precision.',
+                    ? context.l10n.addAccountEditSubtitle
+                    : context.l10n.addAccountCreateSubtitle,
                 style: TextStyle(color: context.colors.textLight, fontSize: 14),
               ),
               const SizedBox(height: 20),
@@ -164,7 +168,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                          accountIconFor(accountIconSlug(_selectedType)),
+                          accountIconFor(_selectedType),
                           color: Color(_selectedColor),
                           size: 28),
                     ),
@@ -175,7 +179,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                         children: [
                           Text(
                             _nameController.text.trim().isEmpty
-                                ? 'Account name'
+                                ? context.l10n.addAccountNamePlaceholder
                                 : _nameController.text.trim(),
                             style: TextStyle(
                               color: context.colors.textDark,
@@ -184,7 +188,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                             ),
                           ),
                           Text(
-                            _selectedType,
+                            accountTypeLabel(context.l10n, _selectedType),
                             style: TextStyle(
                                 color: context.colors.textLight, fontSize: 13),
                           ),
@@ -198,10 +202,10 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
 
               // ── Icon + color picker ──
               AccountIconPicker(
-                selectedType: accountIconSlug(_selectedType),
+                selectedType: _selectedType,
                 selectedColor: _selectedColor,
                 onTypeChanged: (slug) => setState(() {
-                  _selectedType = _labelForSlug(slug);
+                  _selectedType = slug;
                   _selectedColor = accountTypeColors[slug] ?? _selectedColor;
                 }),
                 onColorChanged: (color) =>
@@ -211,10 +215,11 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
 
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Account Name'),
+                decoration: InputDecoration(
+                    labelText: context.l10n.addAccountNameLabel),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter an account name';
+                    return context.l10n.addAccountNameRequired;
                   }
                   return null;
                 },
@@ -242,8 +247,8 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: _selectedCurrencyCode,
-                          decoration:
-                              const InputDecoration(labelText: 'Currency'),
+                          decoration: InputDecoration(
+                              labelText: context.l10n.addAccountCurrencyLabel),
                           items: currencies.map((currency) {
                             return DropdownMenuItem<String>(
                               value: currency.code,
@@ -256,8 +261,9 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                               _selectedCurrencyCode = newValue;
                             });
                           },
-                          validator: (value) =>
-                              value == null ? 'Select currency' : null,
+                          validator: (value) => value == null
+                              ? context.l10n.addAccountSelectCurrencyField
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -266,7 +272,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                           child: TextFormField(
                             controller: _initialBalanceController,
                             decoration: InputDecoration(
-                              labelText: 'Initial Balance',
+                              labelText: context.l10n.addAccountInitialBalance,
                               prefixText: '$symbol ',
                             ),
                             keyboardType: const TextInputType.numberWithOptions(
@@ -275,7 +281,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                               if (value != null &&
                                   value.isNotEmpty &&
                                   double.tryParse(value) == null) {
-                                return 'Enter a valid number';
+                                return context.l10n.enterValidNumber;
                               }
                               return null;
                             },
@@ -287,8 +293,8 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
               ),
               const SizedBox(height: 8),
               SwitchListTile(
-                title: const Text('Include in net worth'),
-                subtitle: const Text('Contribute to revaluation totals'),
+                title: Text(context.l10n.addAccountIncludeInNetWorth),
+                subtitle: Text(context.l10n.addAccountRevaluationHelp),
                 value: _includeInTotal,
                 contentPadding: EdgeInsets.zero,
                 onChanged: (value) {
@@ -303,7 +309,7 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save),
-                  label: const Text('Save Account'),
+                  label: Text(context.l10n.addAccountSave),
                   onPressed: _saveAccount,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: context.colors.primary,
@@ -322,9 +328,4 @@ class _AddAccountSheetState extends State<AddAccountSheet> {
       ),
     );
   }
-
-  String _labelForSlug(String slug) => accountTypeLabels.firstWhere(
-        (label) => accountIconSlug(label) == slug,
-        orElse: () => _selectedType,
-      );
 }
