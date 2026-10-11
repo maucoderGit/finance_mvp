@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
@@ -12,6 +13,7 @@ import 'package:finance_mvp/widgets/month_filter_widget.dart';
 import 'package:finance_mvp/widgets/appbar.dart';
 import 'package:finance_mvp/widgets/info_section_title.dart';
 import 'package:finance_mvp/widgets/profile_avatar.dart';
+import 'package:finance_mvp/widgets/stat_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -75,8 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (generated > 0 && mounted) {
       showToast(
         context,
-        message:
-            '$generated recurring ${generated == 1 ? 'transaction' : 'transactions'} added',
+        message: context.l10n.homeRecurringTransactionsAdded(generated),
       );
     }
 
@@ -123,25 +124,25 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: MediaQuery.of(context).size.height * 0.02),
               InfoSectionTitle(
                 icon: Icons.receipt_long_outlined,
-                title: 'Moves',
+                title: context.l10n.homeMoves,
                 index: 0,
-                actionText: 'View all',
+                actionText: context.l10n.homeViewAll,
                 onTap: () {
                   Navigator.pushNamed(context, '/v1/transactions');
                 },
               ),
               InfoSectionTitle(
                 icon: Icons.account_balance_wallet_outlined,
-                title: 'My balance',
+                title: context.l10n.homeMyBalance,
                 index: 1,
-                actionText: 'Review',
+                actionText: context.l10n.homeReview,
                 onTap: () => Navigator.pushNamed(context, '/v1/accounts'),
               ),
               InfoSectionTitle(
                 icon: Icons.add_card_outlined,
-                title: 'Register Accounts',
+                title: context.l10n.homeRegisterAccounts,
                 index: 2,
-                actionText: 'Add',
+                actionText: context.l10n.homeAdd,
                 onTap: () => Navigator.pushNamed(context, '/v1/accounts'),
               ),
             ],
@@ -183,7 +184,7 @@ class _UserGreetingState extends State<_UserGreeting> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Hi,',
+              context.l10n.homeHi,
               style: TextStyle(
                 fontSize: 18,
                 color: context.colors.textLight,
@@ -227,18 +228,22 @@ class _MonthlySummary extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _SummaryCard(
-                  label: 'Income',
+                child: StatCard(
+                  label: context.l10n.homeIncome,
                   amount: income,
                   amountColor: context.colors.textDark,
+                  onTap: () => Navigator.pushNamed(context, '/v1/transactions',
+                      arguments: 'In'),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _SummaryCard(
-                  label: 'Expenses',
+                child: StatCard(
+                  label: context.l10n.homeExpenses,
                   amount: expenses,
                   amountColor: context.colors.textDark,
+                  onTap: () => Navigator.pushNamed(context, '/v1/transactions',
+                      arguments: 'Out'),
                 ),
               ),
             ],
@@ -248,43 +253,6 @@ class _MonthlySummary extends StatelessWidget {
             netImpact: fxImpactText,
             netPositive: fxImpactPositive,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final String label;
-  final String amount;
-  final Color amountColor;
-
-  const _SummaryCard(
-      {required this.label, required this.amount, required this.amountColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.colors.stackCardBackground[0],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.colors.cardBorder),
-      ),
-      child: Column(
-        children: [
-          Text(label.toUpperCase(),
-              style: TextStyle(
-                  fontSize: 12,
-                  color: context.colors.textLight,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(amount,
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: amountColor)),
         ],
       ),
     );
@@ -309,70 +277,98 @@ class _FxCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: context.colors.stackCardBackground[0],
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.colors.cardBorder),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
-            child: Row(
-              children: [
-                Icon(gain >= 0 ? Icons.trending_up : Icons.trending_down,
-                    color: unrealizedColor, size: 18),
-                const SizedBox(width: 6),
-                Text('UNREALIZED FX',
+          Expanded(
+            child: InkWell(
+              onTap: () => Navigator.pushNamed(context, '/v1/revaluation'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                          gain >= 0
+                              ? Icons.trending_up
+                              : Icons.trending_down,
+                          color: unrealizedColor,
+                          size: 16),
+                      const SizedBox(width: 4),
+                      Text(context.l10n.homeUnrealizedFx,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: context.colors.textLight,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5)),
+                      Icon(Icons.chevron_right,
+                          color: context.colors.textLight, size: 14),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    summary == null
+                        ? '—'
+                        : '${gain >= 0 ? '+' : ''}${formatMoney(gain)} USD',
                     style: TextStyle(
-                        fontSize: 12,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: unrealizedColor,
+                    ),
+                  ),
+                  if (summary?.purchasingPowerChangePercent != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.homePercentOver12Months(
+                          summary!.nationalCurrencyCode,
+                          summary.purchasingPowerChangePercent!
+                              .toStringAsFixed(1)),
+                      style: TextStyle(
+                          color: context.colors.textLight, fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 44,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            color: context.colors.cardBorder,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.l10n.homeNetFxImpact,
+                    style: TextStyle(
+                        fontSize: 11,
                         color: context.colors.textLight,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5)),
-                const Spacer(),
-                Icon(Icons.chevron_right,
-                    color: context.colors.textLight, size: 16),
+                const SizedBox(height: 2),
+                Text(netImpact,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: netColor)),
+                const SizedBox(height: 2),
+                Text(
+                  netPositive
+                      ? context.l10n.homeGapSavings
+                      : context.l10n.homeReplacementLoss,
+                  style: TextStyle(
+                      color: context.colors.textLight, fontSize: 11),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            summary == null
-                ? '—'
-                : '${gain >= 0 ? '+' : ''}${formatMoney(gain)} USD',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: unrealizedColor,
-            ),
-          ),
-          if (summary?.purchasingPowerChangePercent != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              '${summary!.nationalCurrencyCode} devalued '
-              '${summary.purchasingPowerChangePercent!.toStringAsFixed(1)}% in 12 months',
-              style: TextStyle(color: context.colors.textLight, fontSize: 12),
-            ),
-          ],
-          Divider(height: 24, color: context.colors.cardBorder),
-          Text('NET FX IMPACT',
-              style: TextStyle(
-                  fontSize: 12,
-                  color: context.colors.textLight,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(netImpact,
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: netColor)),
-          const SizedBox(height: 2),
-          Text(
-            netPositive ? 'Gap Savings' : 'Replacement Loss',
-            style: TextStyle(color: context.colors.textLight, fontSize: 12),
           ),
         ],
       ),

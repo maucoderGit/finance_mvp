@@ -9,6 +9,7 @@ import 'package:finance_mvp/providers/theme_provider.dart';
 import 'package:finance_mvp/screens/accounts/accounts_screen.dart';
 import 'package:finance_mvp/screens/settings/config_screen.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
+import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
 import 'package:finance_mvp/screens/overview/home_screen.dart';
 import 'package:finance_mvp/screens/revaluation/revaluation_screen.dart';
 import 'package:finance_mvp/screens/overview/root_screen.dart';
@@ -112,6 +113,7 @@ class MyApp extends StatelessWidget {
           routes: {
             '/v1/boot': (context) => const RootScreen(),
             '/v1/home': (context) => const HomeScreen(),
+            '/v1/dashboard': (context) => const DashboardScreen(),
             '/v1/transactions': (context) => const TransactionPage(),
             '/v1/transactions/create': (context) => const TransactionScreen(),
             '/v1/accounts': (context) => const AccountsScreen(),
