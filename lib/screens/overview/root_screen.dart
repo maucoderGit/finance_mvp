@@ -1,5 +1,6 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/l10n.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
 import 'package:finance_mvp/screens/overview/home_screen.dart';
 import 'package:finance_mvp/screens/onboarding/onboarding_screen.dart';
@@ -49,7 +50,7 @@ class _SplashScreen extends StatelessWidget {
                 size: 72, color: context.colors.primary),
             const SizedBox(height: 16),
             Text(
-              'Finance',
+              context.l10n.appTitle,
               style: TextStyle(
                 color: context.colors.textDark,
                 fontSize: 20,

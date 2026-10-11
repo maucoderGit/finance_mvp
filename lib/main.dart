@@ -1,6 +1,8 @@
 import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
+import 'package:finance_mvp/l10n/app_localizations.dart';
 import 'package:finance_mvp/providers/currency_provider.dart';
+import 'package:finance_mvp/providers/locale_provider.dart';
 import 'package:finance_mvp/providers/revaluation_provider.dart';
 import 'package:finance_mvp/providers/theme_provider.dart';
 import 'package:finance_mvp/screens/accounts/accounts_screen.dart';
@@ -20,11 +22,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final database = AppDatabase();
   final themeProvider = await ThemeProvider.load();
+  final localeProvider = await LocaleProvider.load();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
+        ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
         Provider<AppDatabase>(
           create: (_) => database,
           dispose: (_, db) => db.close(),
@@ -55,6 +59,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.watch<LocaleProvider>().locale;
     return Consumer<ThemeProvider>(
       builder: (context, theme, _) {
         AppColors.useDark(theme.dark);
@@ -71,7 +76,10 @@ class MyApp extends StatelessWidget {
         ));
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Financial Dashboard',
+          onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           themeMode: theme.mode,
           theme: _theme(Brightness.light),
           darkTheme: _theme(Brightness.dark),

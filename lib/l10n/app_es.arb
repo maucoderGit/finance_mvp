@@ -1,0 +1,815 @@
+{
+  "@@locale": "es",
+  "appTitle": "Finanzas",
+  "languageEnglish": "Inglés",
+  "languageSpanish": "Español",
+  "languageSystem": "Predeterminado del sistema",
+  "languageSectionTitle": "Idioma",
+  "revalTotalUnrealized": "TOTAL NO REALIZADO",
+  "revalVsCostBasis": "{percent}% vs costo base ({amount})",
+  "@revalVsCostBasis": {
+    "placeholders": {
+      "percent": {},
+      "amount": {}
+    }
+  },
+  "revalDevaluationNote": "En 12 meses, {currency} se devaluó {percent}% vs {base}",
+  "@revalDevaluationNote": {
+    "placeholders": {
+      "currency": {},
+      "percent": {},
+      "base": {}
+    }
+  },
+  "gainLossValueNow": "Valor actual",
+  "gainLossGain": "Ganancia",
+  "gainLossLoss": "Pérdida",
+  "netWorthEmpty": "Aquí aparecerá tu historial de patrimonio neto tras unos días de seguimiento.",
+  "income": "Ingresos",
+  "spending": "Gastos",
+  "cashFlowWindowDay": "Últimos 30 días",
+  "cashFlowWindowWeek": "Últimas 12 semanas",
+  "cashFlowWindowMonth": "Últimos 12 meses",
+  "cashFlowWindowYear": "Últimos 5 años",
+  "purchasingPowerEmpty": "Añade tipos de cambio a lo largo del tiempo para ver el poder adquisitivo.",
+  "purchasingPowerTitle": "Poder adquisitivo de {currency}",
+  "@purchasingPowerTitle": {
+    "placeholders": {
+      "currency": {}
+    }
+  },
+  "purchasingPowerSubtitle": "Valor de 1 {currency} en la moneda base a lo largo del tiempo",
+  "@purchasingPowerSubtitle": {
+    "placeholders": {
+      "currency": {}
+    }
+  },
+  "purchasingPowerDevaluated": "Devaluado {percent}% en este período",
+  "@purchasingPowerDevaluated": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "purchasingPowerAppreciated": "Revalorizado {percent}% en este período",
+  "@purchasingPowerAppreciated": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "goalProgressOf": "{current} de {target}",
+  "@goalProgressOf": {
+    "placeholders": {
+      "current": {},
+      "target": {}
+    }
+  },
+  "goalHeldIn": "Guardado en {account}",
+  "@goalHeldIn": {
+    "placeholders": {
+      "account": {}
+    }
+  },
+  "goalOnTrackFor": "En camino para {month}",
+  "@goalOnTrackFor": {
+    "placeholders": {
+      "month": {}
+    }
+  },
+  "goalNoProjection": "Aún no ahorras lo suficiente para proyectar una fecha",
+  "sidebarTagline": "CARTERA DE PATRIMONIO",
+  "sidebarOnboardingPathway": "RUTA DE REGISTRO",
+  "sidebarStep1Title": "Bienvenida y perfil",
+  "sidebarStep1Subtitle": "Conócenos",
+  "sidebarStep2Title": "Monedas y valoración",
+  "sidebarStep2Subtitle": "VES, USD y multicuenta",
+  "sidebarStep3Title": "Tipos de cambio",
+  "sidebarStep3Subtitle": "Sincronización automática o manual",
+  "sidebarStep4Title": "Tu primera cuenta",
+  "sidebarStep4Subtitle": "Personaliza tu bóveda",
+  "sidebarStep5Title": "Listo para empezar",
+  "sidebarStep5Subtitle": "Analítica de cartera activa",
+  "accountTypeCash": "Efectivo",
+  "accountTypeBank": "Banco",
+  "accountTypeSavings": "Ahorros",
+  "accountTypeInvestment": "Inversión",
+  "accountTypeCreditCard": "Tarjeta de crédito",
+  "accountTypeCryptoWallet": "Cartera cripto",
+  "pickerIconLabel": "ICONO",
+  "pickerColorLabel": "COLOR",
+  "configClearTitle": "¿Borrar todos los datos?",
+  "configClearBody": "Esto elimina definitivamente tus cuentas, transacciones, tasas y preferencias, y reinicia la app desde el registro. No se puede deshacer.",
+  "cancel": "Cancelar",
+  "configDeleteEverything": "Eliminar todo",
+  "configDataCleared": "Todos los datos eliminados.",
+  "configTitle": "Configuración",
+  "configSectionGeneral": "General",
+  "profileTitle": "Perfil",
+  "configProfileSubtitle": "Administra tu perfil de usuario",
+  "configCurrencies": "Monedas",
+  "configCurrenciesSubtitle": "Administra monedas y la moneda base",
+  "configContacts": "Contactos",
+  "configContactsSubtitle": "Ver y administrar todos tus contactos",
+  "configDebts": "Deudas y deudores",
+  "configDebtsSubtitle": "Controla préstamos que diste o recibiste",
+  "configGoals": "Metas",
+  "configGoalsSubtitle": "Metas de ahorro y su progreso",
+  "dashboardTitle": "Panel",
+  "configDashboardSubtitle": "Gráficos de resumen y analítica",
+  "configRevaluation": "Revalorización",
+  "configRevaluationSubtitle": "Ganancia/pérdida diferencial y poder adquisitivo",
+  "configSectionPreferences": "Preferencias",
+  "appearanceTitle": "Apariencia",
+  "configAppearanceSubtitle": "Personaliza tema y apariencia",
+  "configNotifications": "Notificaciones",
+  "configNotificationsSubtitle": "Administra las notificaciones",
+  "configSectionAbout": "Acerca de",
+  "configAbout": "Acerca de Finanzas",
+  "configAboutSubtitle": "Versión de la app e información",
+  "configSectionDanger": "Zona de peligro",
+  "configClearAllData": "Borrar todos los datos",
+  "configClearAllDataSubtitle": "Eliminarlo todo y empezar de nuevo",
+  "appearanceTheme": "TEMA",
+  "themeLight": "Claro",
+  "themeDark": "Oscuro",
+  "themeSystem": "Sistema",
+  "appearanceDarkActive": "Modo oscuro activo",
+  "appearanceLightActive": "Modo claro activo",
+  "profilePictureUpdated": "Foto de perfil actualizada",
+  "defaultUserName": "Usuario",
+  "profileTapEdit": "Toca el icono de editar para cambiar tu foto de perfil",
+  "aboutTitle": "Acerca de mí",
+  "aboutRole": "Desarrollador de software ♡",
+  "aboutSocialLinks": "REDES SOCIALES ♡",
+  "aboutWhyTitle": "POR QUÉ ESTA APP ♡",
+  "aboutWhyBody": "No encontre una app para manejar la inflación y el multi-moneda, asi que yo la hice.",
+  "aboutThanks": "\\ (ト) / ¡gracias!",
+  "aboutCouldNotOpenBrowser": "No se pudo abrir el navegador",
+  "aboutBioFallback": "hola, soy maucoder. me gusta el anime,\nel arte y programar. creo\npequeñas apps de flutter como esta ♡",
+  "currencySelectTitle": "Seleccionar moneda",
+  "currencySearchHint": "Buscar por nombre o código",
+  "currencyNoneFound": "No se encontraron monedas.",
+  "currencyViewRates": "Ver tasas históricas",
+  "currencyAddTitle": "Añadir nueva moneda",
+  "currencyFieldName": "Nombre",
+  "currencyNameHint": "p. ej. Euro",
+  "currencyNameRequired": "Introduce un nombre",
+  "currencyFieldCode": "Código",
+  "currencyCodeHint": "p. ej. EUR",
+  "currencyCodeRequired": "Introduce un código",
+  "currencyFieldSymbol": "Símbolo",
+  "currencySymbolHint": "p. ej. €",
+  "currencySymbolRequired": "Introduce un símbolo",
+  "currencyFieldSeparator": "Separador",
+  "currencySeparatorHint": "p. ej. ,",
+  "currencySeparatorRequired": "Introduce un separador",
+  "currencyFieldDecimalDigits": "Decimales",
+  "currencyDecimalHint": "p. ej. 2",
+  "currencyDecimalRequired": "Introduce el número de decimales",
+  "currencyDecimalInvalid": "Introduce un número válido",
+  "currencySave": "Guardar moneda",
+  "categorySelectTitle": "Seleccionar categoría",
+  "categoryNoneFound": "No se encontraron categorías.",
+  "save": "Guardar",
+  "close": "Cerrar",
+  "enterValidNumber": "Introduce un número válido",
+  "accountsAdjustTitle": "Ajustar saldo de {name}",
+  "@accountsAdjustTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "accountsNewBalance": "Nuevo saldo",
+  "accountsAdjustHelp": "Fija el saldo a este valor. Se registra una transacción de \"Ajuste de saldo\" por la diferencia.",
+  "accountsInvalidBalance": "Introduce un saldo válido.",
+  "accountsBalance": "SALDO",
+  "accountsMyAccounts": "Mis cuentas",
+  "accountsActiveCount": "{count, plural, one{1 ACTIVA} other{{count} ACTIVAS}}",
+  "@accountsActiveCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accountsAdjustBalance": "Ajustar saldo",
+  "addAccountSelectCurrency": "Selecciona una moneda.",
+  "addAccountEditTitle": "Editar cuenta",
+  "addAccountCreateTitle": "Crear cuenta",
+  "addAccountEditSubtitle": "Actualiza los detalles de esta cuenta.",
+  "addAccountCreateSubtitle": "Organiza tus activos con precisión.",
+  "addAccountNamePlaceholder": "Nombre de la cuenta",
+  "addAccountNameLabel": "Nombre de la cuenta",
+  "addAccountNameRequired": "Introduce un nombre de cuenta",
+  "addAccountCurrencyLabel": "Moneda",
+  "addAccountSelectCurrencyField": "Seleccionar moneda",
+  "addAccountInitialBalance": "Saldo inicial",
+  "addAccountIncludeInNetWorth": "Incluir en el patrimonio neto",
+  "addAccountRevaluationHelp": "Contribuir a los totales de revalorización",
+  "addAccountSave": "Guardar cuenta",
+  "delete": "Eliminar",
+  "saveChanges": "Guardar cambios",
+  "nameLabel": "Nombre",
+  "contactsTitle": "Contactos",
+  "contactsNew": "Nuevo contacto",
+  "contactsEdit": "Editar contacto",
+  "contactsDeleteTitle": "¿Eliminar contacto?",
+  "contactsDeleteBody": "Esto quita a \"{name}\" de tus contactos. Las transacciones vinculadas conservan su historial pero pierden el nombre.",
+  "@contactsDeleteBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "contactsSearchHint": "Buscar por nombre o teléfono...",
+  "contactsNone": "Aún no hay contactos",
+  "contactsNoMatch": "No hay contactos que coincidan",
+  "contactsNameHint": "p. ej. Panadería El Sol",
+  "contactsPhoneOptional": "Teléfono (opcional)",
+  "contactsAdd": "Añadir contacto",
+  "contactSelectRecipient": "Seleccionar destinatario",
+  "contactPickerAddHint": "Añade uno con el botón + para vincularlo a esta transacción.",
+  "debtsTitle": "Deudas y deudores",
+  "debtsNew": "Nueva deuda",
+  "debtsTheyOweMe": "Me deben",
+  "debtsIOwe": "Debo",
+  "debtsNone": "Aún no hay deudas",
+  "debtsNoneHint": "Controla préstamos que diste o recibiste con el botón +.",
+  "debtsSettled": "Saldadas",
+  "debtsDebt": "Deuda",
+  "debtsContactFallback": "contacto",
+  "debtsLinkedPayments": "Pagos vinculados",
+  "debtsReopen": "Reabrir",
+  "debtsSettle": "Saldar",
+  "debtsApplied": "Aplicado: {amount}",
+  "@debtsApplied": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "debtsPaymentsTotal": "{count} pago(s) · {total} total",
+  "@debtsPaymentsTotal": {
+    "placeholders": {
+      "count": {},
+      "total": {}
+    }
+  },
+  "debtsNoLinkedPayments": "Aún no hay transacciones vinculadas.\nRegistra un gasto y elige \u201CPagar hacia la deuda\u201D para vincularlo.",
+  "debtsDeleteTitle": "¿Eliminar deuda?",
+  "debtsDeleteBodyDebt": "Esto elimina la deuda con {name} ({amount}).",
+  "@debtsDeleteBodyDebt": {
+    "placeholders": {
+      "name": {},
+      "amount": {}
+    }
+  },
+  "debtsDeleteBodyLoan": "Esto elimina el préstamo a {name} ({amount}).",
+  "@debtsDeleteBodyLoan": {
+    "placeholders": {
+      "name": {},
+      "amount": {}
+    }
+  },
+  "debtsInstallments": "{count} cuotas",
+  "@debtsInstallments": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "debtsDue": "Vence {date}",
+  "@debtsDue": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "debtsProgressOf": "{current} de {total}",
+  "@debtsProgressOf": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "select": "Seleccionar",
+  "debtAmountInvalid": "Introduce un monto válido",
+  "debtFormNew": "Nueva deuda",
+  "debtFormEdit": "Editar deuda",
+  "debtFormDirection": "Dirección",
+  "debtDirectionDebtor": "Me deben",
+  "debtDirectionCreditor": "Debo",
+  "debtFormContactOptional": "Contacto (opcional)",
+  "debtFormAmount": "Monto",
+  "debtFormCurrency": "Moneda",
+  "debtFormDescriptionOptional": "Descripción (opcional)",
+  "debtFormDescriptionHint": "p. ej. Préstamo para el mercado",
+  "debtFormDueDateOptional": "Fecha de vencimiento (opcional)",
+  "debtFormSetDate": "+ Fijar fecha",
+  "debtFormClearDueDate": "Borrar fecha de vencimiento",
+  "debtFormSave": "Guardar deuda",
+  "debtFormSelectContact": "Seleccionar contacto",
+  "debtFormRemoveContact": "Quitar contacto",
+  "goalsTitle": "Metas",
+  "goalsNew": "Nueva meta",
+  "goalsNone": "Aún no hay metas",
+  "goalsNoneHint": "Una meta abre una cuenta para guardar el dinero, así tu progreso es siempre tu saldo real.",
+  "goalsDeleteTitle": "¿Eliminar \"{name}\"?",
+  "@goalsDeleteTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "goalsDeleteBody": "La meta se elimina. La cuenta {account} y sus transacciones se mantienen: ese dinero es tuyo.",
+  "@goalsDeleteBody": {
+    "placeholders": {
+      "account": {}
+    }
+  },
+  "goalFormInvalid": "Ponle un nombre a la meta y un objetivo mayor que 0",
+  "goalFormNew": "Nueva meta",
+  "goalFormEdit": "Editar meta",
+  "goalFormName": "Nombre de la meta",
+  "goalFormNameHint": "Fondo de emergencia",
+  "goalFormTarget": "Monto objetivo",
+  "goalFormCurrency": "Moneda",
+  "goalFormIcon": "Icono",
+  "goalFormDateOptional": "Fecha objetivo (opcional)",
+  "goalFormPickDate": "Elegir una fecha",
+  "goalFormKeepIn": "Guardar el dinero en",
+  "goalFormNewAccount": "Nueva cuenta de ahorros",
+  "goalFormNewAccountHint": "Se abrirá una cuenta de ahorros vacía para esta meta.",
+  "goalFormTransferHint": "Transfiere dinero a esta cuenta para financiar la meta.",
+  "goalFormSave": "Guardar meta",
+  "ratesTitle": "Tasas de {code}",
+  "@ratesTitle": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "ratesDialogTitleAdd": "Añadir tasa para {code}",
+  "@ratesDialogTitleAdd": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "ratesDialogTitleEdit": "Editar tasa para {code}",
+  "@ratesDialogTitleEdit": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "ratesRateLabel": "Tasa (1 USD = ?)",
+  "ratesDate": "Fecha: {date}",
+  "@ratesDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "ratesInvalid": "Introduce una tasa válida.",
+  "ratesDeleteTitle": "¿Eliminar tasa?",
+  "ratesDeleteBody": "¿Quitar la tasa del {date}?",
+  "@ratesDeleteBody": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "ratesSyncTooltip": "Sincronizar desde la API",
+  "ratesEmpty": "No se encontraron tasas para esta moneda.",
+  "ratesEmptyHint": "Usa el botón de sincronizar para obtenerlas de la API, o añade tasas manualmente.",
+  "ratesFetch": "Obtener de la API",
+  "ratesLatest": "Más reciente",
+  "ratesEditTooltip": "Editar tasa",
+  "ratesDeleteTooltip": "Eliminar tasa",
+  "ratesSynced": "Se sincronizaron {count} tasa(s) desde la API.",
+  "@ratesSynced": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "ratesNoneFromApi": "No hay tasas disponibles desde la API. Añádelas manualmente.",
+  "ratesSyncFailed": "Error de sincronización: {error}",
+  "@ratesSyncFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "periodWeek": "Semana",
+  "periodMonth": "Mes",
+  "periodQuarter": "Trimestre",
+  "periodYear": "Año",
+  "periodAll": "Todo",
+  "periodThisWeek": "Esta semana",
+  "periodThisMonth": "Este mes",
+  "periodThisQuarter": "Este trimestre",
+  "periodThisYear": "Este año",
+  "periodAllTime": "Todo el tiempo",
+  "txTitle": "Transacciones",
+  "txSearchHint": "Buscar referencia o monto",
+  "txMoneyIn": "Dinero recibido",
+  "txMoneyOut": "Dinero gastado",
+  "txNetMovement": "Movimiento neto",
+  "txToggleAll": "Todo",
+  "txToggleIn": "Entradas",
+  "txToggleOut": "Salidas",
+  "txNoMatches": "Sin resultados para \"{query}\"",
+  "@txNoMatches": {
+    "placeholders": {
+      "query": {}
+    }
+  },
+  "txNoneInPeriod": "No hay transacciones en {period}",
+  "@txNoneInPeriod": {
+    "placeholders": {
+      "period": {}
+    }
+  },
+  "txNone": "Aún no hay transacciones",
+  "txTransaction": "Transacción",
+  "txToday": "Hoy",
+  "txYesterday": "Ayer",
+  "recurrenceDaily": "Diario",
+  "recurrenceWeekly": "Semanal",
+  "recurrenceMonthly": "Mensual",
+  "recurrenceYearly": "Anual",
+  "recurrenceEndNever": "Nunca",
+  "recurrenceEndOnDate": "En una fecha",
+  "recurrenceEndAfterCount": "Después de un número de veces",
+  "frequencyWeekly": "Semanal",
+  "frequencyBiweekly": "Quincenal",
+  "frequencyMonthly": "Mensual",
+  "txPayTowardDebt": "Pagar hacia la deuda",
+  "txNoOpenDebts": "Aún no hay deudas abiertas.\nAñade una desde Ajustes → Deudas y deudores.",
+  "txSeriesFinished": "Esta serie ya ha terminado.",
+  "txNext": "Siguiente: {date}",
+  "@txNext": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "txRepeat": "Repetir",
+  "txEvery": "Cada",
+  "txDone": "Listo",
+  "txEnds": "Termina",
+  "txEndNever": "Seguir hasta que lo desactives",
+  "txEndOnDate": "Parar después de este día",
+  "txEndAfterCount": "Parar después de un número fijo de pagos",
+  "txPickEndDate": "Elegir fecha de fin",
+  "txOccurrences": "Ocurrencias",
+  "onboardingDefaultUserName": "Usuario",
+  "onboardingAccountNameRequired": "Ponle un nombre a la cuenta.",
+  "onboardingInitialBalanceInvalid": "Introduce un saldo inicial válido.",
+  "onboardingReferenceCurrency": "Moneda de referencia",
+  "onboardingReferenceCurrencySubtitle": "La moneda con la que mides tus ahorros (el patrimonio neto se muestra en ella).",
+  "onboardingLocalCurrency": "Moneda local",
+  "onboardingLocalCurrencySubtitle": "La moneda que ganas y gastas a diario. Tu poder adquisitivo se mide contra ella.",
+  "onboardingStepIndicator": "Paso {current} de {total}",
+  "@onboardingStepIndicator": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "onboardingBack": "Atrás",
+  "onboardingAddAccountFirst": "Añade al menos una cuenta primero.",
+  "onboardingNext": "Siguiente",
+  "onboardingFinish": "Finalizar",
+  "onboardingWelcomeTitle": "Bienvenido a\nFinanzas",
+  "onboardingWelcomeSubtitle": "Controla tus ahorros en varias monedas y protege tu poder adquisitivo ante los cambios de divisa.",
+  "onboardingGetStarted": "Empezar",
+  "onboardingNameQuestion": "¿Cómo te llamamos?",
+  "onboardingNameHint": "Tu nombre",
+  "onboardingCurrencyNameSymbol": "{name} ({symbol})",
+  "@onboardingCurrencyNameSymbol": {
+    "placeholders": {
+      "name": {},
+      "symbol": {}
+    }
+  },
+  "onboardingExchangeRates": "Tipos de cambio",
+  "onboardingExchangeRatesQuestion": "¿Cómo quieres mantener actualizados los tipos de cambio?",
+  "onboardingSyncAutomatic": "Automática",
+  "onboardingSyncAutomaticDescription": "Obtén las tasas más recientes de la API de cambio cada vez que abras la app.",
+  "onboardingSyncManual": "Manual",
+  "onboardingSyncManualDescription": "Introducirás las tasas tú mismo. Lo mejor cuando la API no cubre tu moneda.",
+  "onboardingFirstAccountTitle": "Tu primera cuenta",
+  "onboardingFirstAccountSubtitle": "Añade al menos una cuenta para continuar. El saldo es opcional. Toca una plantilla para empezar rápido o personaliza abajo.",
+  "onboardingQuickStartTemplates": "PLANTILLAS DE INICIO RÁPIDO",
+  "onboardingTapToFillPresets": "Toca para rellenar los valores",
+  "onboardingAccountSpecifications": "Especificaciones de la cuenta",
+  "onboardingEditingName": "Editando: {name}",
+  "@onboardingEditingName": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "onboardingCloseEditor": "Cerrar editor",
+  "onboardingAccountNameLabel": "Nombre de la cuenta",
+  "onboardingAccountNameHint": "p. ej. Efectivo diario",
+  "onboardingAddAccount": "Añadir cuenta",
+  "onboardingSaveChanges": "Guardar cambios",
+  "onboardingAddOwnAccount": "Añade tu propia cuenta",
+  "onboardingCurrencyLabel": "Moneda",
+  "onboardingCurrencyCodeName": "{code} — {name}",
+  "@onboardingCurrencyCodeName": {
+    "placeholders": {
+      "code": {},
+      "name": {}
+    }
+  },
+  "onboardingInitialBalanceLabel": "Saldo inicial (opcional)",
+  "onboardingConfiguredAccounts": "CUENTAS CONFIGURADAS",
+  "onboardingReadyForFirstImport": "Listo para la primera importación",
+  "onboardingNoAccountsYet": "Aún no hay cuentas: añade una para continuar.",
+  "onboardingAccountCodeCurrency": "{code} · {name}",
+  "@onboardingAccountCodeCurrency": {
+    "placeholders": {
+      "code": {},
+      "name": {}
+    }
+  },
+  "onboardingBalanceAmount": "Saldo · {amount}",
+  "@onboardingBalanceAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "onboardingEditAccount": "Editar cuenta",
+  "onboardingRemoveAccount": "Quitar cuenta",
+  "onboardingAllSet": "¡Todo listo!",
+  "onboardingSummaryName": "Nombre",
+  "onboardingSummaryAccounts": "Cuentas",
+  "onboardingOneAccount": "1 cuenta",
+  "onboardingAccountsCount": "{count} cuentas",
+  "@onboardingAccountsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "onboardingSummaryRates": "Tasas",
+  "onboardingAutomaticSync": "Sincronización automática",
+  "onboardingManualEntry": "Ingreso manual",
+  "dashboardWelcomeBack": "Bienvenido de nuevo",
+  "dashboardFinancialOverview": "Resumen financiero",
+  "dashboardNetWorth": "PATRIMONIO NETO",
+  "dashboardSinceDate": "desde {date}",
+  "@dashboardSinceDate": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "dashboardCurrencyPurchasingPower": "Monedas y poder adquisitivo",
+  "dashboardDetails": "Detalles",
+  "dashboardNoExchangeRateData": "Aún no hay datos de tipo de cambio. Añade tasas o sincroniza para ver la ganancia/pérdida por diferencial.",
+  "dashboardMonthAtAGlance": "Mes de un vistazo",
+  "dashboardCurrentCycle": "Ciclo actual: {cycle}",
+  "@dashboardCurrentCycle": {
+    "placeholders": {
+      "cycle": {}
+    }
+  },
+  "dashboardDayOfMonth": "Día {day} de {total}",
+  "@dashboardDayOfMonth": {
+    "placeholders": {
+      "day": {},
+      "total": {}
+    }
+  },
+  "dashboardBillingPeriodProgress": "Progreso del período",
+  "dashboardElapsedDaysLeft": "{percent}% transcurrido · quedan {days} días",
+  "@dashboardElapsedDaysLeft": {
+    "placeholders": {
+      "percent": {},
+      "days": {}
+    }
+  },
+  "dashboardIncome": "INGRESOS",
+  "dashboardEarned": "Ganado",
+  "dashboardExpenses": "GASTOS",
+  "dashboardSpent": "Gastado",
+  "dashboardNetSaved": "NETO AHORRADO",
+  "dashboardRate": "tasa del {percent}%",
+  "@dashboardRate": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "dashboardExceptionalSavingsPace": "Ritmo de ahorro excepcional",
+  "dashboardHealthySavingsPace": "Ritmo de ahorro saludable",
+  "dashboardPositiveSavingsPace": "Ritmo de ahorro positivo",
+  "dashboardSpendingExceedsIncome": "Los gastos superan los ingresos",
+  "dashboardRetainedCashFlow": "Has retenido el {percent}% de tu flujo de caja.",
+  "@dashboardRetainedCashFlow": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "dashboardKeepingEarnings": "Estás conservando el {percent}% de lo que ganas.",
+  "@dashboardKeepingEarnings": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "dashboardIncomeCoversSpending": "El ingreso aún cubre los gastos de este mes.",
+  "dashboardExpensesAheadOfIncome": "Los gastos van por delante de los ingresos este mes.",
+  "dashboardConnectedAccounts": "CUENTAS CONECTADAS",
+  "dashboardManage": "Administrar",
+  "dashboardNoAccounts": "Aún no hay cuentas. Añade una para empezar a rastrear saldos.",
+  "dashboardTopSpendingCategories": "Principales categorías de gasto",
+  "dashboardDistributionExpenditures": "Distribución de gastos de este ciclo",
+  "dashboardSpendLabel": "Gasto: {amount}",
+  "@dashboardSpendLabel": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "dashboardNoSpendingThisMonth": "No hay gastos registrados este mes.",
+  "dashboardViewCompleteBreakdown": "Ver desglose completo →",
+  "dashboardPercentOfSpending": "{percent}% del gasto",
+  "@dashboardPercentOfSpending": {
+    "placeholders": {
+      "percent": {}
+    }
+  },
+  "dashboardSeeAll": "Ver todo",
+  "homeRecurringTransactionsAdded": "{count, plural, =1{1 transacción recurrente añadida} other{{count} transacciones recurrentes añadidas}}",
+  "@homeRecurringTransactionsAdded": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "homeMoves": "Movimientos",
+  "homeViewAll": "Ver todo",
+  "homeMyBalance": "Mi saldo",
+  "homeReview": "Revisar",
+  "homeRegisterAccounts": "Registrar cuentas",
+  "homeAdd": "Añadir",
+  "homeHi": "Hola,",
+  "homeIncome": "Ingresos",
+  "homeExpenses": "Gastos",
+  "homeUnrealizedFx": "DIFERENCIAL NO REALIZADO",
+  "homePercentOver12Months": "{currency} {percent}% / 12m",
+  "@homePercentOver12Months": {
+    "placeholders": {
+      "currency": {},
+      "percent": {}
+    }
+  },
+  "homeNetFxImpact": "IMPACTO DIFERENCIAL NETO",
+  "homeGapSavings": "Ahorro de brecha",
+  "homeReplacementLoss": "Pérdida por sustitución",
+  "revaluationTitle": "Revalorización",
+  "revaluationSyncedRates": "Se sincronizaron {count} tasa(s) desde la API.",
+  "@revaluationSyncedRates": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "revaluationNothingToSync": "Nada que sincronizar. Añade tasas manualmente si lo necesitas.",
+  "revaluationSyncTooltip": "Sincronizar tasas desde la API",
+  "revaluationRefreshTooltip": "Actualizar",
+  "revaluationGainLossByCurrency": "GANANCIA / PÉRDIDA POR MONEDA",
+  "revaluationNoHoldings": "Aún no hay activos. Crea cuentas y transacciones para ver la ganancia/pérdida diferencial.",
+  "revaluationPurchasingPower": "PODER ADQUISITIVO",
+  "revaluationNetWorth": "PATRIMONIO NETO",
+  "txfNoExchangeRate": "Aún no hay tipo de cambio disponible para {code}",
+  "@txfNoExchangeRate": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "txfApproxAmount": "≈ {amount}",
+  "@txfApproxAmount": {
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "txfRateLine": "1 {base} = {rate} {other}",
+  "@txfRateLine": {
+    "placeholders": {
+      "base": {},
+      "rate": {},
+      "other": {}
+    }
+  },
+  "txfSelectAccountFirst": "Selecciona una cuenta primero.",
+  "txfEnterAmount": "Introduce un monto.",
+  "txfDebt": "Deuda",
+  "txfSelectDestinationFirst": "Selecciona primero una cuenta de destino.",
+  "txfSourceDestinationDifferent": "El origen y el destino deben ser diferentes.",
+  "txfDeleteTransaction": "Eliminar transacción",
+  "txfDeleteTransactionBody": "Esto eliminará el pago permanentemente.",
+  "txfCancel": "Cancelar",
+  "txfDelete": "Eliminar",
+  "txfCreateAccountFirst": "Primero crea una cuenta en \"Registrar cuentas\".",
+  "txfCreateSecondAccount": "Crea una segunda cuenta para transferir entre ellas.",
+  "txfSelectAccount": "Seleccionar cuenta",
+  "txfPayment": "Pago",
+  "txfAccount": "Cuenta",
+  "txfToAccount": "Cuenta destino",
+  "txfExchangeRate": "Tipo de cambio",
+  "txfCategory": "Categoría",
+  "txfContact": "Contacto",
+  "txfRecurrence": "Repetición",
+  "txfAmount": "Monto",
+  "txfDetails": "Detalles",
+  "txfAddDetails": "Añadir detalles",
+  "txfContinueToDebtPlan": "Continuar al plan de deuda",
+  "txfSave": "Guardar",
+  "txfConfirmSaveWithDebt": "Confirmar y guardar con deuda",
+  "txfReturn": "Volver",
+  "txfRatePrefix": "1 {code} =",
+  "@txfRatePrefix": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "txfRateHint": "Tasa",
+  "txfSelectToAccount": "Seleccionar cuenta destino",
+  "txfSelectCategory": "Seleccionar categoría",
+  "txfIncome": "Ingreso",
+  "txfExpense": "Gasto",
+  "txfTransfer": "Transferencia",
+  "txfEnterReference": "Introducir referencia",
+  "txfSelectContactOptional": "Seleccionar contacto (opcional)",
+  "txfRemoveContact": "Quitar contacto",
+  "txfPayTowardDebtOptional": "Pagar hacia la deuda (opcional)",
+  "txfRemoveDebtLink": "Quitar vínculo de deuda",
+  "txfIOwe": "Debo",
+  "txfTheyOweMe": "Me deben",
+  "txfDebtProgress": "{remaining} de {total}",
+  "@txfDebtProgress": {
+    "placeholders": {
+      "remaining": {},
+      "total": {}
+    }
+  },
+  "txfRecurring": "Recurrente",
+  "txfRecurringDescription": "Esta transacción se repite. Las siguientes ocurrencias se añaden a tu registro automáticamente al abrir la app.",
+  "txfFirstDue": "Primer vencimiento",
+  "txfRepeats": "Se repite",
+  "txfEnds": "Termina",
+  "txfEveryDay": "Todos los días",
+  "txfEveryNDays": "Cada {count} días",
+  "@txfEveryNDays": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "txfEveryWeek": "Cada semana",
+  "txfEveryNWeeks": "Cada {count} semanas",
+  "@txfEveryNWeeks": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "txfEveryMonth": "Cada mes",
+  "txfEveryNMonths": "Cada {count} meses",
+  "@txfEveryNMonths": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "txfEveryYear": "Cada año",
+  "txfEveryNYears": "Cada {count} años",
+  "@txfEveryNYears": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "txfPickADate": "Elegir una fecha",
+  "txfAfterNTimes": "Después de {count} veces",
+  "@txfAfterNTimes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "txfGenerateDebtInstallments": "Generar deuda y cuotas",
+  "txfSplitPaymentInstallments": "Divide este pago en cuotas con fecha de vencimiento",
+  "txfFrequency": "Frecuencia",
+  "txfInstallments": "Cuotas",
+  "txfPerPeriod": "Por {period}",
+  "@txfPerPeriod": {
+    "placeholders": {
+      "period": {}
+    }
+  },
+  "txfZeroInterest": "0% de interés",
+  "txfFirstDueDate": "Primera fecha de vencimiento",
+  "txfSavingCreatesOneDebt": "Guardar crea una deuda con fecha de vencimiento para este pago.",
+  "txfSavingCreatesInstallments": "Guardar crea una deuda de {total} {code}, dividida en {count} cuotas de ~{per} {code} cada una, con vencimiento cada {period} (última el {date}).",
+  "@txfSavingCreatesInstallments": {
+    "placeholders": {
+      "total": {},
+      "code": {},
+      "count": {},
+      "per": {},
+      "period": {},
+      "date": {}
+    }
+  },
+  "txfPeriodWeek": "semana",
+  "txfPeriodBiweek": "dos semanas",
+  "txfPeriodMonth": "mes",
+  "notificationsTitle": "Notificaciones",
+  "notificationReminderToggle": "Recordatorio para registrar transacciones",
+  "notificationReminderToggleSubtitle": "Pídeme a diario que registre mis transacciones",
+  "notificationReminderTime": "Hora del recordatorio",
+  "notificationReminderTitle": "Hora de registrar tus transacciones",
+  "notificationReminderBody": "Anotar tus ingresos y gastos mantiene tus finanzas en forma ♡"
+}
