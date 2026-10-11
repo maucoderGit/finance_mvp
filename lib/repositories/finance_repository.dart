@@ -20,6 +20,22 @@ class MonthlySummary {
   });
 }
 
+/// One category's share of a month's spending, valued in the base currency.
+/// [amount] is a magnitude, always non-negative.
+class CategorySpending {
+  final String name;
+  final String icon;
+  final int color;
+  final double amount;
+
+  const CategorySpending({
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.amount,
+  });
+}
+
 /// Granularity of the cash-flow series. Buckets are calendar units, not
 /// rolling windows: weeks start on Monday, months on the 1st, so a bucket
 /// boundary never shifts under the data.
@@ -1290,6 +1306,47 @@ class FinanceRepository {
           income: totalIncome,
           expenses: totalExpenses,
           fxImpact: totalFxImpact);
+    });
+  }
+
+  /// Spending in [date]'s month grouped by category, valued in the base
+  /// currency and sorted largest first. Transfers are excluded (moving your own
+  /// money isn't spending); expenses with no category collect under
+  /// "Uncategorized" rather than being dropped.
+  Stream<List<CategorySpending>> watchSpendingByCategory(DateTime date) {
+    final startOfMonth = DateTime(date.year, date.month, 1);
+    final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
+
+    final query = db.select(db.transactions)
+      ..where((t) => t.date
+          .isBetween(drift.Variable(startOfMonth), drift.Variable(endOfMonth)) &
+          t.transferGroupId.isNull());
+
+    return query.watch().asyncMap((transactionsInMonth) async {
+      final baseCode = await getBaseCurrencyCode();
+      final categories = {
+        for (final c in await getAllCategories()) c.id: c,
+      };
+      final totals = <int?, double>{};
+
+      for (final t in transactionsInMonth) {
+        final baseAmount = await _toBaseAmount(t, baseCode);
+        if (baseAmount >= 0) continue;
+        totals[t.categoryId] = (totals[t.categoryId] ?? 0) + baseAmount.abs();
+      }
+
+      final out = <CategorySpending>[];
+      totals.forEach((id, amount) {
+        final category = id == null ? null : categories[id];
+        out.add(CategorySpending(
+          name: category?.name ?? 'Uncategorized',
+          icon: category?.icon ?? 'bookmark',
+          color: category?.color ?? 0xFF9E9E9E,
+          amount: amount,
+        ));
+      });
+      out.sort((a, b) => b.amount.compareTo(a.amount));
+      return out;
     });
   }
 

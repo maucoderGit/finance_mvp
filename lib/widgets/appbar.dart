@@ -22,6 +22,20 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
                 radius: 22,
                 backgroundColor: Colors.white,
                 child: IconButton(
+                  icon: Icon(Icons.dashboard_outlined,
+                      color: context.colors.primary, size: 26),
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/v1/dashboard');
+                  },
+                  padding: EdgeInsets.zero,
+                  iconSize: 26,
+                ),
+              ),
+              const SizedBox(width: 4),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white,
+                child: IconButton(
                   icon: Icon(Icons.add, color: context.colors.primary, size: 26),
                   onPressed: () {
                     Navigator.pushNamed(context, '/v1/transactions/create');

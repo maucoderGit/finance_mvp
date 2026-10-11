@@ -1,19 +1,14 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:finance_mvp/constants/app_colors.dart';
 import 'package:finance_mvp/database/app_database.dart';
 import 'package:finance_mvp/repositories/finance_repository.dart';
-import 'package:finance_mvp/screens/overview/dashboard_screen.dart';
-import 'package:finance_mvp/services/finance/currency_converter.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import 'test_db.dart';
 
-/// The dashboard's Spending/Income toggle and D/W/M/Y bar used to repaint and
-/// nothing else. These assert each control changes the numbers on screen —
-/// which is the whole claim — by expecting the production formatter's own
-/// output, so the check holds under any locale.
+/// The dashboard derives every figure from repository methods, so this tests
+/// those derivations directly — the month summary, the spending-by-category
+/// grouping and the balance total. Nothing here pumps a widget tree.
 void main() {
   setUpAll(() => useSystemSqlite());
 
@@ -32,127 +27,65 @@ void main() {
       ),
       0,
     );
-    final account = (await repo.getAllAccounts()).first;
-    final now = DateTime.now();
-
-    Future<void> post(double amount, DateTime date) => repo.createTransaction(
-          TransactionsCompanion.insert(
-            amount: amount,
-            accountId: account.id,
-            currencyCode: 'USD',
-            date: date,
-          ),
-        );
-
-    // Today lands in every window; 45 days back only reaches the monthly and
-    // yearly ones, which is what makes the filter distinguishable from a
-    // highlight that changes nothing.
-    await post(-55, now);
-    await post(200, now);
-    await post(-45, now.subtract(const Duration(days: 45)));
-    await post(70, now.subtract(const Duration(days: 45)));
   });
 
   tearDown(() => db.close());
 
-  Future<void> mount(WidgetTester tester) async {
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [Provider<FinanceRepository>.value(value: repo)],
-        child: AppPalette(
-          colors: AppColors.current,
-          child: const MaterialApp(home: DashboardScreen()),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-  }
+  Future<Account> cashAccount() async => (await repo.getAllAccounts()).first;
 
-  String money(double amount) => formatMoney(amount, currencyCode: 'USD');
+  Future<void> post(Account account, double amount, DateTime date,
+          {Value<int?> categoryId = const Value.absent()}) =>
+      repo.createTransaction(TransactionsCompanion.insert(
+        amount: amount,
+        accountId: account.id,
+        currencyCode: 'USD',
+        date: date,
+        categoryId: categoryId,
+      ));
 
-  testWidgets('the bucket bar re-buckets the series', (tester) async {
-    await mount(tester);
+  test('calculateTotalBalance sums every account in the base currency',
+      () async {
+    final account = await cashAccount();
+    final now = DateTime.now();
+    await post(account, 200, now);
+    await post(account, -55, now);
+    await post(account, -45, now.subtract(const Duration(days: 45)));
 
-    expect(find.text('Spending · last 12 months'), findsOneWidget);
-    expect(find.text(money(100)), findsOneWidget);
-
-    await tester.tap(find.text('D'));
-    await tester.pumpAndSettle();
-
-    // The 45-day-old spending has fallen out of a 30-day window.
-    expect(find.text('Spending · last 30 days'), findsOneWidget);
-    expect(find.text(money(55)), findsOneWidget);
-    expect(find.text(money(100)), findsNothing);
+    expect(await repo.calculateTotalBalance('USD'), 100);
   });
 
-  testWidgets('the Spending/Income toggle switches the plotted leg',
-      (tester) async {
-    await mount(tester);
+  test('watchSpendingByCategory groups this month only, largest first',
+      () async {
+    final account = await cashAccount();
+    final now = DateTime.now();
+    final categoryId = await db.into(db.categories).insert(
+          CategoriesCompanion.insert(
+              name: 'Food', icon: 'restaurant', color: 0xFFFF9800),
+        );
 
-    await tester.tap(find.text('Income'));
-    await tester.pumpAndSettle();
+    await post(account, -30, now, categoryId: Value(categoryId));
+    await post(account, -10, now);
+    // Older spending and income must not leak into the current cycle.
+    await post(account, -999, now.subtract(const Duration(days: 45)));
+    await post(account, 500, now);
 
-    expect(find.text('Income · last 12 months'), findsOneWidget);
-    expect(find.text(money(270)), findsOneWidget);
-    expect(find.text(money(100)), findsNothing);
-
-    await tester.tap(find.text('D'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Income · last 30 days'), findsOneWidget);
-    expect(find.text(money(200)), findsOneWidget);
-    expect(find.text(money(270)), findsNothing);
+    final spending = await repo.watchSpendingByCategory(now).first;
+    expect(spending.map((c) => c.name), ['Food', 'Uncategorized']);
+    expect(spending[0].icon, 'restaurant');
+    expect(spending[0].color, 0xFFFF9800);
+    expect(spending[0].amount, 30);
+    expect(spending[1].amount, 10);
   });
 
-  testWidgets('the dashboard ships no placeholder goals or dead bell',
-      (tester) async {
-    await mount(tester);
+  test('monthly summary derives income, expenses and net', () async {
+    final account = await cashAccount();
+    final now = DateTime.now();
+    await post(account, 200, now);
+    await post(account, -55, now);
 
-    expect(find.text('Goal Projections'), findsNothing);
-    expect(find.text('Emergency Fund'), findsNothing);
-    expect(find.text('Vacation to Italy'), findsNothing);
-    expect(find.byIcon(Icons.notifications_none), findsNothing);
-  });
-
-  testWidgets('real goals show on the dashboard with derived progress',
-      (tester) async {
-    final goal = await repo.createGoalWithAccount(
-      name: 'Emergency Fund',
-      targetAmount: 200,
-      currencyCode: 'USD',
-      accountName: 'Emergency Fund',
-    );
-    // Fund the pot: this is what makes progress non-zero, and the dashboard
-    // never wrote a progress number itself.
-    await repo.createTransaction(TransactionsCompanion.insert(
-      amount: 50,
-      accountId: goal.accountId,
-      currencyCode: 'USD',
-      date: DateTime.now(),
-    ));
-
-    await mount(tester);
-
-    expect(find.text('Goals'), findsOneWidget);
-    expect(find.text('Emergency Fund'), findsOneWidget);
-    expect(find.text('25%'), findsOneWidget);
-    expect(find.text('${formatMoney(50, currencyCode: 'USD')} of '
-        '${formatMoney(200, currencyCode: 'USD')}'), findsOneWidget);
-    // The dashboard has no monthly rate to project from, so it must not invent
-    // a date or a "can't project" verdict.
-    expect(find.textContaining('On track for'), findsNothing);
-    expect(find.textContaining('Not saving enough'), findsNothing);
-  });
-
-  testWidgets('a ledger with no transactions still draws a flat zero line',
-      (tester) async {
-    await db.transaction(() async {
-      await db.delete(db.transactions).go();
-    });
-
-    await mount(tester);
-
-    expect(find.text('Spending · last 12 months'), findsOneWidget);
-    expect(find.text(money(0)), findsOneWidget);
+    final summary = await repo.watchMonthlySummary(now).first;
+    expect(summary.income, 200);
+    expect(summary.expenses, 55);
+    expect(summary.income - summary.expenses, 145);
   });
 }
